@@ -10,3 +10,6 @@ public/sw.js
 .turbo/
 coverage/
 *.tsbuildinfo
+
+.tanstack/
+**/.tanstack/
