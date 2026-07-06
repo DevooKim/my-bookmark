@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import {
   createCategory,
   deleteCategory,
+  getAiStatus,
   listCategories,
   updateCategory,
 } from "../../lib/api-client";
@@ -30,6 +31,7 @@ function SettingsPage() {
         </p>
       </section>
       <CategorySection />
+      <AiSection />
       <ThemeSection />
     </main>
   );
@@ -191,6 +193,18 @@ function CategoryRow({
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
+  );
+}
+
+function AiSection() {
+  const aiQuery = useQuery({ queryKey: ["ai"], queryFn: getAiStatus });
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <h2 className="font-bold">AI 분류</h2>
+      <p className="mt-2 text-sm text-zinc-500">
+        현재 provider: {aiQuery.data?.provider ?? "불러오는 중…"}
+      </p>
+    </section>
   );
 }
 

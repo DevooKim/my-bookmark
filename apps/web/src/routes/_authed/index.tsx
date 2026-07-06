@@ -20,6 +20,7 @@ import {
   deleteBookmark,
   listBookmarks,
   listCategories,
+  recategorizeBookmark,
   updateBookmark,
 } from "../../lib/api-client";
 
@@ -117,6 +118,15 @@ function HomePage() {
     onError: () => toast.error("변경하지 못했어요"),
   });
 
+  const recategorizeMutation = useMutation({
+    mutationFn: recategorizeBookmark,
+    onSuccess: () => {
+      toast.success("AI 분류를 다시 시작했어요");
+      void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+    },
+    onError: () => toast.error("AI 분류를 시작하지 못했어요"),
+  });
+
   const categories = categoriesQuery.data?.items ?? [];
 
   return (
@@ -184,6 +194,7 @@ function HomePage() {
                 categoryId: nextCategoryId,
               })
             }
+            onRecategorize={() => recategorizeMutation.mutate(bookmark.id)}
           />
         ))}
 
@@ -257,12 +268,14 @@ function BookmarkCard({
   onDelete,
   onEdit,
   onMove,
+  onRecategorize,
 }: {
   bookmark: Bookmark;
   categories: CategoryWithCount[];
   onDelete: () => void;
   onEdit: () => void;
   onMove: (categoryId: string | null) => void;
+  onRecategorize: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const category = categories.find((item) => item.id === bookmark.categoryId);
@@ -298,8 +311,13 @@ function BookmarkCard({
             </p>
           ) : null}
           {bookmark.aiStatus === "pending" ? (
-            <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">
+            <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-200">
               분석중…
+            </span>
+          ) : null}
+          {bookmark.aiStatus === "failed" ? (
+            <span className="mt-2 inline-flex rounded-full bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950 dark:text-red-200">
+              AI 분류 실패
             </span>
           ) : null}
         </div>
@@ -334,6 +352,15 @@ function BookmarkCard({
                   {item.name}
                 </button>
               ))}
+              {bookmark.aiStatus === "failed" ? (
+                <button
+                  className="menu-item"
+                  onClick={onRecategorize}
+                  type="button"
+                >
+                  AI 재분류
+                </button>
+              ) : null}
               <button
                 className="menu-item text-red-600"
                 onClick={onDelete}
@@ -359,9 +386,10 @@ export function BookmarkDialog({
   const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
-  const [mode, setMode] = useState<"manual" | "none">(() =>
-    localStorage.getItem("bookmarkMode") === "manual" ? "manual" : "none",
-  );
+  const [mode, setMode] = useState<"ai" | "manual" | "none">(() => {
+    const stored = localStorage.getItem("bookmarkMode");
+    return stored === "ai" || stored === "manual" ? stored : "none";
+  });
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [newCategoryName, setNewCategoryName] = useState("");
   const createCategoryMutation = useMutation({
@@ -397,7 +425,7 @@ export function BookmarkDialog({
     const body: CreateBookmarkRequest =
       mode === "manual"
         ? { url, mode, categoryId, title: title.trim() || null }
-        : { url, mode: "none", title: title.trim() || null };
+        : { url, mode, title: title.trim() || null };
     mutation.mutate(body);
   }
 
@@ -421,10 +449,12 @@ export function BookmarkDialog({
           />
         </Field>
         <div className="grid grid-cols-3 gap-2 text-sm">
-          <button className="chip opacity-50" disabled type="button">
+          <button
+            className={mode === "ai" ? "chip-active" : "chip"}
+            onClick={() => setMode("ai")}
+            type="button"
+          >
             AI 자동
-            <br />
-            <span className="text-xs">다음 업데이트</span>
           </button>
           <button
             className={mode === "manual" ? "chip-active" : "chip"}

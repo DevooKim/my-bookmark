@@ -4,15 +4,15 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 2 구현 완료 (자동 검증 + 실제 계정 API E2E 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 3
-- **최종 갱신**: 2026-07-07 (Phase 2 리뷰 지적 수정 — 카테고리 소유권 검증, metadata user_id 필터, DNS SSRF 방어, 인라인 카테고리 생성/무한 스크롤)
+- **현재 Phase**: Phase 3 구현 완료 (AI provider/분류 파이프라인 자동 검증 통과, 실제 AI 키 기반 E2E와 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 4
+- **최종 갱신**: 2026-07-07 (Phase 3 — 멀티 provider AI 분류, mode=ai, 재분류 UI)
 
 ## Phase 체크리스트
 
 - [x] Phase 0 — 모노레포 스캐폴딩
 - [x] Phase 1 — DB + 인증
 - [x] Phase 2 — 북마크 + 카테고리 CRUD
-- [ ] Phase 3 — AI 카테고리 분류
+- [x] Phase 3 — AI 카테고리 분류
 - [ ] Phase 4 — API Key + iOS 단축어
 - [ ] Phase 5 — PWA
 - [ ] Phase 6 — Web Push + 리마인더
@@ -35,6 +35,8 @@
 | 2026-07-07 | Supabase/agent skill 파일(`.agents`, `.claude/skills/supabase-server`, `skills-lock.json`)을 별도 커밋으로 추적했다. | 개인 프로젝트라 작업 지침/스킬 버전을 저장소에 고정해 세션 재현성을 높이는 편이 유리하다. |
 | 2026-07-07 | Phase 2 리뷰 지적에 따라 북마크 생성/수정 시 카테고리 소유권을 서버에서 검증하고, 백그라운드 metadata 업데이트에도 `user_id` 필터를 추가했다. | Express secret key는 RLS를 우회하므로 모든 DB 변경에 사용자 경계를 명시해야 한다. |
 | 2026-07-07 | metadata SSRF 방어를 DNS resolve 결과 검사까지 확장했다. | hostname 문자열 검사만으로는 내부 IP로 resolve되는 도메인을 막을 수 없다. |
+| 2026-07-07 | OpenAI SDK는 Responses API의 `responses.parse` + `zodTextFormat`을 사용하고, Anthropic은 tool-use 강제 호출, Gemini는 `responseSchema`를 사용했다. 기본 모델명은 docs/05-ai의 지정값(`gemini-2.5-flash`, `claude-haiku-4-5`, `gpt-4o-mini`)을 유지했다. | 설치된 SDK 타입 정의 기준으로 구조화 출력 API를 확인해 구현했다. |
+| 2026-07-07 | 선택 provider API key가 없으면 API 서버는 경고만 내고 기동하며, `mode=ai`/재분류 작업은 metadata 수집 후 `ai_status='failed'`로 종료한다. | docs/05-ai의 "AI 비활성 모드로 기동" 요구 준수. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -44,7 +46,9 @@
 - dev 확인 중 기본 API 포트 3001이 이미 사용 중이며 Phase 2 라우트가 없는 이전 프로세스였다. 이후 검증은 충돌 없는 `PORT=3101 pnpm --filter @my-bookmark/api dev`로 수행했다.
 - SSR 가드 공백: `_authed` 라우트의 `beforeLoad`는 클라이언트에서만 세션을 검사한다(docs/04-auth line 27 허용). `_authed` 하위에 민감 데이터를 SSR로 렌더하지 말 것 — 비인증 초기 HTML로 노출된다.
 - `jwtVerify`에 `algorithms` 화이트리스트 미지정: jose v6의 JWKS 리졸버가 키의 `alg`에 검증을 바인딩하므로 현재 악용 불가. Supabase 키 타입 확정 후 defense-in-depth로 명시 고려.
-- Vite production build가 client `index` chunk 500KB 초과 경고를 출력한다. 현재 Phase 2 검증은 통과했으며, 번들 예산/코드 스플리팅은 Phase 7 성능 작업에서 재점검한다.
+- Vite production build가 client `index` chunk 500KB 초과 경고를 출력한다. 현재 Phase 3 검증은 통과했으며, 번들 예산/코드 스플리팅은 Phase 7 성능 작업에서 재점검한다.
+- Phase 3 자동 검증 완료: provider 응답 zod 파싱(existing/new/none/실패), provider factory, 조건부 `ai_status='pending'` UPDATE(수동 지정 시 AI 결과 미덮어쓰기), 신규 카테고리 중복 재확인, 전체 검증 루프 통과.
+- Phase 3 실제 AI E2E 확인 필요: 현재 세션에는 Supabase 로그인 계정 비밀번호가 없어 `mode=ai` 실제 등록 → 수초 내 분류, `AI_PROVIDER=anthropic/openai` 전환 실호출, 브라우저에서 pending/failed/재분류 메뉴 조작은 자동 확인하지 못했다. `.env`에 키 존재 여부만 확인했으며 값은 출력하지 않았다.
 
 ## 배포 후 TODO
 

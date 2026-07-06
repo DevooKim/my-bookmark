@@ -1,4 +1,6 @@
 import {
+  type AiStatusResponse,
+  aiStatusResponseSchema,
   type Bookmark,
   type BookmarksResponse,
   bookmarkSchema,
@@ -98,6 +100,13 @@ export async function getMe(): Promise<MeResponse> {
   return parseJsonResponse(response, (json) => meResponseSchema.parse(json));
 }
 
+export async function getAiStatus(): Promise<AiStatusResponse> {
+  const response = await apiFetch("/api/ai");
+  return parseJsonResponse(response, (json) =>
+    aiStatusResponseSchema.parse(json),
+  );
+}
+
 export async function listCategories(): Promise<CategoriesResponse> {
   const response = await apiFetch("/api/categories?withCounts=true");
   return parseJsonResponse(response, (json) =>
@@ -179,6 +188,15 @@ export async function updateBookmark(
   const response = await apiFetch(`/api/bookmarks/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    bookmarkSchema.parse((json as { bookmark?: unknown }).bookmark),
+  );
+}
+
+export async function recategorizeBookmark(id: string): Promise<Bookmark> {
+  const response = await apiFetch(`/api/bookmarks/${id}/categorize`, {
+    method: "POST",
   });
   return parseJsonResponse(response, (json) =>
     bookmarkSchema.parse((json as { bookmark?: unknown }).bookmark),

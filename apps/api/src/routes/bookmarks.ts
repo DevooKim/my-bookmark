@@ -11,6 +11,8 @@ import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
+import { getAiProvider } from "../services/ai-provider";
+import { categorizeBookmark } from "../services/categorize";
 import { fetchMetadata, type PageMetadata } from "../services/metadata";
 
 interface DbError {
@@ -76,14 +78,6 @@ bookmarksRouter.use(requireAuth());
 bookmarksRouter.post("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
   const body = createBookmarkRequestSchema.parse(request.body);
-  if (body.mode === "ai") {
-    throw new HttpError(
-      501,
-      API_ERROR_CODES.INTERNAL,
-      "AI bookmark creation is available in the next update",
-    );
-  }
-
   const url = normalizeBookmarkUrl(body.url);
   const db = getDb();
   if (body.mode === "manual") {
@@ -95,7 +89,7 @@ bookmarksRouter.post("/bookmarks", async (request, response) => {
     url,
     title: body.title ?? null,
     category_id: body.mode === "manual" ? body.categoryId : null,
-    ai_status: "idle",
+    ai_status: body.mode === "ai" ? "pending" : "idle",
   };
 
   const { data, error } = await db
@@ -109,8 +103,52 @@ bookmarksRouter.post("/bookmarks", async (request, response) => {
   }
 
   const bookmark = mapBookmark(data);
-  void updateBookmarkMetadata(db, userId, bookmark.id, url, body.title ?? null);
+  if (body.mode === "ai") {
+    void categorizeBookmark({
+      db,
+      userId,
+      bookmarkId: bookmark.id,
+      provider: getAiProvider(),
+    }).catch((error) => console.warn("AI categorization task failed", error));
+  } else {
+    void updateBookmarkMetadata(
+      db,
+      userId,
+      bookmark.id,
+      url,
+      body.title ?? null,
+    );
+  }
   response.status(201).json({ bookmark });
+});
+
+bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
+  const userId = getUserId(request);
+  const id = uuidSchema.parse(request.params.id);
+  const db = getDb();
+  const { data, error } = await db
+    .from("bookmarks")
+    .update({ ai_status: "pending" })
+    .eq("user_id", userId)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
+  }
+  const bookmark = mapBookmark(data);
+  void categorizeBookmark({
+    db,
+    userId,
+    bookmarkId: bookmark.id,
+    provider: getAiProvider(),
+  }).catch((taskError) =>
+    console.warn("AI categorization task failed", taskError),
+  );
+  response.json({ bookmark });
 });
 
 bookmarksRouter.get("/bookmarks", async (request, response) => {

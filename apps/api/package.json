@@ -11,6 +11,7 @@
     "build": "tsup src/index.ts --format esm --target node22 --clean --sourcemap"
   },
   "dependencies": {
+    "@my-bookmark/ai": "workspace:*",
     "@my-bookmark/shared": "workspace:*",
     "@supabase/supabase-js": "^2.110.0",
     "cheerio": "^1.2.0",

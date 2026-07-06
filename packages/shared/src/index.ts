@@ -139,6 +139,9 @@ export const updateCategoryRequestSchema = z
   });
 
 export const meResponseSchema = z.object({ userId: uuidSchema });
+export const aiStatusResponseSchema = z.object({
+  provider: z.enum(["gemini", "anthropic", "openai"]),
+});
 export const bookmarkResponseSchema = z.object({ bookmark: bookmarkSchema });
 export const bookmarksResponseSchema = z.object({
   items: z.array(bookmarkSchema),
@@ -159,6 +162,7 @@ export type BookmarkListQuery = z.infer<typeof bookmarkListQuerySchema>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
+export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
 export type BookmarkResponse = z.infer<typeof bookmarkResponseSchema>;
 export type BookmarksResponse = z.infer<typeof bookmarksResponseSchema>;
 export type CategoriesResponse = z.infer<typeof categoriesResponseSchema>;

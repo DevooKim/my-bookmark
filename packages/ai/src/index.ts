@@ -1,15 +1,9 @@
-export interface ClassifyInput {
-  url: string;
-  title?: string;
-  description?: string;
-  categoryNames?: readonly string[];
-}
-
-export interface ClassifyResult {
-  categoryName: string;
-  confidence: number;
-}
-
-export interface AiProvider {
-  classify(input: ClassifyInput): Promise<ClassifyResult>;
-}
+export { createAiProvider, DEFAULT_MODELS } from "./providers";
+export { categorizeResponseSchema, parseCategorizeResponse } from "./schema";
+export type {
+  AiProvider,
+  AiProviderConfig,
+  AiProviderName,
+  CategorizeInput,
+  CategorizeResult,
+} from "./types";
