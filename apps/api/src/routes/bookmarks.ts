@@ -13,6 +13,14 @@ import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
 import { fetchMetadata } from "../services/metadata";
 
+interface BookmarkUpdate {
+  url?: string;
+  title?: string | null;
+  description?: string | null;
+  category_id?: string | null;
+  ai_status?: "idle";
+}
+
 export const bookmarksRouter = Router();
 
 bookmarksRouter.use(requireAuth());
@@ -121,19 +129,19 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   const userId = getUserId(request);
   const id = uuidSchema.parse(request.params.id);
   const body = updateBookmarkRequestSchema.parse(request.body);
-  const updates: Record<string, string | null> = {};
+  const updates: BookmarkUpdate = {};
   if (body.url !== undefined) {
-    updates["url"] = normalizeBookmarkUrl(body.url);
+    updates.url = normalizeBookmarkUrl(body.url);
   }
   if (body.title !== undefined) {
-    updates["title"] = body.title;
+    updates.title = body.title;
   }
   if (body.description !== undefined) {
-    updates["description"] = body.description;
+    updates.description = body.description;
   }
   if (body.categoryId !== undefined) {
-    updates["category_id"] = body.categoryId;
-    updates["ai_status"] = "idle";
+    updates.category_id = body.categoryId;
+    updates.ai_status = "idle";
   }
 
   const { data, error } = await getDb()
@@ -144,7 +152,7 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
     .select("*")
     .maybeSingle();
   if (error) {
-    await handleBookmarkInsertError(error, userId, updates["url"] ?? "");
+    await handleBookmarkInsertError(error, userId, updates.url ?? "");
   }
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
@@ -168,7 +176,11 @@ bookmarksRouter.delete("/bookmarks/:id", async (request, response) => {
 
 function getDb() {
   if (!supabaseAdmin) {
-    throw new HttpError(500, API_ERROR_CODES.INTERNAL, "Database is not configured");
+    throw new HttpError(
+      500,
+      API_ERROR_CODES.INTERNAL,
+      "Database is not configured",
+    );
   }
   return supabaseAdmin;
 }
@@ -215,17 +227,25 @@ async function updateBookmarkMetadata(
 }
 
 function encodeCursor(createdAt: string, id: string): string {
-  return Buffer.from(JSON.stringify({ createdAt, id }), "utf8").toString("base64url");
+  return Buffer.from(JSON.stringify({ createdAt, id }), "utf8").toString(
+    "base64url",
+  );
 }
 
 function decodeCursor(cursor: string): { createdAt: string; id: string } {
   try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const parsed = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8"),
+    );
     return {
       createdAt: String(parsed.createdAt),
       id: uuidSchema.parse(parsed.id),
     };
   } catch {
-    throw new HttpError(400, API_ERROR_CODES.VALIDATION_ERROR, "Invalid cursor");
+    throw new HttpError(
+      400,
+      API_ERROR_CODES.VALIDATION_ERROR,
+      "Invalid cursor",
+    );
   }
 }

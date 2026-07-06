@@ -39,7 +39,10 @@ export function isPrivateHost(host: string): boolean {
   );
 }
 
-export function extractMetadataFromHtml(html: string, pageUrl: string): PageMetadata {
+export function extractMetadataFromHtml(
+  html: string,
+  pageUrl: string,
+): PageMetadata {
   const $ = cheerio.load(html);
   const attr = (selector: string, name: string) =>
     $(selector).first().attr(name)?.trim() || null;
@@ -119,7 +122,10 @@ async function fetchWithRedirects(
   return response;
 }
 
-async function readLimitedText(response: Response, limit: number): Promise<string> {
+async function readLimitedText(
+  response: Response,
+  limit: number,
+): Promise<string> {
   if (!response.body) {
     return "";
   }

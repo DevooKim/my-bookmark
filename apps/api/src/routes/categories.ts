@@ -10,12 +10,20 @@ import { supabaseAdmin } from "../lib/supabase";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
 
+interface CategoryUpdate {
+  name?: string;
+  color?: string | null;
+  sort_order?: number;
+}
+
 export const categoriesRouter = Router();
 
 categoriesRouter.use(requireAuth());
 
 categoriesRouter.get("/categories", async (request, response) => {
   const userId = getUserId(request);
+  // Express query is typed as an index signature; dot access fails noPropertyAccessFromIndexSignature.
+  // biome-ignore lint/complexity/useLiteralKeys: bracket access is required by TypeScript config.
   const withCounts = request.query["withCounts"] === "true";
   const db = getDb();
   const { data, error } = await db
@@ -65,15 +73,15 @@ categoriesRouter.patch("/categories/:id", async (request, response) => {
   const userId = getUserId(request);
   const id = uuidSchema.parse(request.params.id);
   const body = updateCategoryRequestSchema.parse(request.body);
-  const updates: Record<string, string | number | null> = {};
+  const updates: CategoryUpdate = {};
   if (body.name !== undefined) {
-    updates["name"] = body.name;
+    updates.name = body.name;
   }
   if (body.color !== undefined) {
-    updates["color"] = body.color;
+    updates.color = body.color;
   }
   if (body.sortOrder !== undefined) {
-    updates["sort_order"] = body.sortOrder;
+    updates.sort_order = body.sortOrder;
   }
 
   const { data, error } = await getDb()
@@ -110,12 +118,18 @@ categoriesRouter.delete("/categories/:id", async (request, response) => {
 
 function getDb() {
   if (!supabaseAdmin) {
-    throw new HttpError(500, API_ERROR_CODES.INTERNAL, "Database is not configured");
+    throw new HttpError(
+      500,
+      API_ERROR_CODES.INTERNAL,
+      "Database is not configured",
+    );
   }
   return supabaseAdmin;
 }
 
-async function loadBookmarkCounts(userId: string): Promise<Map<string, number>> {
+async function loadBookmarkCounts(
+  userId: string,
+): Promise<Map<string, number>> {
   const { data, error } = await getDb()
     .from("bookmarks")
     .select("category_id")
@@ -136,7 +150,11 @@ async function loadBookmarkCounts(userId: string): Promise<Map<string, number>> 
 
 function handleCategoryWriteError(error: { code?: string }): never {
   if (error.code === "23505") {
-    throw new HttpError(409, API_ERROR_CODES.CONFLICT, "이미 있는 카테고리예요");
+    throw new HttpError(
+      409,
+      API_ERROR_CODES.CONFLICT,
+      "이미 있는 카테고리예요",
+    );
   }
   throw error;
 }
