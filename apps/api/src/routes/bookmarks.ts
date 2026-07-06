@@ -11,7 +11,55 @@ import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
-import { fetchMetadata } from "../services/metadata";
+import { fetchMetadata, type PageMetadata } from "../services/metadata";
+
+interface DbError {
+  code?: string;
+  message?: string;
+}
+
+interface CategoryLookupDb {
+  from(table: "categories"): {
+    select(columns: string): {
+      eq(
+        field: string,
+        value: string,
+      ): {
+        eq(
+          field: string,
+          value: string,
+        ): {
+          maybeSingle(): PromiseLike<{
+            data: { id: string } | null;
+            error: DbError | null;
+          }>;
+        };
+      };
+    };
+  };
+}
+
+interface MetadataUpdateDb {
+  from(table: "bookmarks"): {
+    update(values: {
+      title: string;
+      description: string | null;
+      site_name: string | null;
+      favicon_url: string | null;
+      og_image_url: string | null;
+    }): {
+      eq(
+        field: string,
+        value: string,
+      ): {
+        eq(
+          field: string,
+          value: string,
+        ): PromiseLike<{ error: DbError | null }>;
+      };
+    };
+  };
+}
 
 interface BookmarkUpdate {
   url?: string;
@@ -38,6 +86,10 @@ bookmarksRouter.post("/bookmarks", async (request, response) => {
 
   const url = normalizeBookmarkUrl(body.url);
   const db = getDb();
+  if (body.mode === "manual") {
+    await assertCategoryBelongsToUser(db, userId, body.categoryId);
+  }
+
   const insert = {
     user_id: userId,
     url,
@@ -57,7 +109,7 @@ bookmarksRouter.post("/bookmarks", async (request, response) => {
   }
 
   const bookmark = mapBookmark(data);
-  void updateBookmarkMetadata(bookmark.id, url, body.title ?? null);
+  void updateBookmarkMetadata(db, userId, bookmark.id, url, body.title ?? null);
   response.status(201).json({ bookmark });
 });
 
@@ -139,12 +191,16 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   if (body.description !== undefined) {
     updates.description = body.description;
   }
+  const db = getDb();
   if (body.categoryId !== undefined) {
+    if (body.categoryId !== null) {
+      await assertCategoryBelongsToUser(db, userId, body.categoryId);
+    }
     updates.category_id = body.categoryId;
     updates.ai_status = "idle";
   }
 
-  const { data, error } = await getDb()
+  const { data, error } = await db
     .from("bookmarks")
     .update(updates)
     .eq("user_id", userId)
@@ -204,14 +260,42 @@ async function handleBookmarkInsertError(
   throw error;
 }
 
-async function updateBookmarkMetadata(
+export async function assertCategoryBelongsToUser(
+  db: unknown,
+  userId: string,
+  categoryId: string,
+): Promise<void> {
+  const categoryDb = db as CategoryLookupDb;
+  const { data, error } = await categoryDb
+    .from("categories")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("id", categoryId)
+    .maybeSingle();
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new HttpError(
+      400,
+      API_ERROR_CODES.VALIDATION_ERROR,
+      "categoryId must reference one of your categories",
+    );
+  }
+}
+
+export async function updateBookmarkMetadata(
+  db: unknown,
+  userId: string,
   bookmarkId: string,
   url: string,
   providedTitle: string | null,
-) {
+  metadataFetcher: (url: string) => Promise<PageMetadata> = fetchMetadata,
+): Promise<void> {
   try {
-    const metadata = await fetchMetadata(url);
-    await getDb()
+    const metadata = await metadataFetcher(url);
+    const metadataDb = db as MetadataUpdateDb;
+    const { error } = await metadataDb
       .from("bookmarks")
       .update({
         title: providedTitle ?? metadata.title ?? domainFromUrl(url),
@@ -220,7 +304,11 @@ async function updateBookmarkMetadata(
         favicon_url: metadata.faviconUrl,
         og_image_url: metadata.ogImageUrl,
       })
-      .eq("id", bookmarkId);
+      .eq("id", bookmarkId)
+      .eq("user_id", userId);
+    if (error) {
+      throw error;
+    }
   } catch (error) {
     console.warn("metadata update failed", error);
   }

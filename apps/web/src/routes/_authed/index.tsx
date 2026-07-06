@@ -11,11 +11,12 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Edit, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ApiClientError,
   createBookmark,
+  createCategory,
   deleteBookmark,
   listBookmarks,
   listCategories,
@@ -31,6 +32,7 @@ function HomePage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editing, setEditing] = useState<Bookmark | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handle = window.setTimeout(
@@ -74,6 +76,20 @@ function HomePage() {
     () => bookmarksQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [bookmarksQuery.data],
   );
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !bookmarksQuery.hasNextPage) {
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void bookmarksQuery.fetchNextPage();
+      }
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [bookmarksQuery.hasNextPage, bookmarksQuery.fetchNextPage]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteBookmark,
@@ -187,6 +203,7 @@ function HomePage() {
           </div>
         ) : null}
 
+        <div ref={loadMoreRef} />
         {bookmarksQuery.hasNextPage ? (
           <button
             className="btn-secondary mx-auto"
@@ -332,7 +349,7 @@ function BookmarkCard({
   );
 }
 
-function BookmarkDialog({
+export function BookmarkDialog({
   categories,
   onClose,
 }: {
@@ -346,6 +363,17 @@ function BookmarkDialog({
     localStorage.getItem("bookmarkMode") === "manual" ? "manual" : "none",
   );
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const createCategoryMutation = useMutation({
+    mutationFn: createCategory,
+    onSuccess: (category) => {
+      setCategoryId(category.id);
+      setNewCategoryName("");
+      toast.success("카테고리를 만들었어요");
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+    onError: () => toast.error("카테고리를 만들지 못했어요"),
+  });
   const mutation = useMutation({
     mutationFn: createBookmark,
     onSuccess: () => {
@@ -414,20 +442,48 @@ function BookmarkDialog({
           </button>
         </div>
         {mode === "manual" ? (
-          <Field label="카테고리">
-            <select
-              className="input"
-              onChange={(e) => setCategoryId(e.target.value)}
-              required
-              value={categoryId}
-            >
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
+          <div className="space-y-3">
+            <Field label="카테고리">
+              <select
+                className="input"
+                onChange={(e) => setCategoryId(e.target.value)}
+                required
+                value={categoryId}
+              >
+                <option value="" disabled>
+                  카테고리를 선택하세요
                 </option>
-              ))}
-            </select>
-          </Field>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="flex gap-2">
+              <input
+                className="input"
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="새 카테고리 이름"
+                value={newCategoryName}
+              />
+              <button
+                className="btn-secondary shrink-0"
+                disabled={
+                  createCategoryMutation.isPending || !newCategoryName.trim()
+                }
+                onClick={() =>
+                  createCategoryMutation.mutate({
+                    name: newCategoryName,
+                    color: "blue",
+                  })
+                }
+                type="button"
+              >
+                새 카테고리
+              </button>
+            </div>
+          </div>
         ) : null}
         <button
           className="btn-primary w-full justify-center"

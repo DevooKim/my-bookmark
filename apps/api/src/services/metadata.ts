@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import * as cheerio from "cheerio";
 import { domainFromUrl } from "../lib/url";
 
@@ -39,6 +40,20 @@ export function isPrivateHost(host: string): boolean {
   );
 }
 
+export async function isPrivateFetchTarget(
+  host: string,
+  resolveAddresses: (host: string) => Promise<string[]> = async (target) => {
+    const records = await lookup(target, { all: true });
+    return records.map((record) => record.address);
+  },
+): Promise<boolean> {
+  if (isPrivateHost(host)) {
+    return true;
+  }
+  const addresses = await resolveAddresses(host);
+  return addresses.some(isPrivateHost);
+}
+
 export function extractMetadataFromHtml(
   html: string,
   pageUrl: string,
@@ -72,7 +87,7 @@ export function extractMetadataFromHtml(
 
 export async function fetchMetadata(url: string): Promise<PageMetadata> {
   const parsed = new URL(url);
-  if (isPrivateHost(parsed.hostname)) {
+  if (await isPrivateFetchTarget(parsed.hostname)) {
     return fallbackMetadata(url);
   }
 
@@ -113,7 +128,7 @@ async function fetchWithRedirects(
     redirectsLeft > 0
   ) {
     const nextUrl = new URL(response.headers.get("location") ?? "", url);
-    if (isPrivateHost(nextUrl.hostname)) {
+    if (await isPrivateFetchTarget(nextUrl.hostname)) {
       throw new Error("Blocked private redirect target");
     }
     return fetchWithRedirects(nextUrl.toString(), signal, redirectsLeft - 1);

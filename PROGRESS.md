@@ -5,7 +5,7 @@
 ## 현재 상태
 
 - **현재 Phase**: Phase 2 구현 완료 (자동 검증 + 실제 계정 API E2E 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 3
-- **최종 갱신**: 2026-07-07 (Phase 2 E2E — 실제 로그인으로 북마크/카테고리 CRUD, 중복, metadata, 필터 확인)
+- **최종 갱신**: 2026-07-07 (Phase 2 리뷰 지적 수정 — 카테고리 소유권 검증, metadata user_id 필터, DNS SSRF 방어, 인라인 카테고리 생성/무한 스크롤)
 
 ## Phase 체크리스트
 
@@ -33,12 +33,14 @@
 | 2026-07-07 | Phase 2의 `mode=ai` 등록은 501로 두고, 웹 추가 다이얼로그의 AI 자동 옵션을 비활성화했다. | 로드맵 Phase 2는 AI를 다음 Phase로 미루며 `ai`는 501 또는 metadata만 허용한다. 사용자 혼동을 막기 위해 UI에서는 "다음 업데이트"로 표시했다. |
 | 2026-07-07 | Biome CSS parser에 `tailwindDirectives`를 활성화했다. | Tailwind CSS v4의 `@custom-variant`/`@apply`를 사용하는 공용 UI 클래스가 Biome에서 파싱되어야 lint/format 검증을 통과한다. |
 | 2026-07-07 | Supabase/agent skill 파일(`.agents`, `.claude/skills/supabase-server`, `skills-lock.json`)을 별도 커밋으로 추적했다. | 개인 프로젝트라 작업 지침/스킬 버전을 저장소에 고정해 세션 재현성을 높이는 편이 유리하다. |
+| 2026-07-07 | Phase 2 리뷰 지적에 따라 북마크 생성/수정 시 카테고리 소유권을 서버에서 검증하고, 백그라운드 metadata 업데이트에도 `user_id` 필터를 추가했다. | Express secret key는 RLS를 우회하므로 모든 DB 변경에 사용자 경계를 명시해야 한다. |
+| 2026-07-07 | metadata SSRF 방어를 DNS resolve 결과 검사까지 확장했다. | hostname 문자열 검사만으로는 내부 IP로 resolve되는 도메인을 막을 수 없다. |
 
 ## 알려진 이슈 / 기술 부채
 
 - (해소) Phase 1 수용 기준 — 로그인/리다이렉트/로그아웃/`GET /api/me` — 사용자가 실제 동작 확인 완료. `supabase db push` 및 대시보드 가입 차단/계정 생성도 사용자 측에서 반영된 것으로 확인.
 - Phase 2 실제 계정 API E2E 확인 완료: Supabase password login → `GET /api/me`, 카테고리 생성/목록 count, 수동/미지정 북마크 등록, 정규화 중복 409(`existingId`), metadata title/favicon 백그라운드 보강, 검색/카테고리/미분류 필터, 카테고리 변경, 카테고리 삭제 시 미분류化, pagination 응답 shape를 `PORT=3101` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다.
-- Phase 2 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 실제 클릭 기반 확인은 자동화하지 못했다. 웹 dev 서버는 `VITE_API_URL=http://localhost:3101` + port 3100에서 HTTP 200 렌더 확인 완료. 남은 항목: 중복 URL 토스트, 375px 모바일 레이아웃, 다크모드 토글의 실제 브라우저 확인.
+- Phase 2 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 실제 클릭 기반 확인은 자동화하지 못했다. 웹 dev 서버는 `VITE_API_URL=http://localhost:3101` + port 3100에서 HTTP 200 렌더 확인 완료. 남은 항목: 중복 URL 토스트, 375px 모바일 레이아웃, 다크모드 토글, 인라인 카테고리 생성/무한 스크롤의 실제 브라우저 확인.
 - dev 확인 중 기본 API 포트 3001이 이미 사용 중이며 Phase 2 라우트가 없는 이전 프로세스였다. 이후 검증은 충돌 없는 `PORT=3101 pnpm --filter @my-bookmark/api dev`로 수행했다.
 - SSR 가드 공백: `_authed` 라우트의 `beforeLoad`는 클라이언트에서만 세션을 검사한다(docs/04-auth line 27 허용). `_authed` 하위에 민감 데이터를 SSR로 렌더하지 말 것 — 비인증 초기 HTML로 노출된다.
 - `jwtVerify`에 `algorithms` 화이트리스트 미지정: jose v6의 JWKS 리졸버가 키의 `alg`에 검증을 바인딩하므로 현재 악용 불가. Supabase 키 타입 확정 후 defense-in-depth로 명시 고려.

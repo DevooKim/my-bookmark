@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extractMetadataFromHtml, isPrivateHost } from "../services/metadata";
+import {
+  extractMetadataFromHtml,
+  isPrivateFetchTarget,
+  isPrivateHost,
+} from "../services/metadata";
 
 describe("metadata", () => {
   it("extracts open graph metadata and resolves relative URLs", () => {
@@ -32,5 +36,14 @@ describe("metadata", () => {
     expect(isPrivateHost("10.0.0.1")).toBe(true);
     expect(isPrivateHost("172.20.0.1")).toBe(true);
     expect(isPrivateHost("example.com")).toBe(false);
+  });
+
+  it("blocks hostnames that resolve to private IP addresses", async () => {
+    await expect(
+      isPrivateFetchTarget("internal.example", async () => ["127.0.0.1"]),
+    ).resolves.toBe(true);
+    await expect(
+      isPrivateFetchTarget("example.com", async () => ["93.184.216.34"]),
+    ).resolves.toBe(false);
   });
 });
