@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@my-bookmark/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.110.0",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
     "helmet": "latest",
+    "jose": "^6.2.3",
     "pino": "latest",
     "pino-http": "latest",
     "zod": "latest"

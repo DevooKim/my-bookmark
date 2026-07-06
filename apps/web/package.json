@@ -15,8 +15,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@my-bookmark/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.110.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
+    "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "latest",
     "@tanstack/react-router-devtools": "latest",
     "@tanstack/react-router-ssr-query": "latest",

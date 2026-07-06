@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import { appEnv } from "./lib/env";
 import { errorMiddleware } from "./middleware/error";
 import { healthRouter } from "./routes/health";
+import { meRouter } from "./routes/me";
 
 export function createApp(): express.Express {
   const app = express();
@@ -15,6 +16,7 @@ export function createApp(): express.Express {
   app.use(pinoHttp({ level: appEnv.NODE_ENV === "test" ? "silent" : "info" }));
 
   app.use("/api", healthRouter);
+  app.use("/api", meRouter);
   app.use(errorMiddleware);
 
   return app;

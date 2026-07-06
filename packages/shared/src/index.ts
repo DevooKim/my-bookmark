@@ -1,18 +1,124 @@
+import { z } from "zod";
+
 export const API_ERROR_CODES = {
-  BAD_REQUEST: "BAD_REQUEST",
+  VALIDATION_ERROR: "VALIDATION_ERROR",
   UNAUTHORIZED: "UNAUTHORIZED",
-  FORBIDDEN: "FORBIDDEN",
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
-  INTERNAL_ERROR: "INTERNAL_ERROR",
+  RATE_LIMITED: "RATE_LIMITED",
+  INTERNAL: "INTERNAL",
 } as const;
 
 export type ApiErrorCode =
   (typeof API_ERROR_CODES)[keyof typeof API_ERROR_CODES];
 
-export interface ApiErrorResponse {
-  error: {
-    code: ApiErrorCode;
-    message: string;
-  };
-}
+export const apiErrorResponseSchema = z.object({
+  error: z.object({
+    code: z.enum(API_ERROR_CODES),
+    message: z.string(),
+    details: z.unknown().optional(),
+  }),
+});
+
+export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
+
+export const uuidSchema = z.uuid();
+export const isoDateTimeSchema = z.iso.datetime({ offset: true });
+
+export const categoryColorSchema = z.enum([
+  "red",
+  "orange",
+  "amber",
+  "green",
+  "teal",
+  "blue",
+  "violet",
+  "pink",
+]);
+
+export const categorySchema = z.object({
+  id: uuidSchema,
+  userId: uuidSchema,
+  name: z.string().min(1).max(50),
+  color: categoryColorSchema.nullable(),
+  sortOrder: z.number().int(),
+  createdAt: isoDateTimeSchema,
+});
+
+export const categoryWithCountSchema = categorySchema.extend({
+  bookmarkCount: z.number().int().nonnegative().optional(),
+});
+
+export const aiStatusSchema = z.enum(["idle", "pending", "done", "failed"]);
+
+export const bookmarkSchema = z.object({
+  id: uuidSchema,
+  userId: uuidSchema,
+  url: z.url(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  siteName: z.string().nullable(),
+  faviconUrl: z.url().nullable(),
+  ogImageUrl: z.url().nullable(),
+  categoryId: uuidSchema.nullable(),
+  aiStatus: aiStatusSchema,
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+});
+
+export const reminderStatusSchema = z.enum(["pending", "sent", "cancelled"]);
+
+export const reminderSchema = z.object({
+  id: uuidSchema,
+  userId: uuidSchema,
+  bookmarkId: uuidSchema,
+  remindAt: isoDateTimeSchema,
+  note: z.string().nullable(),
+  status: reminderStatusSchema,
+  sentAt: isoDateTimeSchema.nullable(),
+  createdAt: isoDateTimeSchema,
+});
+
+export const loginRequestSchema = z.object({
+  email: z.email(),
+  password: z.string().min(1),
+});
+
+export const createBookmarkRequestSchema = z.discriminatedUnion("mode", [
+  z.object({
+    url: z.url(),
+    mode: z.literal("ai"),
+    categoryId: z.null().optional(),
+    title: z.string().min(1).nullable().optional(),
+  }),
+  z.object({
+    url: z.url(),
+    mode: z.literal("manual"),
+    categoryId: uuidSchema,
+    title: z.string().min(1).nullable().optional(),
+  }),
+  z.object({
+    url: z.url(),
+    mode: z.literal("none"),
+    categoryId: z.null().optional(),
+    title: z.string().min(1).nullable().optional(),
+  }),
+]);
+
+export const createCategoryRequestSchema = z.object({
+  name: z.string().min(1).max(50),
+  color: categoryColorSchema.nullable().optional(),
+});
+
+export const meResponseSchema = z.object({
+  userId: uuidSchema,
+});
+
+export type Category = z.infer<typeof categorySchema>;
+export type CategoryWithCount = z.infer<typeof categoryWithCountSchema>;
+export type Bookmark = z.infer<typeof bookmarkSchema>;
+export type Reminder = z.infer<typeof reminderSchema>;
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type CreateBookmarkRequest = z.infer<typeof createBookmarkRequestSchema>;
+export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
+export type MeResponse = z.infer<typeof meResponseSchema>;
