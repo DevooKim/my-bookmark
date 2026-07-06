@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -18,6 +19,17 @@ export const Route = createRootRoute({
 function RootDocument({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
+  useEffect(() => {
+    const stored = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    document.documentElement.classList.toggle(
+      "dark",
+      stored === "dark" || (!stored && prefersDark),
+    );
+  }, []);
+
   return (
     <html lang="ko">
       <head>
@@ -27,6 +39,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
           {children}
         </QueryClientProvider>
+        <Toaster richColors position="top-center" />
         <Scripts />
       </body>
     </html>
