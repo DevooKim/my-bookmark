@@ -105,13 +105,47 @@ export const createBookmarkRequestSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
+export const updateBookmarkRequestSchema = z
+  .object({
+    url: z.url().optional(),
+    title: z.string().min(1).nullable().optional(),
+    description: z.string().nullable().optional(),
+    categoryId: uuidSchema.nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
+
+export const bookmarkListQuerySchema = z.object({
+  categoryId: z.union([uuidSchema, z.literal("none")]).optional(),
+  q: z.string().trim().min(1).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+
 export const createCategoryRequestSchema = z.object({
-  name: z.string().min(1).max(50),
+  name: z.string().trim().min(1).max(50),
   color: categoryColorSchema.nullable().optional(),
 });
 
-export const meResponseSchema = z.object({
-  userId: uuidSchema,
+export const updateCategoryRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(50).optional(),
+    color: categoryColorSchema.nullable().optional(),
+    sortOrder: z.number().int().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
+
+export const meResponseSchema = z.object({ userId: uuidSchema });
+export const bookmarkResponseSchema = z.object({ bookmark: bookmarkSchema });
+export const bookmarksResponseSchema = z.object({
+  items: z.array(bookmarkSchema),
+  nextCursor: z.string().nullable(),
+});
+export const categoriesResponseSchema = z.object({
+  items: z.array(categoryWithCountSchema),
 });
 
 export type Category = z.infer<typeof categorySchema>;
@@ -120,5 +154,11 @@ export type Bookmark = z.infer<typeof bookmarkSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateBookmarkRequest = z.infer<typeof createBookmarkRequestSchema>;
+export type UpdateBookmarkRequest = z.infer<typeof updateBookmarkRequestSchema>;
+export type BookmarkListQuery = z.infer<typeof bookmarkListQuerySchema>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
+export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
+export type BookmarkResponse = z.infer<typeof bookmarkResponseSchema>;
+export type BookmarksResponse = z.infer<typeof bookmarksResponseSchema>;
+export type CategoriesResponse = z.infer<typeof categoriesResponseSchema>;

@@ -4,6 +4,8 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { appEnv } from "./lib/env";
 import { errorMiddleware } from "./middleware/error";
+import { bookmarksRouter } from "./routes/bookmarks";
+import { categoriesRouter } from "./routes/categories";
 import { healthRouter } from "./routes/health";
 import { meRouter } from "./routes/me";
 
@@ -17,6 +19,8 @@ export function createApp(): express.Express {
 
   app.use("/api", healthRouter);
   app.use("/api", meRouter);
+  app.use("/api", categoriesRouter);
+  app.use("/api", bookmarksRouter);
   app.use(errorMiddleware);
 
   return app;

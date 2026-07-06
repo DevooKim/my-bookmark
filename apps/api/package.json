@@ -13,6 +13,7 @@
   "dependencies": {
     "@my-bookmark/shared": "workspace:*",
     "@supabase/supabase-js": "^2.110.0",
+    "cheerio": "^1.2.0",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
