@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.output/
+.vinxi/
+.env
+.env.*
+!.env.example
+public/sw.js
+.DS_Store
+.turbo/
+coverage/
+*.tsbuildinfo

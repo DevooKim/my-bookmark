@@ -1,0 +1,19 @@
+{
+  "name": "@my-bookmark/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@my-bookmark/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "build": "tsup src/index.ts --format esm --target node22 --clean --sourcemap"
+  },
+  "dependencies": {
+    "@my-bookmark/shared": "workspace:*",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "helmet": "latest",
+    "pino": "latest",
+    "pino-http": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/cors": "latest",
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "@types/supertest": "latest",
+    "supertest": "latest",
+    "tsup": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

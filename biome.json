@@ -1,0 +1,34 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!node_modules",
+      "!dist",
+      "!**/dist",
+      "!.output",
+      "!**/.output",
+      "!.vinxi",
+      "!**/.vinxi",
+      "!coverage",
+      "!**/routeTree.gen.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always"
+    }
+  }
+}
