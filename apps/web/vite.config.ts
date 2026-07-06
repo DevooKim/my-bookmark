@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 
@@ -8,6 +9,7 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 const config = defineConfig({
+  envDir: fileURLToPath(new URL("../..", import.meta.url)),
   resolve: { tsconfigPaths: true },
   plugins: [
     devtools(),

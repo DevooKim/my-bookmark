@@ -44,7 +44,10 @@ describe("createBearerAuth", () => {
   it("rejects a tampered JWT", async () => {
     const { bearerAuth, signToken } = await createAuthFixture();
     const token = await signToken();
-    const tamperedToken = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
+    const tokenParts = token.split(".");
+    const signature = tokenParts[2] ?? "";
+    tokenParts[2] = `${signature.startsWith("a") ? "b" : "a"}${signature.slice(1)}`;
+    const tamperedToken = tokenParts.join(".");
 
     await expect(bearerAuth(tamperedToken)).rejects.toThrow(
       "Invalid bearer token",
