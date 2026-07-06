@@ -4,14 +4,17 @@ import {
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  createApiKey,
   createCategory,
   deleteCategory,
   getAiStatus,
+  listApiKeys,
   listCategories,
+  revokeApiKey,
   updateCategory,
 } from "../../lib/api-client";
 
@@ -31,6 +34,7 @@ function SettingsPage() {
         </p>
       </section>
       <CategorySection />
+      <ApiKeySection />
       <AiSection />
       <ThemeSection />
     </main>
@@ -193,6 +197,139 @@ function CategoryRow({
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
+  );
+}
+
+function ApiKeySection() {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("iOS 단축어");
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const apiKeysQuery = useQuery({
+    queryKey: ["apiKeys"],
+    queryFn: listApiKeys,
+  });
+  const createMutation = useMutation({
+    mutationFn: createApiKey,
+    onSuccess: (apiKey) => {
+      setCreatedKey(apiKey.key);
+      toast.success("API 키를 발급했어요. 지금 복사해두세요.");
+      void queryClient.invalidateQueries({ queryKey: ["apiKeys"] });
+    },
+    onError: () => toast.error("API 키를 발급하지 못했어요"),
+  });
+  const revokeMutation = useMutation({
+    mutationFn: revokeApiKey,
+    onSuccess: () => {
+      toast.success("API 키를 회수했어요");
+      void queryClient.invalidateQueries({ queryKey: ["apiKeys"] });
+    },
+    onError: () => toast.error("API 키를 회수하지 못했어요"),
+  });
+
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-bold">API 키</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            iOS 단축어에서 북마크를 저장할 때 사용합니다. 원문 키는 발급 직후 한
+            번만 표시됩니다.
+          </p>
+        </div>
+        <KeyRound className="h-5 w-5 text-zinc-400" />
+      </div>
+
+      <form
+        className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]"
+        onSubmit={(event) => {
+          event.preventDefault();
+          createMutation.mutate({ name });
+        }}
+      >
+        <input
+          className="input"
+          onChange={(event) => setName(event.target.value)}
+          placeholder="키 이름"
+          required
+          value={name}
+        />
+        <button
+          className="btn-primary justify-center"
+          disabled={createMutation.isPending}
+          type="submit"
+        >
+          발급
+        </button>
+      </form>
+
+      {createdKey ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
+          <p className="font-medium text-amber-900 dark:text-amber-100">
+            이 키는 다시 볼 수 없습니다. 지금 복사하세요.
+          </p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-white p-2 dark:bg-zinc-950">
+              {createdKey}
+            </code>
+            <button
+              className="btn-secondary justify-center"
+              onClick={() => {
+                void navigator.clipboard.writeText(createdKey);
+                toast.success("복사했어요");
+              }}
+              type="button"
+            >
+              <Copy className="h-4 w-4" /> 복사
+            </button>
+            <button
+              className="btn-secondary justify-center"
+              onClick={() => setCreatedKey(null)}
+              type="button"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+        {apiKeysQuery.data?.items.map((apiKey) => (
+          <div
+            className="grid gap-2 py-3 sm:grid-cols-[1fr_120px_170px_auto] sm:items-center"
+            key={apiKey.id}
+          >
+            <div>
+              <p className="font-medium">{apiKey.name}</p>
+              <p className="text-xs text-zinc-500">
+                prefix: {apiKey.keyPrefix}
+              </p>
+            </div>
+            <span className="text-sm text-zinc-500">
+              {apiKey.lastUsedAt ? "사용됨" : "미사용"}
+            </span>
+            <span className="text-xs text-zinc-500">
+              {new Date(apiKey.createdAt).toLocaleString()}
+            </span>
+            <button
+              className="btn-secondary justify-center text-red-600"
+              onClick={() => {
+                if (window.confirm("이 API 키를 회수할까요?")) {
+                  revokeMutation.mutate(apiKey.id);
+                }
+              }}
+              type="button"
+            >
+              회수
+            </button>
+          </div>
+        ))}
+        {apiKeysQuery.data?.items.length === 0 ? (
+          <p className="py-4 text-sm text-zinc-500">
+            발급된 API 키가 없습니다.
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

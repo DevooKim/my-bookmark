@@ -142,6 +142,27 @@ export const meResponseSchema = z.object({ userId: uuidSchema });
 export const aiStatusResponseSchema = z.object({
   provider: z.enum(["gemini", "anthropic", "openai"]),
 });
+
+export const createApiKeyRequestSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
+export const apiKeySchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  keyPrefix: z.string(),
+  lastUsedAt: isoDateTimeSchema.nullable(),
+  createdAt: isoDateTimeSchema,
+});
+
+export const createApiKeyResponseSchema = apiKeySchema.extend({
+  key: z.string().regex(/^bm_[A-Za-z0-9_-]{43}$/),
+});
+
+export const apiKeysResponseSchema = z.object({
+  items: z.array(apiKeySchema),
+});
+
 export const bookmarkResponseSchema = z.object({ bookmark: bookmarkSchema });
 export const bookmarksResponseSchema = z.object({
   items: z.array(bookmarkSchema),
@@ -163,6 +184,10 @@ export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
 export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
+export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
+export type ApiKey = z.infer<typeof apiKeySchema>;
+export type CreateApiKeyResponse = z.infer<typeof createApiKeyResponseSchema>;
+export type ApiKeysResponse = z.infer<typeof apiKeysResponseSchema>;
 export type BookmarkResponse = z.infer<typeof bookmarkResponseSchema>;
 export type BookmarksResponse = z.infer<typeof bookmarksResponseSchema>;
 export type CategoriesResponse = z.infer<typeof categoriesResponseSchema>;

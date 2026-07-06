@@ -5,9 +5,7 @@ import { getAiProviderLabel } from "../services/ai-provider";
 
 export const aiRouter = Router();
 
-aiRouter.use(requireAuth());
-
-aiRouter.get("/ai", (request, response) => {
+aiRouter.get("/ai", requireAuth(), (request, response) => {
   getUserId(request);
   response.json(
     aiStatusResponseSchema.parse({ provider: getAiProviderLabel() }),

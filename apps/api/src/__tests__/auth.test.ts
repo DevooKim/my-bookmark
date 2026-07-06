@@ -4,6 +4,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import {
   type BearerVerifier,
+  createApiKeyVerifier,
   createBearerAuth,
   createSupabaseJwksUrl,
   getUserId,
@@ -37,11 +38,29 @@ async function createAuthFixture() {
 
 function createTestApp(verify: BearerVerifier) {
   const app = express();
-  app.get("/api/me", requireAuth(verify), (req, res) => {
+  app.get("/api/me", requireAuth({ bearer: verify }), (req, res) => {
     res.json({ userId: getUserId(req) });
   });
   app.use(errorMiddleware);
   return app;
+}
+
+function createApiKeyDb(row: unknown) {
+  const updates: unknown[] = [];
+  let isUpdating = false;
+  const builder = {
+    from: () => builder,
+    select: () => builder,
+    update: (value: unknown) => {
+      isUpdating = true;
+      updates.push(value);
+      return builder;
+    },
+    eq: () => builder,
+    is: () => (isUpdating ? Promise.resolve({ error: null }) : builder),
+    maybeSingle: async () => ({ data: row, error: null }),
+  };
+  return { db: builder, updates };
 }
 
 describe("createSupabaseJwksUrl", () => {
@@ -182,5 +201,65 @@ describe("requireAuth (HTTP boundary)", () => {
 
     expect(response.status).toBe(500);
     expect(response.body.error.code).toBe("INTERNAL");
+  });
+
+  it("allows API key auth only when the route opts in", async () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const app = express();
+    const verifyApiKey = async (key: string) => {
+      if (key !== "bm_valid") {
+        throw new Error("unexpected key");
+      }
+      return userId;
+    };
+    app.get(
+      "/api/bookmarks",
+      requireAuth({ apiKey: true, apiKeyVerifier: verifyApiKey }),
+      (req, res) => res.json({ userId: getUserId(req) }),
+    );
+    app.get(
+      "/api/keys",
+      requireAuth({ apiKeyVerifier: verifyApiKey }),
+      (req, res) => res.json({ userId: getUserId(req) }),
+    );
+    app.use(errorMiddleware);
+
+    const allowed = await request(app)
+      .get("/api/bookmarks")
+      .set("X-API-Key", "bm_valid");
+    const denied = await request(app)
+      .get("/api/keys")
+      .set("X-API-Key", "bm_valid");
+
+    expect(allowed.status).toBe(200);
+    expect(allowed.body).toEqual({ userId });
+    expect(denied.status).toBe(401);
+    expect(denied.body.error.code).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("createApiKeyVerifier", () => {
+  it("returns the owner user id for a valid non-revoked key and updates last_used_at", async () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const key = "bm_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
+    const { db, updates } = createApiKeyDb({
+      user_id: userId,
+      last_used_at: null,
+    });
+
+    const verifyApiKey = createApiKeyVerifier(db);
+
+    await expect(verifyApiKey(key)).resolves.toBe(userId);
+    expect(updates).toHaveLength(1);
+  });
+
+  it("rejects an invalid key", async () => {
+    const { db } = createApiKeyDb(null);
+    const verifyApiKey = createApiKeyVerifier(db);
+
+    await expect(verifyApiKey("bm_missing")).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
   });
 });

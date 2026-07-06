@@ -1,16 +1,21 @@
 import {
   type AiStatusResponse,
+  type ApiKeysResponse,
   aiStatusResponseSchema,
+  apiKeysResponseSchema,
   type Bookmark,
   type BookmarksResponse,
   bookmarkSchema,
   bookmarksResponseSchema,
   type CategoriesResponse,
   type Category,
+  type CreateApiKeyRequest,
+  type CreateApiKeyResponse,
   type CreateBookmarkRequest,
   type CreateCategoryRequest,
   categoriesResponseSchema,
   categorySchema,
+  createApiKeyResponseSchema,
   type MeResponse,
   meResponseSchema,
   type UpdateBookmarkRequest,
@@ -105,6 +110,32 @@ export async function getAiStatus(): Promise<AiStatusResponse> {
   return parseJsonResponse(response, (json) =>
     aiStatusResponseSchema.parse(json),
   );
+}
+
+export async function listApiKeys(): Promise<ApiKeysResponse> {
+  const response = await apiFetch("/api/keys");
+  return parseJsonResponse(response, (json) =>
+    apiKeysResponseSchema.parse(json),
+  );
+}
+
+export async function createApiKey(
+  body: CreateApiKeyRequest,
+): Promise<CreateApiKeyResponse> {
+  const response = await apiFetch("/api/keys", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    createApiKeyResponseSchema.parse(json),
+  );
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  const response = await apiFetch(`/api/keys/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    await parseJsonResponse(response, (json) => json);
+  }
 }
 
 export async function listCategories(): Promise<CategoriesResponse> {

@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 3 구현 완료 (리뷰 MED 지적 수정 + 자동 검증 + 실제 Gemini API E2E 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 4
-- **최종 갱신**: 2026-07-07 (Phase 3 리뷰 MED 지적 수정)
+- **현재 Phase**: Phase 4 구현 완료 (API Key + iOS 단축어, 자동 검증 + API Key 실제 E2E 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 5
+- **최종 갱신**: 2026-07-07 (Phase 4 구현)
 
 ## Phase 체크리스트
 
@@ -13,7 +13,7 @@
 - [x] Phase 1 — DB + 인증
 - [x] Phase 2 — 북마크 + 카테고리 CRUD
 - [x] Phase 3 — AI 카테고리 분류
-- [ ] Phase 4 — API Key + iOS 단축어
+- [x] Phase 4 — API Key + iOS 단축어
 - [ ] Phase 5 — PWA
 - [ ] Phase 6 — Web Push + 리마인더
 - [ ] Phase 7 — 성능 + Docker + 마무리
@@ -37,6 +37,8 @@
 | 2026-07-07 | metadata SSRF 방어를 DNS resolve 결과 검사까지 확장했다. | hostname 문자열 검사만으로는 내부 IP로 resolve되는 도메인을 막을 수 없다. |
 | 2026-07-07 | OpenAI SDK는 Responses API의 `responses.parse` + `zodTextFormat`을 사용하고, Anthropic은 tool-use 강제 호출, Gemini는 `responseSchema`를 사용했다. 기본 모델명은 docs/05-ai의 지정값(`gemini-2.5-flash`, `claude-haiku-4-5`, `gpt-4o-mini`)을 유지했다. | 설치된 SDK 타입 정의 기준으로 구조화 출력 API를 확인해 구현했다. |
 | 2026-07-07 | 선택 provider API key가 없으면 API 서버는 경고만 내고 기동하며, `mode=ai`/재분류 작업은 metadata 수집 후 `ai_status='failed'`로 종료한다. | docs/05-ai의 "AI 비활성 모드로 기동" 요구 준수. |
+| 2026-07-07 | Phase 4에서 API Key 요청은 `express-rate-limit`로 `X-API-Key` 헤더가 있는 요청에만 분당 60회/IP 제한을 적용했다. | docs/03-api의 "API Key 인증 요청" 제한을 Bearer 웹앱 경로에는 적용하지 않기 위함. |
+| 2026-07-07 | `/api`에 router-level auth를 쓰는 기존 구조 때문에 Bearer 전용 라우터가 API Key 허용 라우터를 가로막을 수 있어, 라우터별 auth middleware를 해당 path prefix(`/bookmarks`, `/categories`, `/keys`, `/ai`)에만 적용하고 회귀 테스트를 추가했다. | Express router middleware는 path가 맞지 않는 요청도 마운트 prefix가 맞으면 실행된다. API Key는 bookmarks/categories만 허용하면서 `/api/keys`는 Bearer 전용이어야 한다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -49,6 +51,9 @@
 - Vite production build가 client `index` chunk 500KB 초과 경고를 출력한다. 현재 Phase 3 검증은 통과했으며, 번들 예산/코드 스플리팅은 Phase 7 성능 작업에서 재점검한다.
 - Phase 3 자동 검증 완료: provider 응답 zod 파싱(existing/new/none/실패), provider factory, provider별 SDK mock 경로(Gemini/Anthropic/OpenAI), 조건부 `ai_status='pending'` UPDATE(수동 지정 시 AI 결과 미덮어쓰기), 신규 카테고리 DB 재조회 기반 중복 재확인, 전체 검증 루프 통과.
 - Phase 3 실제 계정 API E2E 확인 완료: 제공 계정으로 Supabase password login → `GET /api/ai`, 임시 카테고리 생성, `mode=ai` 북마크 등록 직후 `ai_status='pending'`, Gemini 실호출 후 `ai_status='done'`, 기존 개발 카테고리 매칭, title 존재, `POST /api/bookmarks/:id/categorize` 재분류 직후 `pending` 전이를 `PORT=3202` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다. 브라우저에서 pending/failed/재분류 메뉴 조작은 자동 확인하지 못했다.
+- Phase 4 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과. API Key 미들웨어(유효/무효/범위 제한), keys 라우트(발급 원문 1회 노출/목록 원문 미노출/회수), 앱 라우터 순서 회귀 테스트 추가.
+- Phase 4 실제 API E2E 확인 완료: 테스트용 API Key를 DB에 삽입 → `POST /api/bookmarks` with `X-API-Key` + `mode=ai`가 201 반환, `ai_status`가 `pending`에서 `done`으로 전이, 같은 키로 `/api/keys`는 401, 회수 후 `/api/categories`는 401을 `PORT=3301` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다.
+- Phase 4 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 설정 화면에서 키 발급→복사→회수 클릭 플로우는 자동 확인하지 못했다. 타입/빌드와 API E2E는 통과했으며, 실제 브라우저에서 클립보드 권한/토스트/목록 갱신 확인이 필요하다.
 
 ## 배포 후 TODO
 

@@ -18,7 +18,7 @@ interface CategoryUpdate {
 
 export const categoriesRouter = Router();
 
-categoriesRouter.use(requireAuth());
+categoriesRouter.use("/categories", requireAuth({ apiKey: true }));
 
 categoriesRouter.get("/categories", async (request, response) => {
   const userId = getUserId(request);

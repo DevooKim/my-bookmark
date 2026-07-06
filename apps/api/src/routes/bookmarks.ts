@@ -73,7 +73,7 @@ interface BookmarkUpdate {
 
 export const bookmarksRouter = Router();
 
-bookmarksRouter.use(requireAuth());
+bookmarksRouter.use("/bookmarks", requireAuth({ apiKey: true }));
 
 bookmarksRouter.post("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
