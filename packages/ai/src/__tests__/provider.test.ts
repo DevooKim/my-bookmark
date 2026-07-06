@@ -1,4 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
+
+const sdkMocks = vi.hoisted(() => ({
+  anthropicCreate: vi.fn(),
+  geminiGenerateContent: vi.fn(),
+  openAiParse: vi.fn(),
+}));
+
+vi.mock("@google/genai", () => ({
+  GoogleGenAI: vi.fn(function GoogleGenAI() {
+    return { models: { generateContent: sdkMocks.geminiGenerateContent } };
+  }),
+  Type: {
+    NUMBER: "number",
+    OBJECT: "object",
+    STRING: "string",
+  },
+}));
+
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: vi.fn(function Anthropic() {
+    return { messages: { create: sdkMocks.anthropicCreate } };
+  }),
+}));
+
+vi.mock("openai", () => ({
+  default: vi.fn(function OpenAI() {
+    return { responses: { parse: sdkMocks.openAiParse } };
+  }),
+}));
+
+vi.mock("openai/helpers/zod", () => ({
+  zodTextFormat: vi.fn((schema, name) => ({ name, schema })),
+}));
+
 import {
   type AiProvider,
   createAiProvider,
@@ -71,5 +105,104 @@ describe("AI provider contract", () => {
     expect(createAiProvider({ provider: "openai", apiKey: "test" }).name).toBe(
       "openai",
     );
+  });
+
+  it("parses Gemini structured JSON responses and passes an abort signal", async () => {
+    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
+      text: JSON.stringify({
+        type: "existing",
+        categoryId: "cat-dev",
+        confidence: 0.91,
+      }),
+    });
+
+    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
+
+    await expect(
+      provider.categorize({
+        url: "https://example.com",
+        title: "React 19",
+        existingCategories: [{ id: "cat-dev", name: "개발" }],
+      }),
+    ).resolves.toEqual({
+      type: "existing",
+      categoryId: "cat-dev",
+      confidence: 0.91,
+    });
+    expect(sdkMocks.geminiGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          abortSignal: expect.any(AbortSignal),
+          responseMimeType: "application/json",
+        }),
+      }),
+    );
+  });
+
+  it("parses Anthropic forced tool-use responses", async () => {
+    sdkMocks.anthropicCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: "tool_use",
+          input: { type: "new", name: "디자인", confidence: 0.82 },
+        },
+      ],
+    });
+
+    const provider = createAiProvider({
+      provider: "anthropic",
+      apiKey: "test",
+    });
+
+    await expect(
+      provider.categorize({
+        url: "https://example.com",
+        existingCategories: [],
+      }),
+    ).resolves.toEqual({ type: "new", name: "디자인", confidence: 0.82 });
+    expect(sdkMocks.anthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool_choice: { type: "tool", name: "categorize_bookmark" },
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("parses OpenAI structured output responses", async () => {
+    sdkMocks.openAiParse.mockResolvedValueOnce({
+      output_parsed: { type: "none" },
+    });
+
+    const provider = createAiProvider({ provider: "openai", apiKey: "test" });
+
+    await expect(
+      provider.categorize({
+        url: "https://example.com",
+        existingCategories: [],
+      }),
+    ).resolves.toEqual({ type: "none" });
+    expect(sdkMocks.openAiParse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.objectContaining({
+          format: expect.objectContaining({ name: "bookmark_category" }),
+        }),
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("falls back to none when provider output parsing fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({ text: "not json" });
+
+    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
+
+    await expect(
+      provider.categorize({
+        url: "https://example.com",
+        existingCategories: [],
+      }),
+    ).resolves.toEqual({ type: "none" });
+    warn.mockRestore();
   });
 });

@@ -79,6 +79,18 @@ describe("applyCategorizeResult", () => {
     expect(db.bookmark.category_id).toBe("cat-dev");
   });
 
+  it("rechecks the database before creating a suggested new category", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(db, "user", "bookmark", [], {
+      type: "new",
+      name: " 개발 ",
+      confidence: 0.8,
+    });
+
+    expect(db.categories).toHaveLength(1);
+    expect(db.bookmark.category_id).toBe("cat-dev");
+  });
+
   it("creates new categories and leaves none results uncategorized", async () => {
     const db = new FakeDb();
     const result: CategorizeResult = {

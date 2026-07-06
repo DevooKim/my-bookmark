@@ -97,10 +97,11 @@ export async function applyCategorizeResult(
 
   if (result.type === "new") {
     const name = result.name.trim();
-    const existing = categories.find(
-      (item) => item.name.trim().toLowerCase() === name.toLowerCase(),
-    );
-    const categoryId = existing?.id ?? (await createCategory(db, userId, name));
+    const existing = findCategoryByNormalizedName(categories, name);
+    const current =
+      existing ??
+      findCategoryByNormalizedName(await loadCategories(db, userId), name);
+    const categoryId = current?.id ?? (await createCategory(db, userId, name));
     await markDone(db, userId, bookmarkId, categoryId);
     return;
   }
@@ -190,6 +191,16 @@ async function markFailed(
   }
 }
 
+function findCategoryByNormalizedName(
+  categories: CategoryRow[],
+  name: string,
+): CategoryRow | undefined {
+  const normalizedName = name.trim().toLowerCase();
+  return categories.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName,
+  );
+}
+
 async function createCategory(
   db: BookmarkCategorizeDb,
   userId: string,
@@ -202,9 +213,7 @@ async function createCategory(
   if (error) {
     if (error.code === "23505") {
       const categories = await loadCategories(db, userId);
-      const existing = categories.find(
-        (item) => item.name.trim().toLowerCase() === name.toLowerCase(),
-      );
+      const existing = findCategoryByNormalizedName(categories, name);
       if (existing) {
         return existing.id;
       }
