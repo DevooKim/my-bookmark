@@ -1,6 +1,6 @@
 ---
 name: review-phase
-description: 완료된 Phase를 스펙(docs)과 수용 기준에 대조해 적대적으로 리뷰한다. Phase 완료 직후 별도 세션에서 실행하면 효과적. 사용: /review-phase N
+description: 완료된 Phase를 스펙(docs)과 수용 기준에 대조해 적대적으로 리뷰한다. Phase 완료 직후 별도 세션에서 실행하면 효과적. 사용:/review-phase N
 argument-hint: <phase-number>
 ---
 
