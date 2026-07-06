@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 3 구현 완료 (AI provider/분류 파이프라인 자동 검증 통과, 실제 AI 키 기반 E2E와 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 4
-- **최종 갱신**: 2026-07-07 (Phase 3 — 멀티 provider AI 분류, mode=ai, 재분류 UI)
+- **현재 Phase**: Phase 3 구현 완료 (자동 검증 + 실제 Gemini API E2E 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 4
+- **최종 갱신**: 2026-07-07 (Phase 3 — 실제 Gemini AI 분류 E2E 확인)
 
 ## Phase 체크리스트
 
@@ -48,7 +48,7 @@
 - `jwtVerify`에 `algorithms` 화이트리스트 미지정: jose v6의 JWKS 리졸버가 키의 `alg`에 검증을 바인딩하므로 현재 악용 불가. Supabase 키 타입 확정 후 defense-in-depth로 명시 고려.
 - Vite production build가 client `index` chunk 500KB 초과 경고를 출력한다. 현재 Phase 3 검증은 통과했으며, 번들 예산/코드 스플리팅은 Phase 7 성능 작업에서 재점검한다.
 - Phase 3 자동 검증 완료: provider 응답 zod 파싱(existing/new/none/실패), provider factory, 조건부 `ai_status='pending'` UPDATE(수동 지정 시 AI 결과 미덮어쓰기), 신규 카테고리 중복 재확인, 전체 검증 루프 통과.
-- Phase 3 실제 AI E2E 확인 필요: 현재 세션에는 Supabase 로그인 계정 비밀번호가 없어 `mode=ai` 실제 등록 → 수초 내 분류, `AI_PROVIDER=anthropic/openai` 전환 실호출, 브라우저에서 pending/failed/재분류 메뉴 조작은 자동 확인하지 못했다. `.env`에 키 존재 여부만 확인했으며 값은 출력하지 않았다.
+- Phase 3 실제 계정 API E2E 확인 완료: 제공 계정으로 Supabase password login → `GET /api/ai`, 임시 카테고리 생성, `mode=ai` 북마크 등록 직후 `ai_status='pending'`, Gemini 실호출 후 `ai_status='done'`, 기존 개발 카테고리 매칭, title 존재, `POST /api/bookmarks/:id/categorize` 재분류 직후 `pending` 전이를 `PORT=3202` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다. 브라우저에서 pending/failed/재분류 메뉴 조작은 자동 확인하지 못했다.
 
 ## 배포 후 TODO
 
