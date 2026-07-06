@@ -4,13 +4,13 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 1 진행 중 (DB push/실제 로그인 검증 대기)
-- **최종 갱신**: 2026-07-06 (Phase 1 DB/Auth 코드 구현, Supabase CLI 인증 대기)
+- **현재 Phase**: Phase 1 완료 (수용 기준 동작 확인 + 리뷰 지적 반영). 다음: Phase 2
+- **최종 갱신**: 2026-07-07 (Phase 1 리뷰 수정 — auth 미들웨어 통합 테스트, me.ts 폴백 제거, JWKS 장애 502 처리)
 
 ## Phase 체크리스트
 
 - [x] Phase 0 — 모노레포 스캐폴딩
-- [ ] Phase 1 — DB + 인증 (선행: 사용자의 Supabase 프로젝트 설정 필요 → docs/04-auth.md)
+- [x] Phase 1 — DB + 인증
 - [ ] Phase 2 — 북마크 + 카테고리 CRUD
 - [ ] Phase 3 — AI 카테고리 분류
 - [ ] Phase 4 — API Key + iOS 단축어
@@ -27,11 +27,15 @@
 | 2026-07-06 | TanStack Router 생성 파일 `**/routeTree.gen.ts`를 Biome 검사에서 제외했다. | 생성 파일에 `any`가 포함되며, 파일 자체 주석도 lint/format 제외를 권장함. |
 | 2026-07-06 | Phase 1에서 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`는 test 외 환경 필수로 강화하고, 테스트 환경만 optional로 유지했다. | 인증/API 테스트는 Supabase 실제 값 없이도 실행되어야 하지만 dev/prod 서버는 잘못된 설정으로 뜨면 안 된다. |
 | 2026-07-06 | Supabase CLI를 루트 devDependency로 추가하고 `supabase init` 결과를 커밋 대상으로 포함했다. | 마이그레이션 관리를 저장소 명령(`pnpm exec supabase ...`)으로 재현 가능하게 하기 위함. |
+| 2026-07-07 | `requireAuth`에 verifier 주입 파라미터(`requireAuth(verify = bearerAuth)`)를 추가하고, supertest로 HTTP 경계 통합 테스트를 작성했다(유효/만료/변조/헤더누락/비-bearer 스킴). | 로드맵 Phase 1의 "auth 미들웨어 단위 테스트" 요구는 순수 함수(`createBearerAuth`)가 아니라 실제 미들웨어(`requireAuth`)의 헤더 파싱·에러 전달 경로를 덮어야 충족된다. 리뷰 지적(HIGH). |
+| 2026-07-07 | `GET /api/me`의 `userId ?? ""` 폴백을 제거하고 `getUserId(request)` 헬퍼(userId 없으면 500)로 교체했다. | 도달 불가능한 폴백이 미들웨어 우회 버그를 서버 500이 아니라 클라 zod 파싱 에러로 밀어냈다. 리뷰 지적(MED). |
+| 2026-07-07 | `createBearerAuth`가 jose의 키 해결 실패(`ERR_JWKS_TIMEOUT`/`NO_MATCHING_KEY`/`MULTIPLE_MATCHING_KEYS`)를 401이 아닌 502로 응답하도록 분기했다. | JWKS 엔드포인트 일시 장애를 "토큰 무효(401)"로 뭉개면 유효 세션 사용자가 refresh 루프 끝에 로그아웃당한다. 리뷰 지적(LOW). |
 
 ## 알려진 이슈 / 기술 부채
 
-- Phase 1 DB/Auth 코드 구현과 정적 검증은 완료됐지만, `supabase link/db push`는 로컬 Supabase access token 부재로 미실행 상태다. 사용자가 `supabase login` 또는 `SUPABASE_ACCESS_TOKEN` 제공 후 `pnpm exec supabase link --project-ref <ref>` 및 `pnpm exec supabase db push`를 실행해야 한다.
-- Supabase 대시보드의 가입 차단(Allow new users to sign up OFF)과 사용자 1개 생성은 에이전트가 확인할 수 없어 사용자 확인 필요.
+- (해소) Phase 1 수용 기준 — 로그인/리다이렉트/로그아웃/`GET /api/me` — 사용자가 실제 동작 확인 완료. `supabase db push` 및 대시보드 가입 차단/계정 생성도 사용자 측에서 반영된 것으로 확인.
+- SSR 가드 공백: `_authed` 라우트의 `beforeLoad`는 클라이언트에서만 세션을 검사한다(docs/04-auth line 27 허용). Phase 2+에서 `_authed` 하위에 민감 데이터를 SSR로 렌더하지 말 것 — 비인증 초기 HTML로 노출된다.
+- `jwtVerify`에 `algorithms` 화이트리스트 미지정: jose v6의 JWKS 리졸버가 키의 `alg`에 검증을 바인딩하므로 현재 악용 불가. Supabase 키 타입 확정 후 defense-in-depth로 명시 고려.
 
 ## 배포 후 TODO
 
