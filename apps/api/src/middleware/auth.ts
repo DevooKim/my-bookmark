@@ -34,11 +34,15 @@ export function createBearerAuth({
   };
 }
 
+export function createSupabaseJwksUrl(supabaseUrl: string) {
+  return new URL("/auth/v1/.well-known/jwks.json", supabaseUrl);
+}
+
 const issuer = appEnv.SUPABASE_URL
   ? `${appEnv.SUPABASE_URL}/auth/v1`
   : "http://localhost/auth/v1";
 const remoteJwks = appEnv.SUPABASE_URL
-  ? createRemoteJWKSet(new URL(`${appEnv.SUPABASE_URL}/auth/v1/jwks`))
+  ? createRemoteJWKSet(createSupabaseJwksUrl(appEnv.SUPABASE_URL))
   : undefined;
 
 export const bearerAuth = remoteJwks

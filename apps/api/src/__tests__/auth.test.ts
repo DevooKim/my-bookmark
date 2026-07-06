@@ -1,6 +1,6 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
-import { createBearerAuth } from "../middleware/auth";
+import { createBearerAuth, createSupabaseJwksUrl } from "../middleware/auth";
 
 async function createAuthFixture() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -25,6 +25,14 @@ async function createAuthFixture() {
 
   return { bearerAuth, signToken, userId };
 }
+
+describe("createSupabaseJwksUrl", () => {
+  it("uses Supabase well-known JWKS endpoint", () => {
+    expect(
+      createSupabaseJwksUrl("https://example.supabase.co").toString(),
+    ).toBe("https://example.supabase.co/auth/v1/.well-known/jwks.json");
+  });
+});
 
 describe("createBearerAuth", () => {
   it("returns user id for a valid Supabase JWT", async () => {
