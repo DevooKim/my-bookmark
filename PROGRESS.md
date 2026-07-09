@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 4 구현 완료 (API Key + iOS 단축어, 리뷰 지적 수정 및 자동 검증 통과, 브라우저 UI 조작 확인은 사용자/브라우저 확인 필요). 다음: Phase 5
-- **최종 갱신**: 2026-07-07 (Phase 4 리뷰 지적 수정)
+- **현재 Phase**: Phase 5 구현 완료 (PWA 설치 기반 + 오프라인 읽기 캐시, 자동 검증 통과). 다음: Phase 6
+- **최종 갱신**: 2026-07-10 (Phase 5 PWA 구현)
 
 ## Phase 체크리스트
 
@@ -14,7 +14,7 @@
 - [x] Phase 2 — 북마크 + 카테고리 CRUD
 - [x] Phase 3 — AI 카테고리 분류
 - [x] Phase 4 — API Key + iOS 단축어
-- [ ] Phase 5 — PWA
+- [x] Phase 5 — PWA
 - [ ] Phase 6 — Web Push + 리마인더
 - [ ] Phase 7 — 성능 + Docker + 마무리
 
@@ -40,6 +40,8 @@
 | 2026-07-07 | Phase 4에서 API Key 요청은 `express-rate-limit`로 `X-API-Key` 헤더가 있는 요청에만 분당 60회/IP 제한을 적용했다. | docs/03-api의 "API Key 인증 요청" 제한을 Bearer 웹앱 경로에는 적용하지 않기 위함. |
 | 2026-07-07 | `/api`에 router-level auth를 쓰는 기존 구조 때문에 Bearer 전용 라우터가 API Key 허용 라우터를 가로막을 수 있어, 라우터별 auth middleware를 해당 path prefix(`/bookmarks`, `/categories`, `/keys`, `/ai`)에만 적용하고 회귀 테스트를 추가했다. | Express router middleware는 path가 맞지 않는 요청도 마운트 prefix가 맞으면 실행된다. API Key는 bookmarks/categories만 허용하면서 `/api/keys`는 Bearer 전용이어야 한다. |
 | 2026-07-07 | Phase 4 리뷰 지적에 따라 pino HTTP 로그에서 `Authorization`/`X-API-Key` 헤더를 redaction하고, API Key 복사 실패 시 성공 토스트를 띄우지 않도록 Clipboard API 실패 처리를 추가했다. 또한 API Key rate limit의 429 응답을 공통 에러 포맷으로 맞추고, rate limit 적용 범위를 bookmarks/categories API Key 허용 경로로 제한했다. | API Key 원문은 발급 응답 1회 외 로그/응답에 재노출되면 안 되며, 복사 실패는 사용자가 직접 선택 복사할 수 있도록 명확히 알려야 한다. `/api/keys` 같은 Bearer 전용 라우트는 API Key 헤더가 있어도 수용 기준대로 401을 반환해야 한다. |
+| 2026-07-10 | Phase 5 서비스 워커는 `vite-plugin-pwa` 없이 `src/sw/sw.ts`를 esbuild 별도 스텝으로 `public/sw.js`에 번들하고, 생성 산출물은 git/biome 대상에서 제외했다. | docs/06-pwa-push의 TanStack Start 호환성 함정을 그대로 따른다. SW 산출물은 build/dev에서 재생성되므로 소스(`src/sw/sw.ts`)만 추적한다. |
+| 2026-07-10 | Lighthouse 13.4.0에서 PWA 카테고리/설치성 audit이 제거되어 `--only-categories=pwa`로 검증할 수 없었다. 대신 Chrome CDP로 프로덕션 서버에서 SW 등록(`/sw.js`), manifest/apple-touch-icon/theme-color 링크를 확인하고, manifest/아이콘/SW cache-control 헤더를 curl로 검증했다. | 현행 Lighthouse CLI의 기능 변경. DevTools Application 탭과 동등한 설치성 요소(manifest + maskable icon + SW 등록)는 직접 확인했다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -55,6 +57,8 @@
 - Phase 4 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과. API Key 미들웨어(유효/무효/범위 제한), keys 라우트(발급 원문 1회 노출/목록 원문 미노출/회수), 앱 라우터 순서, API Key rate limit 범위/429 공통 에러 포맷, HTTP 로그 secret redaction, Clipboard API 복사 실패 처리 회귀 테스트 추가.
 - Phase 4 실제 API E2E 확인 완료: 테스트용 API Key를 DB에 삽입 → `POST /api/bookmarks` with `X-API-Key` + `mode=ai`가 201 반환, `ai_status`가 `pending`에서 `done`으로 전이, 같은 키로 `/api/keys`는 401, 회수 후 `/api/categories`는 401을 `PORT=3301` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다.
 - Phase 4 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 설정 화면에서 키 발급→복사→회수 클릭 플로우는 자동 확인하지 못했다. 타입/빌드와 API E2E는 통과했으며, 실제 브라우저에서 클립보드 권한/토스트/목록 갱신 확인이 필요하다.
+- Phase 5 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과. 서비스 워커 캐시 전략 테스트(정적 자산 cache-first, `GET /api/bookmarks`/`GET /api/categories` network-first + 오프라인 fallback, API mutation/기타 API network-only), 수동 등록 테스트, PWA 설정 테스트 추가.
+- Phase 5 프로덕션 확인 완료: `PORT=3400 node apps/web/.output/server/index.mjs`로 manifest/SW/icon 응답을 확인했고 `manifest.webmanifest`/icons는 `cache-control: public, max-age=3600`, `sw.js`는 `cache-control: no-cache`임을 curl로 확인했다. Chrome headless CDP에서 `/login` 로드 후 `navigator.serviceWorker.getRegistrations()`가 `http://localhost:3400/sw.js`를 반환하고, manifest/apple-touch-icon/theme-color head 요소가 존재함을 확인했다. Lighthouse 13은 PWA audit을 제공하지 않아 별도 installable 경고 검사는 불가했다.
 
 ## 배포 후 TODO
 

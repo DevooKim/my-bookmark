@@ -11,6 +11,7 @@
       "!.vinxi",
       "!**/.vinxi",
       "!coverage",
+      "!**/public/sw.js",
       "!**/routeTree.gen.ts"
     ]
   },

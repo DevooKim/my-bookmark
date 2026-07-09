@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
+import { registerServiceWorker } from "../lib/service-worker";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -14,9 +15,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#0a0a0a" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "Bookmark" },
       { title: "My Bookmark" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
+    ],
   }),
   component: App,
   shellComponent: RootDocument,
@@ -26,6 +34,8 @@ function App() {
   const [queryClient] = useState(() => new QueryClient());
 
   useEffect(() => {
+    void registerServiceWorker();
+
     const stored = localStorage.getItem("theme");
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)",

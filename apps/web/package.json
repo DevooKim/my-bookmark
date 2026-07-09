@@ -6,12 +6,13 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "build:sw": "esbuild src/sw/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
+    "dev": "esbuild src/sw/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js --watch=forever & vite dev --port 3000",
     "generate-routes": "tsr generate",
     "typecheck": "pnpm generate-routes && tsc --noEmit",
     "lint": "biome check .",
     "test": "vitest run --passWithNoTests",
-    "build": "pnpm generate-routes && vite build",
+    "build": "pnpm build:sw && pnpm generate-routes && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "esbuild": "^0.28.1",
     "jsdom": "^28.1.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",

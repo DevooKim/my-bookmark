@@ -13,7 +13,23 @@ const config = defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: [
     devtools(),
-    nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+    nitro({
+      rollupConfig: { external: [/^@sentry\//] },
+      routeRules: {
+        "/assets/**": {
+          headers: { "cache-control": "public, max-age=31536000, immutable" },
+        },
+        "/icons/**": {
+          headers: { "cache-control": "public, max-age=3600" },
+        },
+        "/manifest.webmanifest": {
+          headers: { "cache-control": "public, max-age=3600" },
+        },
+        "/sw.js": {
+          headers: { "cache-control": "no-cache" },
+        },
+      },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),
