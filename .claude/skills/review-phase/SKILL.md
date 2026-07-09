@@ -8,7 +8,55 @@ argument-hint: <phase-number>
 
 방금 구현된 Phase N을 **구현자가 아닌 리뷰어의 눈**으로 검증한다. 목표는 칭찬이 아니라 결함 발견이다.
 
-## 절차
+## 기본 원칙
+
+- 리뷰는 구현 세션과 분리된 새 컨텍스트에서 받는다.
+- 리뷰어는 수정하지 않는다. 결함 보고만 한다.
+- 원 세션은 리뷰 결과를 사용자에게 보고한다.
+- 사용자가 수정 진행을 승인하면, 원 세션에서 지적사항을 수정하고 검증 루프를 다시 실행한다.
+
+## herdr 격리 리뷰 절차 (우선 사용)
+
+herdr 안에서 실행 중이면(`HERDR_ENV=1`) 새 패널에 `pi` 리뷰어를 띄워 리뷰를 받는다.
+
+1. 현재 pane id를 확인한다.
+
+```bash
+herdr pane list
+```
+
+2. 현재 pane을 오른쪽으로 split하고 새 pane id를 저장한다. `CURRENT_PANE`은 `pane list`에서 `focused:true`인 pane id다.
+
+```bash
+REVIEW_PANE=$(herdr pane split "$CURRENT_PANE" --direction right --no-focus \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+```
+
+3. 새 pane에서 `pi`를 실행하고 agent가 입력 가능 상태가 될 때까지 기다린다.
+
+```bash
+herdr pane run "$REVIEW_PANE" "cd /Users/hyunwookim/Dev/apps/my-bookmark && pi"
+herdr wait agent-status "$REVIEW_PANE" --status idle --timeout 60000
+```
+
+4. 리뷰어에게 아래 프롬프트를 보낸다. Phase 번호가 인자로 없으면 `PROGRESS.md`의 현재 완료 Phase를 사용한다.
+
+```bash
+herdr pane run "$REVIEW_PANE" "Review Phase N of this repository as an adversarial reviewer. Read PROGRESS.md, docs/09-roadmap.md Phase N, and every referenced docs/*.md. Then inspect all code changes for Phase N using git log/diff. Do not modify files. Report findings only, in the project's review-phase format: HIGH/MED/LOW with file:line, spec basis, and scenario. If there are no findings, state the exact verification scope."
+```
+
+5. 리뷰어가 끝날 때까지 기다리고 결과를 읽는다.
+
+```bash
+herdr wait agent-status "$REVIEW_PANE" --status done --timeout 600000
+herdr pane read "$REVIEW_PANE" --source recent-unwrapped --lines 240
+```
+
+6. 원 세션에서 리뷰 결과를 사용자에게 요약 보고한다. 지적이 있으면 사용자에게 수정 진행 여부를 묻는다.
+
+> herdr가 아니거나 새 pane 생성이 실패하면, 아래 "인라인 리뷰 절차"를 수행하고 그 사실을 보고한다.
+
+## 인라인 리뷰 절차
 
 1. `docs/09-roadmap.md`의 Phase N(작업 목록 + 수용 기준)과 참조 문서를 읽는다.
 2. 이번 Phase에서 변경된 코드를 전부 읽는다 (`git log`/`git diff`로 범위 파악).
