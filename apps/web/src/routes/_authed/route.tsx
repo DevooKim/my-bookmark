@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Bookmark, Clock, Home, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getMe } from "../../lib/api-client";
+import { clearServiceWorkerApiCache } from "../../lib/service-worker";
 import { supabase } from "../../lib/supabase";
 
 export const Route = createFileRoute("/_authed")({
@@ -38,6 +39,7 @@ function AuthedLayout() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    await clearServiceWorkerApiCache();
     queryClient.clear();
     window.location.assign("/login");
   }

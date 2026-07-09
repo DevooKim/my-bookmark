@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 5 구현 완료 (PWA 설치 기반 + 오프라인 읽기 캐시, 자동 검증 통과). 다음: Phase 6
-- **최종 갱신**: 2026-07-10 (Phase 5 PWA 구현)
+- **현재 Phase**: Phase 5 구현 완료 및 리뷰 지적(MED: 로그아웃 시 인증 API 캐시 정리) 반영 완료. 다음: Phase 6
+- **최종 갱신**: 2026-07-10 (Phase 5 리뷰 지적 반영)
 
 ## Phase 체크리스트
 
@@ -42,6 +42,7 @@
 | 2026-07-07 | Phase 4 리뷰 지적에 따라 pino HTTP 로그에서 `Authorization`/`X-API-Key` 헤더를 redaction하고, API Key 복사 실패 시 성공 토스트를 띄우지 않도록 Clipboard API 실패 처리를 추가했다. 또한 API Key rate limit의 429 응답을 공통 에러 포맷으로 맞추고, rate limit 적용 범위를 bookmarks/categories API Key 허용 경로로 제한했다. | API Key 원문은 발급 응답 1회 외 로그/응답에 재노출되면 안 되며, 복사 실패는 사용자가 직접 선택 복사할 수 있도록 명확히 알려야 한다. `/api/keys` 같은 Bearer 전용 라우트는 API Key 헤더가 있어도 수용 기준대로 401을 반환해야 한다. |
 | 2026-07-10 | Phase 5 서비스 워커는 `vite-plugin-pwa` 없이 `src/sw/sw.ts`를 esbuild 별도 스텝으로 `public/sw.js`에 번들하고, 생성 산출물은 git/biome 대상에서 제외했다. | docs/06-pwa-push의 TanStack Start 호환성 함정을 그대로 따른다. SW 산출물은 build/dev에서 재생성되므로 소스(`src/sw/sw.ts`)만 추적한다. |
 | 2026-07-10 | Lighthouse 13.4.0에서 PWA 카테고리/설치성 audit이 제거되어 `--only-categories=pwa`로 검증할 수 없었다. 대신 Chrome CDP로 프로덕션 서버에서 SW 등록(`/sw.js`), manifest/apple-touch-icon/theme-color 링크를 확인하고, manifest/아이콘/SW cache-control 헤더를 curl로 검증했다. | 현행 Lighthouse CLI의 기능 변경. DevTools Application 탭과 동등한 설치성 요소(manifest + maskable icon + SW 등록)는 직접 확인했다. |
+| 2026-07-10 | Phase 5 리뷰 반영으로 로그아웃 시 `navigator.serviceWorker.controller?.postMessage({ type: "CLEAR_API_CACHE" })`와 `caches.delete("my-bookmark-api-v1")`를 함께 수행하도록 했다. SW도 `CLEAR_API_CACHE` message를 받아 동일 API cache를 삭제한다. | 인증 사용자별 오프라인 API 응답이 계정 전환/로그아웃 뒤 남으면 안 된다. controller가 없거나 message 전달이 지연돼도 page CacheStorage 직접 삭제로 정리되도록 이중 경로를 둔다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -59,6 +60,7 @@
 - Phase 4 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 설정 화면에서 키 발급→복사→회수 클릭 플로우는 자동 확인하지 못했다. 타입/빌드와 API E2E는 통과했으며, 실제 브라우저에서 클립보드 권한/토스트/목록 갱신 확인이 필요하다.
 - Phase 5 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과. 서비스 워커 캐시 전략 테스트(정적 자산 cache-first, `GET /api/bookmarks`/`GET /api/categories` network-first + 오프라인 fallback, API mutation/기타 API network-only), 수동 등록 테스트, PWA 설정 테스트 추가.
 - Phase 5 프로덕션 확인 완료: `PORT=3400 node apps/web/.output/server/index.mjs`로 manifest/SW/icon 응답을 확인했고 `manifest.webmanifest`/icons는 `cache-control: public, max-age=3600`, `sw.js`는 `cache-control: no-cache`임을 curl로 확인했다. Chrome headless CDP에서 `/login` 로드 후 `navigator.serviceWorker.getRegistrations()`가 `http://localhost:3400/sw.js`를 반환하고, manifest/apple-touch-icon/theme-color head 요소가 존재함을 확인했다. Lighthouse 13은 PWA audit을 제공하지 않아 별도 installable 경고 검사는 불가했다.
+- Phase 5 리뷰 지적 반영 완료: 로그아웃 경로에서 SW API cache를 삭제하도록 `clearServiceWorkerApiCache` helper를 추가하고 `_authed/route.tsx`에서 `signOut()` 직후 호출한다. SW `CLEAR_API_CACHE` message handler와 직접 `CacheStorage.delete` 경로를 모두 테스트했다. 전체 검증 루프 재통과.
 
 ## 배포 후 TODO
 

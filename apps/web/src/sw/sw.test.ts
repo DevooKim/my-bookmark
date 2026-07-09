@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyRequest, handleFetch, shouldCacheResponse } from "./sw";
+import {
+  classifyRequest,
+  clearApiCache,
+  handleFetch,
+  handleMessage,
+  shouldCacheResponse,
+} from "./sw";
 
 describe("service worker cache strategy", () => {
   it("uses cache-first only for hashed static assets", () => {
@@ -37,6 +43,26 @@ describe("service worker cache strategy", () => {
     expect(shouldCacheResponse(new Response("missing", { status: 404 }))).toBe(
       false,
     );
+  });
+
+  it("clears the API cache on request", async () => {
+    const deleteCache = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("caches", { delete: deleteCache });
+
+    await clearApiCache();
+
+    expect(deleteCache).toHaveBeenCalledWith("my-bookmark-api-v1");
+  });
+
+  it("handles CLEAR_API_CACHE messages", () => {
+    const waitUntil = vi.fn();
+    const deleteCache = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("caches", { delete: deleteCache });
+
+    handleMessage({ data: { type: "CLEAR_API_CACHE" }, waitUntil });
+
+    expect(waitUntil).toHaveBeenCalledOnce();
+    expect(deleteCache).toHaveBeenCalledWith("my-bookmark-api-v1");
   });
 
   it("falls back to the last successful bookmarks response when offline", async () => {

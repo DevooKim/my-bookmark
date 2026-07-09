@@ -14,6 +14,11 @@ type FetchEventLike = ExtendableEventLike & {
   respondWith: (response: Promise<Response>) => void;
 };
 
+type MessageEventLike = {
+  data?: unknown;
+  waitUntil?: (promise: Promise<unknown>) => void;
+};
+
 type PushEventLike = ExtendableEventLike & {
   data?: {
     json: () => unknown;
@@ -101,6 +106,22 @@ async function networkFirst(request: Request): Promise<Response> {
   }
 }
 
+export async function clearApiCache(): Promise<boolean> {
+  return caches.delete(API_CACHE);
+}
+
+export function handleMessage(event: MessageEventLike): void {
+  const data = event.data;
+  if (!data || typeof data !== "object") {
+    return;
+  }
+
+  if ((data as { type?: unknown }).type === "CLEAR_API_CACHE") {
+    const clearPromise = clearApiCache();
+    event.waitUntil?.(clearPromise);
+  }
+}
+
 export async function handleFetch(request: Request): Promise<Response> {
   switch (classifyRequest(request)) {
     case "asset-cache-first":
@@ -173,6 +194,10 @@ swScope.addEventListener?.("activate", (event) => {
 swScope.addEventListener?.("fetch", (event) => {
   const fetchEvent = event as FetchEventLike;
   fetchEvent.respondWith(handleFetch(fetchEvent.request));
+});
+
+swScope.addEventListener?.("message", (event) => {
+  handleMessage(event as MessageEventLike);
 });
 
 swScope.addEventListener?.("push", (event) => {
