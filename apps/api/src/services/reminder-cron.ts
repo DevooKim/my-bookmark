@@ -81,13 +81,25 @@ export async function processDueReminders({
   return { scanned: reminders.length, claimed, sent, failed };
 }
 
-export function startReminderCron(): ScheduledTask | null {
+export function startReminderCron({
+  pushConfigured,
+  schedule = cron.schedule,
+}: {
+  pushConfigured: boolean;
+  schedule?: typeof cron.schedule;
+}): ScheduledTask | null {
+  if (!pushConfigured) {
+    if (appEnv.NODE_ENV !== "test") {
+      console.warn("Reminder cron is disabled because push is not configured");
+    }
+    return null;
+  }
   if (appEnv.NODE_ENV === "test") {
     return null;
   }
   const db = createSupabaseReminderCronDb();
   const pushSender = createDefaultPushSender();
-  const task = cron.schedule("* * * * *", () => {
+  const task = schedule("* * * * *", () => {
     void processDueReminders({ db, pushSender }).catch((error) => {
       console.warn("reminder cron failed", error);
     });

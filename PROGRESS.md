@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 6 구현 완료. 다음: Phase 7
-- **최종 갱신**: 2026-07-10 (Phase 6 Web Push + 리마인더 구현)
+- **현재 Phase**: Phase 6 구현 완료 및 리뷰 지적 반영 완료. 다음: Phase 7
+- **최종 갱신**: 2026-07-10 (Phase 6 리뷰 지적 반영)
 
 ## Phase 체크리스트
 
@@ -45,6 +45,8 @@
 | 2026-07-10 | Phase 5 리뷰 반영으로 로그아웃 시 `navigator.serviceWorker.controller?.postMessage({ type: "CLEAR_API_CACHE" })`와 `caches.delete("my-bookmark-api-v1")`를 함께 수행하도록 했다. SW도 `CLEAR_API_CACHE` message를 받아 동일 API cache를 삭제한다. | 인증 사용자별 오프라인 API 응답이 계정 전환/로그아웃 뒤 남으면 안 된다. controller가 없거나 message 전달이 지연돼도 page CacheStorage 직접 삭제로 정리되도록 이중 경로를 둔다. |
 | 2026-07-10 | VAPID 키 생성 절차는 별도 사용자 문서 `docs/vapid-guide.md`로 추가했다. API는 VAPID 값이 없으면 기동은 허용하되 push 등록/테스트는 500으로 명확히 실패한다. | 로컬/테스트 환경에서 푸시 없이도 서버가 떠야 하며, 실제 발송 기능은 설정 누락을 숨기면 안 된다. |
 | 2026-07-10 | 리마인더 cron은 조건부 `status='pending'` 업데이트로 먼저 `sent` 클레임한 뒤 발송한다. 구독이 0개이거나 전송 실패여도 클레임된 리마인더는 sent로 남긴다. | docs/06-pwa-push의 단순화된 순서도(재시도 큐 없음, 중복 발송 방지)를 그대로 따른다. |
+| 2026-07-10 | Phase 6 리뷰 반영으로 `configureWebPush()` 결과를 서버 시작 시 보관해 VAPID 미설정/부분설정이면 reminder cron 자체를 시작하지 않도록 했다. | push 발송 불가능 상태에서 cron이 리마인더를 `sent`로 클레임하면 알림이 유실된다. |
+| 2026-07-10 | `PATCH /api/reminders/:id`는 docs/03-api에 맞춰 `{ remindAt?, note? }` pending-only 수정으로 변경하고, 취소는 `DELETE`만 담당하게 했다. | 기존 구현은 `{ status: 'cancelled' }`만 받아 스펙과 달랐다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -66,6 +68,7 @@
 - Phase 6 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과. push sender(web-push JSON payload, 410 만료 구독 삭제), reminder cron(조건부 클레임 후 발송, 경쟁 claim 실패 시 미발송), VAPID 공개키 변환 테스트 추가.
 - Phase 6 구현 완료: `/api/push/status|subscriptions|unsubscribe|test`, `/api/reminders` 목록/생성/취소, 서버 listen 후 cron 시작 및 SIGTERM/SIGINT graceful stop, 설정 알림 섹션, 리마인더 페이지, 북마크 카드 리마인더 다이얼로그, 알림 꺼짐 배너를 추가했다.
 - Phase 6 수동 확인 제한: 현재 환경에는 테스트 계정 자격 증명과 OS 알림 권한이 제공되지 않아 데스크톱 Chrome에서 실제 테스트 알림 수신 및 2분 뒤 리마인더 수신은 자동 확인하지 못했다. VAPID env 값 존재, 빌드/테스트, 서버·클라이언트 코드 경로는 검증했다. 실제 계정 로그인 후 설정 → 알림 켜기 → 테스트 알림/2분 리마인더 수신 확인 필요.
+- Phase 6 리뷰 지적 반영 완료: VAPID 미설정 시 cron 미시작(클레임/알림 유실 방지), `POST /api/reminders` 과거/현재 `remindAt` 400, `PATCH /api/reminders/:id`의 `{ remindAt?, note? }` pending-only 수정 및 과거 `remindAt` 400/소유권 경계, `POST /api/push/subscriptions` 201 응답을 HTTP route 테스트로 보강했다. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 재통과.
 
 ## 배포 후 TODO
 

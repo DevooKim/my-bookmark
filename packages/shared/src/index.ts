@@ -156,9 +156,14 @@ export const createReminderRequestSchema = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 });
 
-export const updateReminderRequestSchema = z.object({
-  status: z.literal("cancelled"),
-});
+export const updateReminderRequestSchema = z
+  .object({
+    remindAt: isoDateTimeSchema.optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
 
 export const meResponseSchema = z.object({ userId: uuidSchema });
 export const aiStatusResponseSchema = z.object({

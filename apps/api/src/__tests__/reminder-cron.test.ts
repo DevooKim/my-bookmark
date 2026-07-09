@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { processDueReminders } from "../services/reminder-cron";
+import {
+  processDueReminders,
+  startReminderCron,
+} from "../services/reminder-cron";
 
 const reminder = {
   id: "reminder-1",
@@ -28,6 +31,15 @@ function createDb({ claimed = true } = {}) {
 }
 
 describe("reminder cron", () => {
+  it("does not schedule or claim reminders when push is not configured", () => {
+    const schedule = vi.fn();
+
+    const task = startReminderCron({ pushConfigured: false, schedule });
+
+    expect(task).toBeNull();
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
   it("claims pending due reminders before sending", async () => {
     const db = createDb();
     const pushSender = { send: vi.fn().mockResolvedValue({ ok: true }) };

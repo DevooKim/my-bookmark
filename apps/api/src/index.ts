@@ -5,12 +5,12 @@ import { appEnv } from "./lib/env";
 import { configureWebPush } from "./services/push-sender";
 import { startReminderCron } from "./services/reminder-cron";
 
-configureWebPush();
+const pushConfigured = configureWebPush();
 const server = createServer(createApp());
 let reminderCron: ReturnType<typeof startReminderCron> | null = null;
 
 server.listen(appEnv.PORT, () => {
-  reminderCron = startReminderCron();
+  reminderCron = startReminderCron({ pushConfigured });
   console.log(`API listening on :${appEnv.PORT}`);
 });
 
