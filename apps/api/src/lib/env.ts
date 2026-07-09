@@ -17,6 +17,9 @@ const envSchema = z
     VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),
+    // express `trust proxy` — set to the proxy hop count (e.g. 1 behind
+    // Caddy) so req.ip and the API-key rate limit see the real client IP
+    TRUST_PROXY: z.string().min(1).optional(),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === "test") {

@@ -14,6 +14,45 @@ describe("service worker cache strategy", () => {
     ).toBe("asset-cache-first");
   });
 
+  it("uses network-first for the fixed-name stylesheet", () => {
+    expect(
+      classifyRequest(new Request("https://app.test/assets/app-styles.css")),
+    ).toBe("asset-network-first");
+    // hashed assets stay cache-first — only the fixed name revalidates
+    expect(
+      classifyRequest(new Request("https://app.test/assets/index-abc123.css")),
+    ).toBe("asset-cache-first");
+  });
+
+  it("serves the deployed stylesheet over a stale cached copy", async () => {
+    const stored = new Map<string, Response>();
+    const cache = {
+      match: (request: Request) => stored.get(request.url),
+      put: (request: Request, response: Response) => {
+        stored.set(request.url, response);
+        return Promise.resolve();
+      },
+    };
+    vi.stubGlobal("caches", {
+      match: (request: Request) => stored.get(request.url),
+      open: () => Promise.resolve(cache),
+    });
+    const request = new Request("https://app.test/assets/app-styles.css");
+    stored.set(request.url, new Response("body{old:1}", { status: 200 }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("body{new:1}", { status: 200 }))
+      .mockRejectedValueOnce(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const online = await handleFetch(request);
+    await expect(online.text()).resolves.toBe("body{new:1}");
+
+    const offline = await handleFetch(request);
+    await expect(offline.text()).resolves.toBe("body{new:1}");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("uses network-first for bookmark and category GET requests", () => {
     expect(
       classifyRequest(

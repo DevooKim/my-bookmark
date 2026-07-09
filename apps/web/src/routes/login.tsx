@@ -16,20 +16,26 @@ function LoginPage() {
     setErrorMessage("");
     setIsSubmitting(true);
 
-    const supabase = await getSupabase();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = await getSupabase();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setIsSubmitting(false);
+      if (error) {
+        setErrorMessage("이메일 또는 비밀번호가 올바르지 않습니다");
+        return;
+      }
 
-    if (error) {
-      setErrorMessage("이메일 또는 비밀번호가 올바르지 않습니다");
-      return;
+      await navigate({ to: "/" });
+    } catch {
+      setErrorMessage(
+        "로그인 처리를 시작하지 못했어요. 네트워크 상태를 확인하고 다시 시도해주세요.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    await navigate({ to: "/" });
   }
 
   return (

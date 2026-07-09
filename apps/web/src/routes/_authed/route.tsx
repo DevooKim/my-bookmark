@@ -33,6 +33,13 @@ function AuthedLayout() {
           return;
         }
         setIsCheckingSession(false);
+      })
+      .catch(() => {
+        // chunk load failure: fall through so meQuery's error banner shows
+        // instead of spinning on "인증 상태를 확인하는 중" forever
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
       });
     return () => {
       isMounted = false;

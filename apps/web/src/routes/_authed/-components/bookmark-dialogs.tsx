@@ -13,6 +13,7 @@ import {
   createReminder,
   updateBookmark,
 } from "../../../lib/api-client";
+import { toDatetimeLocalValue } from "../../../lib/datetime";
 
 export function BookmarkDialog({
   categories,
@@ -231,9 +232,9 @@ export function ReminderDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const defaultDate = new Date(Date.now() + 2 * 60 * 1000)
-    .toISOString()
-    .slice(0, 16);
+  const defaultDate = toDatetimeLocalValue(
+    new Date(Date.now() + 2 * 60 * 1000),
+  );
   const [remindAt, setRemindAt] = useState(defaultDate);
   const [note, setNote] = useState("");
   const mutation = useMutation({
@@ -248,7 +249,13 @@ export function ReminderDialog({
       void queryClient.invalidateQueries({ queryKey: ["reminders"] });
       onClose();
     },
-    onError: () => toast.error("리마인더를 만들지 못했어요"),
+    onError: (error) => {
+      if (error instanceof ApiClientError && error.status === 400) {
+        toast.error(`리마인더를 만들지 못했어요 — ${error.message}`);
+        return;
+      }
+      toast.error("리마인더를 만들지 못했어요");
+    },
   });
   return (
     <Dialog title="리마인더 설정" onClose={onClose}>
@@ -265,7 +272,7 @@ export function ReminderDialog({
         <Field label="알림 시간">
           <input
             className="input"
-            min={new Date().toISOString().slice(0, 16)}
+            min={toDatetimeLocalValue(new Date())}
             onChange={(event) => setRemindAt(event.target.value)}
             required
             type="datetime-local"

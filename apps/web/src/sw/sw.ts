@@ -3,7 +3,11 @@ const ASSET_CACHE = `my-bookmark-assets-${VERSION}`;
 const API_CACHE = `my-bookmark-api-${VERSION}`;
 const CACHE_NAMES = [ASSET_CACHE, API_CACHE];
 
-type CacheStrategy = "asset-cache-first" | "api-network-first" | "network-only";
+type CacheStrategy =
+  | "asset-cache-first"
+  | "asset-network-first"
+  | "api-network-first"
+  | "network-only";
 
 type ExtendableEventLike = Event & {
   waitUntil: (promise: Promise<unknown>) => void;
@@ -55,6 +59,12 @@ export function classifyRequest(request: Request): CacheStrategy {
 
   const url = new URL(request.url);
 
+  // app-styles.css keeps one fixed URL across deploys (SSR/client hash
+  // mismatch workaround) — cache-first would pin the old CSS forever.
+  if (url.pathname === "/assets/app-styles.css") {
+    return "asset-network-first";
+  }
+
   if (url.pathname.startsWith("/assets/")) {
     return "asset-cache-first";
   }
@@ -89,8 +99,11 @@ async function cacheFirst(request: Request): Promise<Response> {
   return response;
 }
 
-async function networkFirst(request: Request): Promise<Response> {
-  const cache = await caches.open(API_CACHE);
+async function networkFirst(
+  request: Request,
+  cacheName: string,
+): Promise<Response> {
+  const cache = await caches.open(cacheName);
   try {
     const response = await fetch(request);
     if (shouldCacheResponse(response)) {
@@ -126,8 +139,10 @@ export async function handleFetch(request: Request): Promise<Response> {
   switch (classifyRequest(request)) {
     case "asset-cache-first":
       return cacheFirst(request);
+    case "asset-network-first":
+      return networkFirst(request, ASSET_CACHE);
     case "api-network-first":
-      return networkFirst(request);
+      return networkFirst(request, API_CACHE);
     case "network-only":
       return fetch(request);
   }

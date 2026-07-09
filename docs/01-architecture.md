@@ -91,6 +91,7 @@ my-bookmark/
 | `AI_MODEL` | 선택. 미설정 시 provider별 기본 모델 (05-ai 참조) |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys`로 생성 |
 | `VAPID_SUBJECT` | `mailto:sammy.kim@goorm.io` 형식 |
+| `TRUST_PROXY` | 선택. 리버스 프록시 뒤에서 hop 수(예: `1`) — express `trust proxy` 설정. 미설정 시 미적용 |
 
 ### apps/web (클라이언트 노출 — 비밀값 금지)
 

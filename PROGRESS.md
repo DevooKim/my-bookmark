@@ -87,6 +87,13 @@
 - Phase 7 브라우저 회귀 (agent-browser, docker 스택): 로그인/로그아웃 리다이렉트, 홈 1,000개 목록, 설정(알림 토글·카테고리 관리·API 키·AI 분류·테마), 리마인더 페이지 + 알림 꺼짐 배너, SW 등록(`/sw.js` active), `sw.js` no-cache / manifest 3600 / assets immutable+gzip 헤더 확인.
 - Phase 7 미완(사용자 확인 필요): 브라우저 알림 권한 → 테스트 알림/리마인더 실수신. CDP `Browser.grantPermissions/setPermission`이 Chrome 150(macOS)에서 페이지에 반영되지 않아 자동화 불가. 실브라우저에서 설정 → 알림 켜기 → 테스트 알림 → 2분 리마인더 수신을 확인해야 한다(Phase 6부터 이어진 항목).
 - 참고: 자동화 중 macOS 디스플레이 절전 시 Chrome이 렌더링을 멈춰 rAF/IntersectionObserver가 정지한다. 무한 스크롤 검증은 `caffeinate` 후 통과 — 앱 버그 아님.
+- Phase 7 리뷰 반영 완료 (2026-07-10):
+  - HIGH: 리마인더 다이얼로그의 datetime-local 기본값/min이 `toISOString`(UTC) 기반이라 KST에서 9시간 과거로 표시되던 버그 수정 — 로컬 컴포넌트 기반 `toDatetimeLocalValue` helper(`lib/datetime.ts`) 도입, KST/EDT/UTC/자정 경계/round-trip 타임존 단위 테스트 5건 추가. 400 응답은 서버 메시지를 토스트에 반영.
+  - HIGH: 고정 URL `/assets/app-styles.css`가 SW `/assets/*` cache-first에 걸려 배포 후 구 CSS가 영구 서빙되던 문제 수정 — 해당 경로만 `asset-network-first`(오프라인 시 캐시 폴백)로 분리하고, 고정 이름 CSS 분류/갱신/오프라인 폴백 테스트 추가. 해시 자산은 cache-first 유지.
+  - LOW: `getSupabase()` dynamic import 실패 시 실패 promise를 캐시에서 버려 재시도 가능하게 하고, 로그인 폼은 에러 메시지 표시 + 버튼 복구, `_authed`는 무한 스피너 대신 기존 인증 에러 배너로 폴백.
+  - LOW: `load-env`는 cwd `.env`를 URL 상대 경로보다 우선하도록 순서 교체(dist 실행 시 저장소 밖 경로가 우선되는 문제 제거).
+  - LOW: `TRUST_PROXY` env 추가(`app.set("trust proxy", …)` — hop 수/boolean/서브넷 문자열 파싱 + 테스트). `.env.example`, docs/01-architecture, docs/deploy.md(Caddy 뒤 `TRUST_PROXY=1`)에 반영.
+  - 재검증: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과(26 파일 84 테스트), `docker compose build && up` → api/web healthy, 서빙된 `sw.js`에 app-styles 분기 포함 확인.
 
 ## 배포 후 TODO
 

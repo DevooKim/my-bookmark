@@ -24,6 +24,7 @@ Docker Compose 기반 배포 절차. Supabase는 클라우드를 사용하므로
 | `GEMINI_API_KEY` 등 | 선택한 provider의 키 | 없으면 AI 비활성으로 기동 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
+| `TRUST_PROXY` | 리버스 프록시 hop 수 | Caddy 등 프록시 뒤에서는 `1` — 미설정 시 rate limit이 프록시 IP를 클라이언트로 본다 |
 | `VITE_SUPABASE_URL` | 웹 클라이언트용 | 빌드 시점에 번들에 포함 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key (`sb_publishable_…`) | 공개 가능 |
 | `VITE_API_URL` | 브라우저가 접근하는 api 주소 | 배포 시 `https://bm.example.com/api`가 아니라 **api 서버의 공개 주소** (예: `https://api.bm.example.com` 또는 리버스 프록시 경유 동일 도메인) |
@@ -87,7 +88,7 @@ volumes:
   caddy_data:
 ```
 
-단일 도메인 구성 시 `.env`는 `WEB_ORIGIN=https://bm.example.com`, `VITE_API_URL=https://bm.example.com`으로 설정하고 web 이미지를 다시 빌드한다.
+단일 도메인 구성 시 `.env`는 `WEB_ORIGIN=https://bm.example.com`, `VITE_API_URL=https://bm.example.com`으로 설정하고 web 이미지를 다시 빌드한다. 프록시 뒤에서는 `TRUST_PROXY=1`도 설정해 api가 `X-Forwarded-For`의 실제 클라이언트 IP를 보게 한다(API Key rate limit 정확도).
 
 ## 5. Supabase 설정 요약
 

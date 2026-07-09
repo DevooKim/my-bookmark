@@ -43,6 +43,10 @@ export function createHttpLogger(options: HttpLoggerOptions = {}) {
 export function createApp(): express.Express {
   const app = express();
 
+  if (appEnv.TRUST_PROXY !== undefined) {
+    app.set("trust proxy", parseTrustProxy(appEnv.TRUST_PROXY));
+  }
+
   app.use(helmet());
   app.use(compression());
   app.use(cors({ origin: appEnv.WEB_ORIGIN }));
@@ -79,6 +83,17 @@ export function createApp(): express.Express {
   app.use(errorMiddleware);
 
   return app;
+}
+
+export function parseTrustProxy(value: string): boolean | number | string {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  const hops = Number(value);
+  return Number.isInteger(hops) && hops >= 0 ? hops : value;
 }
 
 function isApiKeyAllowedPath(path: string): boolean {
