@@ -1,0 +1,13 @@
+{
+  "name": "my-bookmark-supabase-mcp-pi-extension",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.1",
+    "@supabase/mcp-server-supabase": "^0.8.2",
+    "typebox": "^1.0.55"
+  },
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  }
+}

@@ -13,3 +13,4 @@ coverage/
 
 .tanstack/
 **/.tanstack/
+.pi/supabase-mcp.env
