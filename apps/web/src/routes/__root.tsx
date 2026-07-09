@@ -5,10 +5,14 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Toaster } from "sonner";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { registerServiceWorker } from "../lib/service-worker";
 import appCss from "../styles.css?url";
+
+// sonner stays out of the entry chunk; toasts only fire after interaction.
+const Toaster = lazy(() =>
+  import("sonner").then((module) => ({ default: module.Toaster })),
+);
 
 export const Route = createRootRoute({
   head: () => ({
@@ -31,7 +35,12 @@ export const Route = createRootRoute({
 });
 
 function App() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { staleTime: 30_000 } },
+      }),
+  );
 
   useEffect(() => {
     void registerServiceWorker();
@@ -49,7 +58,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      <Toaster richColors position="top-center" />
+      <Suspense fallback={null}>
+        <Toaster richColors position="top-center" />
+      </Suspense>
     </QueryClientProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "../lib/supabase";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -16,6 +16,7 @@ function LoginPage() {
     setErrorMessage("");
     setIsSubmitting(true);
 
+    const supabase = await getSupabase();
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,

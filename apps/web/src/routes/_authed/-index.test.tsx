@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BookmarkDialog } from "./index";
+import { BookmarkDialog } from "./-components/bookmark-dialogs";
 
-vi.mock("../../lib/api-client", () => ({
+vi.mock("../../../lib/api-client", () => ({
   ApiClientError: class ApiClientError extends Error {
     status = 500;
   },

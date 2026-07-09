@@ -15,6 +15,7 @@
     "@my-bookmark/shared": "workspace:*",
     "@supabase/supabase-js": "^2.110.0",
     "cheerio": "^1.2.0",
+    "compression": "^1.8.1",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
@@ -28,6 +29,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/cors": "latest",
     "@types/express": "latest",
     "@types/node": "latest",

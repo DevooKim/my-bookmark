@@ -1,4 +1,5 @@
 import { API_ERROR_CODES } from "@my-bookmark/shared";
+import compression from "compression";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
@@ -43,6 +44,7 @@ export function createApp(): express.Express {
   const app = express();
 
   app.use(helmet());
+  app.use(compression());
   app.use(cors({ origin: appEnv.WEB_ORIGIN }));
   app.use(express.json());
   app.use(createHttpLogger());

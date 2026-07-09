@@ -31,7 +31,7 @@ import {
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -46,6 +46,7 @@ export class ApiClientError extends Error {
 }
 
 async function getAccessToken() {
+  const supabase = await getSupabase();
   const { data, error } = await supabase.auth.getSession();
   if (error) {
     throw error;
@@ -54,6 +55,7 @@ async function getAccessToken() {
 }
 
 async function refreshAccessToken() {
+  const supabase = await getSupabase();
   const { data, error } = await supabase.auth.refreshSession();
   if (error) {
     throw error;

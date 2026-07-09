@@ -4,7 +4,7 @@ import { Bookmark, Clock, Home, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getMe } from "../../lib/api-client";
 import { clearServiceWorkerApiCache } from "../../lib/service-worker";
-import { supabase } from "../../lib/supabase";
+import { getSupabase } from "../../lib/supabase";
 
 export const Route = createFileRoute("/_authed")({
   ssr: false,
@@ -22,22 +22,25 @@ function AuthedLayout() {
 
   useEffect(() => {
     let isMounted = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!isMounted) {
-        return;
-      }
-      if (!data.session) {
-        window.location.assign("/login");
-        return;
-      }
-      setIsCheckingSession(false);
-    });
+    void getSupabase()
+      .then((supabase) => supabase.auth.getSession())
+      .then(({ data }) => {
+        if (!isMounted) {
+          return;
+        }
+        if (!data.session) {
+          window.location.assign("/login");
+          return;
+        }
+        setIsCheckingSession(false);
+      });
     return () => {
       isMounted = false;
     };
   }, []);
 
   async function handleLogout() {
+    const supabase = await getSupabase();
     await supabase.auth.signOut();
     await clearServiceWorkerApiCache();
     queryClient.clear();
