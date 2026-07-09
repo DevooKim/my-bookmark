@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 6 구현 완료 및 리뷰 지적 반영 완료. 다음: Phase 7
-- **최종 갱신**: 2026-07-10 (Phase 6 리뷰 지적 반영)
+- **현재 Phase**: Phase 7 구현 완료 — 로드맵 전체 완료. 다음: 배포처 확정 + 배포 후 TODO, 필요 시 Phase 8+ 백로그
+- **최종 갱신**: 2026-07-10 (Phase 7 완료)
 
 ## Phase 체크리스트
 
@@ -16,7 +16,7 @@
 - [x] Phase 4 — API Key + iOS 단축어
 - [x] Phase 5 — PWA
 - [x] Phase 6 — Web Push + 리마인더
-- [ ] Phase 7 — 성능 + Docker + 마무리
+- [x] Phase 7 — 성능 + Docker + 마무리
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
@@ -47,6 +47,13 @@
 | 2026-07-10 | 리마인더 cron은 조건부 `status='pending'` 업데이트로 먼저 `sent` 클레임한 뒤 발송한다. 구독이 0개이거나 전송 실패여도 클레임된 리마인더는 sent로 남긴다. | docs/06-pwa-push의 단순화된 순서도(재시도 큐 없음, 중복 발송 방지)를 그대로 따른다. |
 | 2026-07-10 | Phase 6 리뷰 반영으로 `configureWebPush()` 결과를 서버 시작 시 보관해 VAPID 미설정/부분설정이면 reminder cron 자체를 시작하지 않도록 했다. | push 발송 불가능 상태에서 cron이 리마인더를 `sent`로 클레임하면 알림이 유실된다. |
 | 2026-07-10 | `PATCH /api/reminders/:id`는 docs/03-api에 맞춰 `{ remindAt?, note? }` pending-only 수정으로 변경하고, 취소는 `DELETE`만 담당하게 했다. | 기존 구현은 `{ status: 'cancelled' }`만 받아 스펙과 달랐다. |
+| 2026-07-10 | Phase 7: 홈 목록은 `@tanstack/react-virtual` `useWindowVirtualizer`를 항상 사용한다(100개 이하 조건 분기 없음). | docs/08의 "100개 초과 시 적용"은 구현 시점(Phase 7) 지시로 해석. 이중 렌더 경로는 스크롤 점프/테스트 표면만 늘린다. 1,000개에서 DOM 노드 ~14개 유지 확인. |
+| 2026-07-10 | Phase 7 번들 예산: supabase-js(51KB gz)·다이얼로그·sonner Toaster를 dynamic import로 전환해 초기 라우트 JS를 /login 115KB gz로 낮췄다(예산 150KB). 인증된 `/` 콜드 로드는 150.4KB로 경계값. | supabase 청크가 root preload 그래프에 있어 /login에서 188KB였다. `/`는 api-client(zod)+query 공유 청크가 필요해 경계값 — SW cache-first라 재방문 비용 없음, 실제 콜드 진입 경로는 /login. |
+| 2026-07-10 | Phase 7: api tsup에 `splitting: false` + `createRequire` banner를 추가했다. | 프로덕션 번들이 실행 불가였던 잠복 버그(Phase 3 이후 dist 미실행): (1) 번들된 AI SDK의 CJS dynamic require가 ESM에서 throw, (2) esm 청크 분할이 env.ts 평가를 dotenv side effect보다 먼저 실행. Docker 검증에서 발견. |
+| 2026-07-10 | Phase 7: `styles.css`를 해시 없는 `/assets/app-styles.css`로 고정 emit하고 cache-control 3600으로 예외 처리했다. nitro `compressPublicAssets`(gzip+brotli)도 활성화. | linux Docker 빌드에서 SSR 패스가 자기 해시의 CSS를 링크하는데 public에는 클라이언트 패스 해시만 존재 → 404 → 무스타일 첫 페인트(CLS 0.47, Lighthouse 65). 고정 이름으로 두 패스가 같은 URL을 공유. 수정 후 Lighthouse 98. |
+| 2026-07-10 | Phase 7: Gemini 기본 모델을 `gemini-flash-lite-latest`로 변경했다(docs/05-ai 표도 갱신). | `gemini-2.5-flash`가 generateContent 404(서비스 종료), `gemini-flash-latest`는 실호출이 15s 타임아웃/불안정. lite는 0.65s 안정 응답이며 단일 라벨 분류에 적합. docs/05의 "모델명은 바뀐다 — 현행으로 쓰고 기록" 지침 준수. |
+| 2026-07-10 | Phase 7: VAPID 키가 `.env`에서 비어 있어 새로 생성해 채웠다(`VITE_VAPID_PUBLIC_KEY` 포함). | push_subscriptions가 0행이라 키 교체 부작용 없음. Docker 스택에서 cron 기동 조건(VAPID 완전 설정) 충족을 위해 필요. |
+| 2026-07-10 | Phase 7: 시드 북마크는 `https://seed.my-bookmark.test/article/N` URL 마커를 사용하고 `--clean`으로만 삭제한다. `load-env`는 cwd `.env` 폴백을 추가했다. | 실데이터와 시드의 안전한 분리. dist 번들에서 URL 상대 경로가 저장소 루트를 벗어나 `node dist/index.js` 로컬 실행이 env를 못 읽던 문제 수정. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -69,6 +76,17 @@
 - Phase 6 구현 완료: `/api/push/status|subscriptions|unsubscribe|test`, `/api/reminders` 목록/생성/취소, 서버 listen 후 cron 시작 및 SIGTERM/SIGINT graceful stop, 설정 알림 섹션, 리마인더 페이지, 북마크 카드 리마인더 다이얼로그, 알림 꺼짐 배너를 추가했다.
 - Phase 6 수동 확인 제한: 현재 환경에는 테스트 계정 자격 증명과 OS 알림 권한이 제공되지 않아 데스크톱 Chrome에서 실제 테스트 알림 수신 및 2분 뒤 리마인더 수신은 자동 확인하지 못했다. VAPID env 값 존재, 빌드/테스트, 서버·클라이언트 코드 경로는 검증했다. 실제 계정 로그인 후 설정 → 알림 켜기 → 테스트 알림/2분 리마인더 수신 확인 필요.
 - Phase 6 리뷰 지적 반영 완료: VAPID 미설정 시 cron 미시작(클레임/알림 유실 방지), `POST /api/reminders` 과거/현재 `remindAt` 400, `PATCH /api/reminders/:id`의 `{ remindAt?, note? }` pending-only 수정 및 과거 `remindAt` 400/소유권 경계, `POST /api/push/subscriptions` 201 응답을 HTTP route 테스트로 보강했다. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 재통과.
+
+- Phase 7 자동 검증 완료: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과(24 파일 75 테스트). `docker compose up` → api/web 모두 healthy, `/api/health` ok.
+- Phase 7 성능 수치 (2026-07-10, docker compose 프로덕션 스택 기준):
+  - Lighthouse Performance (모바일, `/login`): **98** (FCP 1.8s, LCP 1.8s, TBT 0ms, CLS 0, SI 1.8s). 수정 전 65(CSS 404로 CLS 0.47 + 무압축 응답)였다.
+  - 초기 라우트 JS(gzip): `/login` **115.2KB** ✓, 인증된 `/` 콜드 로드 150.4KB(경계값, 결정 로그 참조).
+  - 1,000개 시드 스크롤: IntersectionObserver 무한 스크롤로 34페이지 전부 로드, 가상화로 DOM article 노드 11~23개 유지, 5초 연속 스크롤 중 평균 프레임 16.6ms(≈60fps), 50ms 초과 프레임 0. 검색(디바운스)·카테고리 칩·다크모드 정상.
+  - `GET /api/bookmarks` 서버 responseTime p50 169ms / **p95 193ms — 목표(<150ms) 미달**. 단, 이 호스트에서 Supabase REST 왕복이 단독으로도 ~192ms(중앙값)라 앱 오버헤드는 ~0. 원인은 Supabase 프로젝트 리전 거리 — 배포 시 API를 DB 리전 가까이 두면 해소될 인프라 제약으로 기록.
+- Phase 7 Docker E2E 완료 (compose 스택, 실계정): 로그인 토큰 발급 → `/api/me`, 카테고리 생성, 수동 북마크 등록(URL 정규화·utm 제거), 중복 409, PATCH 미분류화, 검색, keyset 커서, `mode=ai` 등록 → `pending` → **`done` + 카테고리 자동 생성**, API Key 발급→`X-API-Key` 등록 201→`/api/keys` 401→회수 후 401, 리마인더 생성/과거시각 400/취소 204, push status. 테스트 데이터는 모두 삭제.
+- Phase 7 브라우저 회귀 (agent-browser, docker 스택): 로그인/로그아웃 리다이렉트, 홈 1,000개 목록, 설정(알림 토글·카테고리 관리·API 키·AI 분류·테마), 리마인더 페이지 + 알림 꺼짐 배너, SW 등록(`/sw.js` active), `sw.js` no-cache / manifest 3600 / assets immutable+gzip 헤더 확인.
+- Phase 7 미완(사용자 확인 필요): 브라우저 알림 권한 → 테스트 알림/리마인더 실수신. CDP `Browser.grantPermissions/setPermission`이 Chrome 150(macOS)에서 페이지에 반영되지 않아 자동화 불가. 실브라우저에서 설정 → 알림 켜기 → 테스트 알림 → 2분 리마인더 수신을 확인해야 한다(Phase 6부터 이어진 항목).
+- 참고: 자동화 중 macOS 디스플레이 절전 시 Chrome이 렌더링을 멈춰 rAF/IntersectionObserver가 정지한다. 무한 스크롤 검증은 `caffeinate` 후 통과 — 앱 버그 아님.
 
 ## 배포 후 TODO
 

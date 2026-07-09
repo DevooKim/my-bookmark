@@ -18,7 +18,10 @@ import type {
 } from "./types";
 
 export const DEFAULT_MODELS = {
-  gemini: "gemini-2.5-flash",
+  // rolling alias: google retired gemini-2.5-flash for generateContent
+  // (404 as of 2026-07). lite tier suits single-label classification and
+  // answers well under the 15s abort budget.
+  gemini: "gemini-flash-lite-latest",
   anthropic: "claude-haiku-4-5",
   openai: "gpt-4o-mini",
 } as const;
