@@ -4,7 +4,7 @@ import {
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Bell, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -12,11 +12,18 @@ import {
   createCategory,
   deleteCategory,
   getAiStatus,
+  getPushStatus,
   listApiKeys,
   listCategories,
   revokeApiKey,
+  sendTestPush,
   updateCategory,
 } from "../../lib/api-client";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushSupportStatus,
+} from "../../lib/push";
 
 export const Route = createFileRoute("/_authed/settings")({
   component: SettingsPage,
@@ -33,11 +40,108 @@ function SettingsPage() {
           카테고리와 테마를 관리합니다.
         </p>
       </section>
+      <NotificationSection />
       <CategorySection />
       <ApiKeySection />
       <AiSection />
       <ThemeSection />
     </main>
+  );
+}
+
+function NotificationSection() {
+  const queryClient = useQueryClient();
+  const statusQuery = useQuery({
+    queryKey: ["pushStatus"],
+    queryFn: getPushStatus,
+  });
+  const vapidPublicKey = statusQuery.data?.vapidPublicKey ?? null;
+  const support = getPushSupportStatus(vapidPublicKey);
+  const enableMutation = useMutation({
+    mutationFn: async () => {
+      if (!vapidPublicKey) {
+        throw new Error("missing-vapid-key");
+      }
+      await enablePushNotifications(vapidPublicKey);
+    },
+    onSuccess: () => {
+      toast.success("알림을 켰어요");
+      void queryClient.invalidateQueries({ queryKey: ["pushStatus"] });
+    },
+    onError: () => toast.error("알림을 켜지 못했어요"),
+  });
+  const disableMutation = useMutation({
+    mutationFn: disablePushNotifications,
+    onSuccess: () => {
+      toast.success("알림을 껐어요");
+      void queryClient.invalidateQueries({ queryKey: ["pushStatus"] });
+    },
+    onError: () => toast.error("알림을 끄지 못했어요"),
+  });
+  const testMutation = useMutation({
+    mutationFn: sendTestPush,
+    onSuccess: (result) => {
+      toast.success(
+        `테스트 발송: 성공 ${result.sent}건, 실패 ${result.failed}건`,
+      );
+    },
+    onError: () => toast.error("테스트 알림을 보내지 못했어요"),
+  });
+
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-bold">알림</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            리마인더 시간에 Web Push 알림을 받습니다. iPhone은 홈 화면에 추가한
+            PWA에서만 동작합니다.
+          </p>
+        </div>
+        <Bell className="h-5 w-5 text-zinc-400" />
+      </div>
+      {support.ok ? null : (
+        <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {support.reason === "ios-not-installed"
+            ? "iOS에서는 홈 화면에 추가한 뒤 앱 아이콘으로 열어야 알림을 켤 수 있어요."
+            : support.reason === "missing-key"
+              ? "서버에 VAPID 공개키가 설정되지 않았어요."
+              : "이 브라우저는 Web Push를 지원하지 않아요."}
+        </p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {statusQuery.data?.enabled ? (
+          <button
+            className="btn-secondary"
+            disabled={disableMutation.isPending}
+            onClick={() => disableMutation.mutate()}
+            type="button"
+          >
+            알림 끄기
+          </button>
+        ) : (
+          <button
+            className="btn-primary"
+            disabled={!support.ok || enableMutation.isPending}
+            onClick={() => enableMutation.mutate()}
+            type="button"
+          >
+            알림 켜기
+          </button>
+        )}
+        <button
+          className="btn-secondary"
+          disabled={!statusQuery.data?.enabled || testMutation.isPending}
+          onClick={() => testMutation.mutate()}
+          type="button"
+        >
+          테스트 알림 보내기
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-zinc-500">
+        현재 구독 {statusQuery.data?.subscriptionCount ?? 0}개
+      </p>
+    </section>
   );
 }
 

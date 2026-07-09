@@ -10,13 +10,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Edit, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
+import { Clock, Edit, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ApiClientError,
   createBookmark,
   createCategory,
+  createReminder,
   deleteBookmark,
   listBookmarks,
   listCategories,
@@ -33,6 +34,7 @@ function HomePage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editing, setEditing] = useState<Bookmark | null>(null);
+  const [reminderTarget, setReminderTarget] = useState<Bookmark | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -195,6 +197,7 @@ function HomePage() {
               })
             }
             onRecategorize={() => recategorizeMutation.mutate(bookmark.id)}
+            onSetReminder={() => setReminderTarget(bookmark)}
           />
         ))}
 
@@ -238,6 +241,12 @@ function HomePage() {
           onClose={() => setEditing(null)}
         />
       ) : null}
+      {reminderTarget ? (
+        <ReminderDialog
+          bookmark={reminderTarget}
+          onClose={() => setReminderTarget(null)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -269,6 +278,7 @@ function BookmarkCard({
   onEdit,
   onMove,
   onRecategorize,
+  onSetReminder,
 }: {
   bookmark: Bookmark;
   categories: CategoryWithCount[];
@@ -276,6 +286,7 @@ function BookmarkCard({
   onEdit: () => void;
   onMove: (categoryId: string | null) => void;
   onRecategorize: () => void;
+  onSetReminder: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const category = categories.find((item) => item.id === bookmark.categoryId);
@@ -361,6 +372,13 @@ function BookmarkCard({
                   AI 재분류
                 </button>
               ) : null}
+              <button
+                className="menu-item"
+                onClick={onSetReminder}
+                type="button"
+              >
+                <Clock className="h-4 w-4" /> 리마인더
+              </button>
               <button
                 className="menu-item text-red-600"
                 onClick={onDelete}
@@ -571,6 +589,74 @@ function EditBookmarkDialog({
             className="input min-h-24"
             onChange={(e) => setDescription(e.target.value)}
             value={description}
+          />
+        </Field>
+        <button
+          className="btn-primary w-full justify-center"
+          disabled={mutation.isPending}
+          type="submit"
+        >
+          저장
+        </button>
+      </form>
+    </Dialog>
+  );
+}
+
+function ReminderDialog({
+  bookmark,
+  onClose,
+}: {
+  bookmark: Bookmark;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const defaultDate = new Date(Date.now() + 2 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
+  const [remindAt, setRemindAt] = useState(defaultDate);
+  const [note, setNote] = useState("");
+  const mutation = useMutation({
+    mutationFn: () =>
+      createReminder({
+        bookmarkId: bookmark.id,
+        remindAt: new Date(remindAt).toISOString(),
+        note: note.trim() || null,
+      }),
+    onSuccess: () => {
+      toast.success("리마인더를 만들었어요");
+      void queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      onClose();
+    },
+    onError: () => toast.error("리마인더를 만들지 못했어요"),
+  });
+  return (
+    <Dialog title="리마인더 설정" onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          mutation.mutate();
+        }}
+      >
+        <p className="truncate text-sm text-zinc-500">
+          {bookmark.title ?? bookmark.url}
+        </p>
+        <Field label="알림 시간">
+          <input
+            className="input"
+            min={new Date().toISOString().slice(0, 16)}
+            onChange={(event) => setRemindAt(event.target.value)}
+            required
+            type="datetime-local"
+            value={remindAt}
+          />
+        </Field>
+        <Field label="메모(선택)">
+          <textarea
+            className="input min-h-20"
+            onChange={(event) => setNote(event.target.value)}
+            value={note}
           />
         </Field>
         <button

@@ -13,6 +13,8 @@ import { categoriesRouter } from "./routes/categories";
 import { healthRouter } from "./routes/health";
 import { keysRouter } from "./routes/keys";
 import { meRouter } from "./routes/me";
+import { pushRouter } from "./routes/push";
+import { remindersRouter } from "./routes/reminders";
 
 interface HttpLoggerOptions extends PinoHttpOptions {
   stream?: pino.DestinationStream;
@@ -69,6 +71,8 @@ export function createApp(): express.Express {
   app.use("/api", keysRouter);
   app.use("/api", categoriesRouter);
   app.use("/api", bookmarksRouter);
+  app.use("/api", remindersRouter);
+  app.use("/api", pushRouter);
   app.use("/api", aiRouter);
   app.use(errorMiddleware);
 

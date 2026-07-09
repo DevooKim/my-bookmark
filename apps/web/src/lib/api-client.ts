@@ -13,11 +13,21 @@ import {
   type CreateApiKeyResponse,
   type CreateBookmarkRequest,
   type CreateCategoryRequest,
+  type CreateReminderRequest,
   categoriesResponseSchema,
   categorySchema,
   createApiKeyResponseSchema,
   type MeResponse,
   meResponseSchema,
+  type PushStatusResponse,
+  type PushSubscriptionRequest,
+  type PushTestResponse,
+  pushStatusResponseSchema,
+  pushTestResponseSchema,
+  type ReminderResponse,
+  type RemindersResponse,
+  reminderResponseSchema,
+  remindersResponseSchema,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
@@ -236,6 +246,70 @@ export async function recategorizeBookmark(id: string): Promise<Bookmark> {
 
 export async function deleteBookmark(id: string): Promise<void> {
   const response = await apiFetch(`/api/bookmarks/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    await parseJsonResponse(response, (json) => json);
+  }
+}
+
+export async function getPushStatus(): Promise<PushStatusResponse> {
+  const response = await apiFetch("/api/push/status");
+  return parseJsonResponse(response, (json) =>
+    pushStatusResponseSchema.parse(json),
+  );
+}
+
+export async function savePushSubscription(
+  body: PushSubscriptionRequest,
+): Promise<void> {
+  const response = await apiFetch("/api/push/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    await parseJsonResponse(response, (json) => json);
+  }
+}
+
+export async function unsubscribePush(
+  body: Partial<PushSubscriptionRequest>,
+): Promise<void> {
+  const response = await apiFetch("/api/push/unsubscribe", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    await parseJsonResponse(response, (json) => json);
+  }
+}
+
+export async function sendTestPush(): Promise<PushTestResponse> {
+  const response = await apiFetch("/api/push/test", { method: "POST" });
+  return parseJsonResponse(response, (json) =>
+    pushTestResponseSchema.parse(json),
+  );
+}
+
+export async function listReminders(): Promise<RemindersResponse> {
+  const response = await apiFetch("/api/reminders");
+  return parseJsonResponse(response, (json) =>
+    remindersResponseSchema.parse(json),
+  );
+}
+
+export async function createReminder(
+  body: CreateReminderRequest,
+): Promise<ReminderResponse> {
+  const response = await apiFetch("/api/reminders", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    reminderResponseSchema.parse(json),
+  );
+}
+
+export async function cancelReminder(id: string): Promise<void> {
+  const response = await apiFetch(`/api/reminders/${id}`, { method: "DELETE" });
   if (!response.ok) {
     await parseJsonResponse(response, (json) => json);
   }

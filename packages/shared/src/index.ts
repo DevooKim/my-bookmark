@@ -79,6 +79,18 @@ export const reminderSchema = z.object({
   createdAt: isoDateTimeSchema,
 });
 
+export const reminderWithBookmarkSchema = reminderSchema.extend({
+  bookmark: bookmarkSchema.pick({ id: true, url: true, title: true }),
+});
+
+export const pushSubscriptionRequestSchema = z.object({
+  endpoint: z.url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
+
 export const loginRequestSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
@@ -138,6 +150,16 @@ export const updateCategoryRequestSchema = z
     message: "At least one field is required",
   });
 
+export const createReminderRequestSchema = z.object({
+  bookmarkId: uuidSchema,
+  remindAt: isoDateTimeSchema,
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
+export const updateReminderRequestSchema = z.object({
+  status: z.literal("cancelled"),
+});
+
 export const meResponseSchema = z.object({ userId: uuidSchema });
 export const aiStatusResponseSchema = z.object({
   provider: z.enum(["gemini", "anthropic", "openai"]),
@@ -163,6 +185,17 @@ export const apiKeysResponseSchema = z.object({
   items: z.array(apiKeySchema),
 });
 
+export const pushStatusResponseSchema = z.object({
+  enabled: z.boolean(),
+  subscriptionCount: z.number().int().nonnegative(),
+  vapidPublicKey: z.string().nullable(),
+});
+
+export const pushTestResponseSchema = z.object({
+  sent: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+
 export const bookmarkResponseSchema = z.object({ bookmark: bookmarkSchema });
 export const bookmarksResponseSchema = z.object({
   items: z.array(bookmarkSchema),
@@ -171,23 +204,39 @@ export const bookmarksResponseSchema = z.object({
 export const categoriesResponseSchema = z.object({
   items: z.array(categoryWithCountSchema),
 });
+export const remindersResponseSchema = z.object({
+  items: z.array(reminderWithBookmarkSchema),
+});
+export const reminderResponseSchema = z.object({
+  reminder: reminderWithBookmarkSchema,
+});
 
 export type Category = z.infer<typeof categorySchema>;
 export type CategoryWithCount = z.infer<typeof categoryWithCountSchema>;
 export type Bookmark = z.infer<typeof bookmarkSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
+export type ReminderWithBookmark = z.infer<typeof reminderWithBookmarkSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateBookmarkRequest = z.infer<typeof createBookmarkRequestSchema>;
 export type UpdateBookmarkRequest = z.infer<typeof updateBookmarkRequestSchema>;
 export type BookmarkListQuery = z.infer<typeof bookmarkListQuerySchema>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
+export type CreateReminderRequest = z.infer<typeof createReminderRequestSchema>;
+export type UpdateReminderRequest = z.infer<typeof updateReminderRequestSchema>;
+export type PushSubscriptionRequest = z.infer<
+  typeof pushSubscriptionRequestSchema
+>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
 export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;
 export type CreateApiKeyResponse = z.infer<typeof createApiKeyResponseSchema>;
 export type ApiKeysResponse = z.infer<typeof apiKeysResponseSchema>;
+export type PushStatusResponse = z.infer<typeof pushStatusResponseSchema>;
+export type PushTestResponse = z.infer<typeof pushTestResponseSchema>;
 export type BookmarkResponse = z.infer<typeof bookmarkResponseSchema>;
 export type BookmarksResponse = z.infer<typeof bookmarksResponseSchema>;
 export type CategoriesResponse = z.infer<typeof categoriesResponseSchema>;
+export type RemindersResponse = z.infer<typeof remindersResponseSchema>;
+export type ReminderResponse = z.infer<typeof reminderResponseSchema>;

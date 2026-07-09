@@ -5,6 +5,8 @@ import {
   type CategoryWithCount,
   categorySchema,
   categoryWithCountSchema,
+  type ReminderWithBookmark,
+  reminderWithBookmarkSchema,
 } from "@my-bookmark/shared";
 
 const dbCategorySchema = categorySchema.transform((category) => category);
@@ -32,6 +34,18 @@ interface CategoryDbRow {
   sort_order: number;
   created_at: string;
   bookmark_count?: number;
+}
+
+interface ReminderWithBookmarkDbRow {
+  id: string;
+  user_id: string;
+  bookmark_id: string;
+  remind_at: string;
+  note: string | null;
+  status: "pending" | "sent" | "cancelled";
+  sent_at: string | null;
+  created_at: string;
+  bookmarks: Pick<BookmarkDbRow, "id" | "url" | "title"> | null;
 }
 
 export function mapBookmark(row: BookmarkDbRow): Bookmark {
@@ -66,5 +80,21 @@ export function mapCategoryWithCount(row: CategoryDbRow): CategoryWithCount {
   return categoryWithCountSchema.parse({
     ...mapCategory(row),
     bookmarkCount: row.bookmark_count,
+  });
+}
+
+export function mapReminderWithBookmark(
+  row: ReminderWithBookmarkDbRow,
+): ReminderWithBookmark {
+  return reminderWithBookmarkSchema.parse({
+    id: row.id,
+    userId: row.user_id,
+    bookmarkId: row.bookmark_id,
+    remindAt: row.remind_at,
+    note: row.note,
+    status: row.status,
+    sentAt: row.sent_at,
+    createdAt: row.created_at,
+    bookmark: row.bookmarks,
   });
 }
