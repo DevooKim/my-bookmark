@@ -1,8 +1,10 @@
+import { API_ERROR_CODES } from "@my-bookmark/shared";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import pinoHttp from "pino-http";
+import type pino from "pino";
+import pinoHttp, { type Options as PinoHttpOptions } from "pino-http";
 import { appEnv } from "./lib/env";
 import { errorMiddleware } from "./middleware/error";
 import { aiRouter } from "./routes/ai";
@@ -12,13 +14,36 @@ import { healthRouter } from "./routes/health";
 import { keysRouter } from "./routes/keys";
 import { meRouter } from "./routes/me";
 
+interface HttpLoggerOptions extends PinoHttpOptions {
+  stream?: pino.DestinationStream;
+}
+
+export function createHttpLogger(options: HttpLoggerOptions = {}) {
+  const { stream, ...loggerOptions } = options;
+  return pinoHttp(
+    {
+      level: appEnv.NODE_ENV === "test" ? "silent" : "info",
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          'req.headers["x-api-key"]',
+          'req.headers["X-API-Key"]',
+        ],
+        censor: "[Redacted]",
+      },
+      ...loggerOptions,
+    },
+    stream,
+  );
+}
+
 export function createApp(): express.Express {
   const app = express();
 
   app.use(helmet());
   app.use(cors({ origin: appEnv.WEB_ORIGIN }));
   app.use(express.json());
-  app.use(pinoHttp({ level: appEnv.NODE_ENV === "test" ? "silent" : "info" }));
+  app.use(createHttpLogger());
   app.use(
     "/api",
     rateLimit({
@@ -26,7 +51,16 @@ export function createApp(): express.Express {
       limit: 60,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (request) => !request.header("X-API-Key"),
+      skip: (request) =>
+        !request.header("X-API-Key") || !isApiKeyAllowedPath(request.path),
+      handler: (_request, response) => {
+        response.status(429).json({
+          error: {
+            code: API_ERROR_CODES.RATE_LIMITED,
+            message: "Too many requests",
+          },
+        });
+      },
     }),
   );
 
@@ -39,4 +73,13 @@ export function createApp(): express.Express {
   app.use(errorMiddleware);
 
   return app;
+}
+
+function isApiKeyAllowedPath(path: string): boolean {
+  return (
+    path === "/bookmarks" ||
+    path.startsWith("/bookmarks/") ||
+    path === "/categories" ||
+    path.startsWith("/categories/")
+  );
 }

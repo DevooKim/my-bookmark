@@ -200,6 +200,28 @@ function CategoryRow({
   );
 }
 
+interface ClipboardCopyDeps {
+  writeText: (text: string) => Promise<void>;
+  success: (message: string) => void;
+  error: (message: string) => void;
+}
+
+export async function copyApiKeyToClipboard(
+  key: string,
+  deps: ClipboardCopyDeps = {
+    writeText: (text) => navigator.clipboard.writeText(text),
+    success: toast.success,
+    error: toast.error,
+  },
+): Promise<void> {
+  try {
+    await deps.writeText(key);
+    deps.success("복사했어요");
+  } catch {
+    deps.error("복사하지 못했어요. 직접 선택해서 복사하세요.");
+  }
+}
+
 function ApiKeySection() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("iOS 단축어");
@@ -274,8 +296,7 @@ function ApiKeySection() {
             <button
               className="btn-secondary justify-center"
               onClick={() => {
-                void navigator.clipboard.writeText(createdKey);
-                toast.success("복사했어요");
+                void copyApiKeyToClipboard(createdKey);
               }}
               type="button"
             >
