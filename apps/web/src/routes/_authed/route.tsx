@@ -1,36 +1,53 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Bookmark, Clock, Home, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
 import { getMe } from "../../lib/api-client";
 import { supabase } from "../../lib/supabase";
 
 export const Route = createFileRoute("/_authed")({
-  beforeLoad: async () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      throw redirect({ to: "/login" });
-    }
-  },
+  ssr: false,
   component: AuthedLayout,
 });
 
 function AuthedLayout() {
   const queryClient = useQueryClient();
-  const meQuery = useQuery({ queryKey: ["me"], queryFn: getMe });
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: getMe,
+    enabled: !isCheckingSession,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) {
+        return;
+      }
+      if (!data.session) {
+        window.location.assign("/login");
+        return;
+      }
+      setIsCheckingSession(false);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     queryClient.clear();
     window.location.assign("/login");
+  }
+
+  if (isCheckingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400">
+        인증 상태를 확인하는 중…
+      </main>
+    );
   }
 
   return (

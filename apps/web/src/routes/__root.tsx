@@ -1,5 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
@@ -13,10 +18,11 @@ export const Route = createRootRoute({
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
+  component: App,
   shellComponent: RootDocument,
 });
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function App() {
   const [queryClient] = useState(() => new QueryClient());
 
   useEffect(() => {
@@ -31,15 +37,21 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
+    <QueryClientProvider client={queryClient}>
+      <Outlet />
+      <Toaster richColors position="top-center" />
+    </QueryClientProvider>
+  );
+}
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
     <html lang="ko">
       <head>
         <HeadContent />
       </head>
       <body>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-        <Toaster richColors position="top-center" />
+        {children}
         <Scripts />
       </body>
     </html>
