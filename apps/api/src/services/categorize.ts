@@ -1,6 +1,8 @@
-import type { AiProvider, CategorizeResult } from "@my-bookmark/ai";
+import type { AiProvider } from "@my-bookmark/ai";
 import { domainFromUrl } from "../lib/url";
 import { fetchMetadata, type PageMetadata } from "./metadata";
+
+type AnalyzeResult = Awaited<ReturnType<AiProvider["categorize"]>>;
 
 interface DbError {
   code?: string;
@@ -87,26 +89,24 @@ export async function applyCategorizeResult(
   userId: string,
   bookmarkId: string,
   categories: CategoryRow[],
-  result: CategorizeResult,
+  result: AnalyzeResult,
 ): Promise<void> {
-  if (result.type === "existing") {
-    const category = categories.find((item) => item.id === result.categoryId);
-    await markDone(db, userId, bookmarkId, category?.id ?? null);
-    return;
-  }
+  let categoryId: string | null = null;
 
-  if (result.type === "new") {
-    const name = result.name.trim();
+  if (result.category.type === "existing") {
+    const requestedCategoryId = result.category.categoryId;
+    const category = categories.find((item) => item.id === requestedCategoryId);
+    categoryId = category?.id ?? null;
+  } else if (result.category.type === "new") {
+    const name = result.category.name.trim();
     const existing = findCategoryByNormalizedName(categories, name);
     const current =
       existing ??
       findCategoryByNormalizedName(await loadCategories(db, userId), name);
-    const categoryId = current?.id ?? (await createCategory(db, userId, name));
-    await markDone(db, userId, bookmarkId, categoryId);
-    return;
+    categoryId = current?.id ?? (await createCategory(db, userId, name));
   }
 
-  await markDone(db, userId, bookmarkId, null);
+  await markDone(db, userId, bookmarkId, categoryId, result);
 }
 
 async function loadBookmark(
@@ -165,9 +165,15 @@ async function markDone(
   userId: string,
   bookmarkId: string,
   categoryId: string | null,
+  result: AnalyzeResult,
 ): Promise<void> {
   const { error } = await (db.from("bookmarks") as BookmarkUpdateTable)
-    .update({ category_id: categoryId, ai_status: "done" })
+    .update({
+      category_id: categoryId,
+      title: result.summaryTitle,
+      tags: result.tags,
+      ai_status: "done",
+    })
     .eq("user_id", userId)
     .eq("id", bookmarkId)
     .eq("ai_status", "pending");
