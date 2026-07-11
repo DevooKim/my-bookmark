@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 8 후속 기능 완료 — AI 모델 선택 + provider API 키 연결 테스트. 다음: 배포처 확정 + 배포 후 TODO
-- **최종 갱신**: 2026-07-11 (AI 모델 선택/연결 테스트 완료)
+- **현재 Phase**: Phase 8 후속 기능 완료 — provider 키 관리/사용 모델 선택 분리. 다음: 배포처 확정 + 배포 후 TODO
+- **최종 갱신**: 2026-07-11 (AI 키/모델 설정 UX 분리 완료)
 
 ## Phase 체크리스트
 
@@ -56,6 +56,7 @@
 | 2026-07-10 | Phase 7: VAPID 키가 `.env`에서 비어 있어 새로 생성해 채웠다(`VITE_VAPID_PUBLIC_KEY` 포함). | push_subscriptions가 0행이라 키 교체 부작용 없음. Docker 스택에서 cron 기동 조건(VAPID 완전 설정) 충족을 위해 필요. |
 | 2026-07-11 | AI provider와 provider별 API 키의 원본을 서버 env에서 사용자별 `ai_settings` DB 행으로 변경하고, API 키는 `AI_SETTINGS_ENCRYPTION_KEY` 기반 AES-256-GCM 암호문만 저장한다. env fallback/자동 이관은 하지 않는다. | 사용자가 설정 화면에서 재시작 없이 provider와 키를 관리해야 하며, 키 원문은 DB·조회 응답·로그에 남기지 않아야 한다. 사용자 승인 설계(`docs/superpowers/specs/2026-07-11-ai-settings-design.md`) 준수. |
 | 2026-07-11 | AI 모델은 동적 목록 대신 provider별 저비용/균형 2개씩 총 6개의 고정 카탈로그로 제공하고, 고성능 모델은 제외한다. 키 미설정 provider 모델도 선택 가능하되 `API 키 필요`를 표시하고 같은 폼에서 키 입력을 요구한다. | 사용자가 고정 추천 목록을 선택했고 고성능 모델 제외를 요청했다. 미설정 모델을 disabled 처리하면 해당 provider 키를 최초 등록할 진입점이 사라지므로 승인 설계의 disabled 표현을 사용 가능한 안내 옵션으로 정정했다. |
+| 2026-07-11 | AI 키 저장 API/UI를 모델 선택에서 분리했다. provider별 카드가 키를 독립 관리하고, 모델 선택에는 키가 설정된 provider의 모델만 표시한다. | 결합 폼은 모델마다 키가 필요한 것처럼 보였다. `PUT /api/ai/keys/:provider`와 `PUT /api/ai/model`로 쓰기 경계를 분리해 키 저장이 활성 모델을 바꾸지 않게 했다. |
 | 2026-07-10 | Phase 7: 시드 북마크는 `https://seed.my-bookmark.test/article/N` URL 마커를 사용하고 `--clean`으로만 삭제한다. `load-env`는 cwd `.env` 폴백을 추가했다. | 실데이터와 시드의 안전한 분리. dist 번들에서 URL 상대 경로가 저장소 루트를 벗어나 `node dist/index.js` 로컬 실행이 env를 못 읽던 문제 수정. |
 
 ## 알려진 이슈 / 기술 부채
@@ -101,6 +102,7 @@
 - Phase 8 후속 AI 설정 자동 검증 완료: AES-256-GCM 무작위 IV/변조·오키 실패, env 검증, 사용자별 설정 기본값/암호화 저장/키 유지·삭제/provider 캐시 무효화, Bearer 전용 GET/PUT/DELETE API, 키 비노출, 분류 시 사용자별 provider 해석, 설정 UI 저장·삭제 테스트를 추가했다. 전체 검증 루프 통과(29 파일 104 테스트).
 - Phase 8 Supabase/Docker/E2E 완료: `0002_ai_settings.sql`을 원격 DB에 push했고 MCP에서 migration 존재, `ai_settings` 컬럼·PK·FK·RLS 활성화를 확인했다. Docker api/web 재빌드 후 모두 healthy. 실계정 API에서 provider 선택+임시 키 저장→응답 비노출→삭제→Gemini 복원, 브라우저 설정에서 Anthropic 선택→password 키 저장→`설정됨`/입력 초기화→키 삭제→Gemini 복원을 확인했다. 임시 키는 삭제했다.
 - AI 모델/연결 테스트 검증 완료: `0003_ai_model.sql` 원격 push 및 기존 OpenAI 행의 `gpt-4o-mini` backfill 확인. 고정 6-model 카탈로그/provider-model 검증, 선택 모델 provider 생성 전달, 세 SDK Models API mock, 연결 API, 그룹 모델 UI 테스트 포함 전체 113 테스트 통과. Docker 스택에서 실계정 상태가 OpenAI + GPT-4o mini + 암호화 키 설정으로 조회됐고, 실제 OpenAI Models API 연결 성공 및 브라우저의 “OpenAI 연결에 성공했어요” 토스트를 확인했다.
+- AI 키/모델 UX 분리 검증 완료: provider 키 저장이 활성 모델을 보존하고 키가 있는 provider만 모델 선택 가능한 서비스/API 테스트, 결합 endpoint 제거, provider별 독립 입력 3개, 키 0개 빈 상태, 필터 모델/별도 저장 UI 테스트를 추가해 전체 117 테스트 통과. Docker 브라우저에서 Gemini/Anthropic/OpenAI 입력이 각각 표시되고, 저장된 OpenAI 키의 모델 2개만 목록에 표시되며 모델 저장과 OpenAI 연결 테스트 성공을 확인했다.
 
 ## 배포 후 TODO
 
