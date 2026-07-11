@@ -2,7 +2,8 @@ import {
   aiConnectionTestResponseSchema,
   aiProviderNameSchema,
   aiStatusResponseSchema,
-  updateAiSettingsRequestSchema,
+  saveAiProviderKeyRequestSchema,
+  selectAiModelRequestSchema,
 } from "@my-bookmark/shared";
 import { type RequestHandler, Router } from "express";
 import { getUserId, requireAuth } from "../middleware/auth";
@@ -23,9 +24,20 @@ export function createAiRouter(
     response.json(aiStatusResponseSchema.parse(status));
   });
 
-  router.put("/ai", async (request, response) => {
-    const body = updateAiSettingsRequestSchema.parse(request.body);
-    const status = await service.save(getUserId(request), body);
+  router.put("/ai/keys/:provider", async (request, response) => {
+    const provider = aiProviderNameSchema.parse(request.params.provider);
+    const body = saveAiProviderKeyRequestSchema.parse(request.body);
+    const status = await service.saveKey(
+      getUserId(request),
+      provider,
+      body.apiKey,
+    );
+    response.json(aiStatusResponseSchema.parse(status));
+  });
+
+  router.put("/ai/model", async (request, response) => {
+    const body = selectAiModelRequestSchema.parse(request.body);
+    const status = await service.selectModel(getUserId(request), body);
     response.json(aiStatusResponseSchema.parse(status));
   });
 

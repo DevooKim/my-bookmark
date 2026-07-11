@@ -21,7 +21,8 @@ const status = {
 function setup() {
   const service: AiSettingsService = {
     getStatus: vi.fn().mockResolvedValue(status),
-    save: vi.fn().mockResolvedValue({ ...status, enabled: true }),
+    saveKey: vi.fn().mockResolvedValue({ ...status, enabled: true }),
+    selectModel: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     deleteKey: vi.fn().mockResolvedValue(status),
     getProvider: vi.fn(),
     testConnection: vi.fn().mockResolvedValue(true),
@@ -50,24 +51,44 @@ describe("AI settings routes", () => {
     expect(service.getStatus).toHaveBeenCalledWith(userId);
   });
 
-  it("saves a selected provider and optional replacement key", async () => {
+  it("saves a provider key without a model payload", async () => {
     const { app, service } = setup();
+    const response = await request(app)
+      .put("/api/ai/keys/anthropic")
+      .set("Authorization", "Bearer token")
+      .send({ apiKey: "new-secret" });
+
+    expect(response.status).toBe(200);
+    expect(service.saveKey).toHaveBeenCalledWith(
+      userId,
+      "anthropic",
+      "new-secret",
+    );
+    expect(JSON.stringify(response.body)).not.toContain("new-secret");
+  });
+
+  it("selects a model independently from provider keys", async () => {
+    const { app, service } = setup();
+    const response = await request(app)
+      .put("/api/ai/model")
+      .set("Authorization", "Bearer token")
+      .send({ provider: "anthropic", model: "claude-sonnet-4-6" });
+
+    expect(response.status).toBe(200);
+    expect(service.selectModel).toHaveBeenCalledWith(userId, {
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("removes the ambiguous combined settings endpoint", async () => {
+    const { app } = setup();
     const response = await request(app)
       .put("/api/ai")
       .set("Authorization", "Bearer token")
-      .send({
-        provider: "anthropic",
-        model: "claude-sonnet-4-6",
-        apiKey: "new-secret",
-      });
+      .send({ provider: "anthropic", model: "claude-sonnet-4-6" });
 
-    expect(response.status).toBe(200);
-    expect(service.save).toHaveBeenCalledWith(userId, {
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-      apiKey: "new-secret",
-    });
-    expect(JSON.stringify(response.body)).not.toContain("new-secret");
+    expect(response.status).toBe(404);
   });
 
   it("tests a configured provider connection", async () => {
@@ -109,13 +130,9 @@ describe("AI settings routes", () => {
       .delete("/api/ai/keys/other")
       .set("Authorization", "Bearer token");
     const blankKey = await request(app)
-      .put("/api/ai")
+      .put("/api/ai/keys/gemini")
       .set("Authorization", "Bearer token")
-      .send({
-        provider: "gemini",
-        model: "gemini-flash-lite-latest",
-        apiKey: " ",
-      });
+      .send({ apiKey: " " });
 
     expect(invalidProvider.status).toBe(400);
     expect(blankKey.status).toBe(400);

@@ -3,7 +3,8 @@ import {
   AI_MODEL_CATALOG,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
-  updateAiSettingsRequestSchema,
+  saveAiProviderKeyRequestSchema,
+  selectAiModelRequestSchema,
 } from "../index";
 
 describe("AI settings schemas", () => {
@@ -63,48 +64,29 @@ describe("AI settings schemas", () => {
     ).toMatchObject({ provider: "openai", model: "gpt-4o-mini" });
   });
 
-  it("accepts valid provider/model updates and bounded non-blank keys", () => {
+  it("parses provider-key requests independently from model selection", () => {
     expect(
-      updateAiSettingsRequestSchema.parse({
+      saveAiProviderKeyRequestSchema.parse({ apiKey: " secret-key " }),
+    ).toEqual({ apiKey: "secret-key" });
+    expect(() =>
+      saveAiProviderKeyRequestSchema.parse({ apiKey: " " }),
+    ).toThrow();
+    expect(() =>
+      saveAiProviderKeyRequestSchema.parse({ apiKey: "x".repeat(513) }),
+    ).toThrow();
+  });
+
+  it("accepts valid model selections and rejects mismatched pairs", () => {
+    expect(
+      selectAiModelRequestSchema.parse({
         provider: "gemini",
         model: "gemini-flash-latest",
       }),
     ).toEqual({ provider: "gemini", model: "gemini-flash-latest" });
-    expect(
-      updateAiSettingsRequestSchema.parse({
-        provider: "anthropic",
-        model: "claude-haiku-4-5",
-        apiKey: " secret-key ",
-      }),
-    ).toEqual({
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
-      apiKey: "secret-key",
-    });
-  });
-
-  it("rejects missing or mismatched models and invalid keys", () => {
     expect(() =>
-      updateAiSettingsRequestSchema.parse({ provider: "gemini" }),
-    ).toThrow();
-    expect(() =>
-      updateAiSettingsRequestSchema.parse({
+      selectAiModelRequestSchema.parse({
         provider: "gemini",
         model: "gpt-4o-mini",
-      }),
-    ).toThrow();
-    expect(() =>
-      updateAiSettingsRequestSchema.parse({
-        provider: "gemini",
-        model: "gemini-flash-lite-latest",
-        apiKey: " ",
-      }),
-    ).toThrow();
-    expect(() =>
-      updateAiSettingsRequestSchema.parse({
-        provider: "gemini",
-        model: "gemini-flash-lite-latest",
-        apiKey: "x".repeat(513),
       }),
     ).toThrow();
   });

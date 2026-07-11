@@ -224,11 +224,13 @@ export const aiStatusResponseSchema = z.object({
     openai: aiProviderStatusSchema,
   }),
 });
-export const updateAiSettingsRequestSchema = z
+export const saveAiProviderKeyRequestSchema = z.object({
+  apiKey: z.string().trim().min(1).max(512),
+});
+export const selectAiModelRequestSchema = z
   .object({
     provider: aiProviderNameSchema,
     model: aiModelIdSchema,
-    apiKey: z.string().trim().min(1).max(512).optional(),
   })
   .refine(
     (value) =>
@@ -312,9 +314,10 @@ export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
 export type AiConnectionTestResponse = z.infer<
   typeof aiConnectionTestResponseSchema
 >;
-export type UpdateAiSettingsRequest = z.infer<
-  typeof updateAiSettingsRequestSchema
+export type SaveAiProviderKeyRequest = z.infer<
+  typeof saveAiProviderKeyRequestSchema
 >;
+export type SelectAiModelRequest = z.infer<typeof selectAiModelRequestSchema>;
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;
 export type CreateApiKeyResponse = z.infer<typeof createApiKeyResponseSchema>;

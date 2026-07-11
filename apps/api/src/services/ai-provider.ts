@@ -10,7 +10,7 @@ import {
   API_ERROR_CODES,
   aiModelIdSchema,
   aiProviderNameSchema,
-  type UpdateAiSettingsRequest,
+  type SelectAiModelRequest,
 } from "@my-bookmark/shared";
 import { z } from "zod";
 import { appEnv } from "../lib/env";
@@ -41,9 +41,14 @@ export interface AiSettingsRepository {
 
 export interface AiSettingsService {
   getStatus(userId: string): Promise<AiStatusResponse>;
-  save(
+  saveKey(
     userId: string,
-    input: UpdateAiSettingsRequest,
+    provider: AiProviderName,
+    apiKey: string,
+  ): Promise<AiStatusResponse>;
+  selectModel(
+    userId: string,
+    input: SelectAiModelRequest,
   ): Promise<AiStatusResponse>;
   deleteKey(
     userId: string,
@@ -118,13 +123,16 @@ export function createAiSettingsService({
     async getStatus(userId) {
       return toStatus(await loadValues(userId));
     },
-    async save(userId, input) {
+    async saveKey(userId, provider, apiKey) {
       const values = await loadValues(userId);
-      values.provider = input.provider;
-      values.model = input.model;
-      if (input.apiKey !== undefined) {
-        values[keyColumns[input.provider]] = cipher.encrypt(input.apiKey);
-      }
+      values[keyColumns[provider]] = cipher.encrypt(apiKey);
+      const saved = await repository.save(userId, values);
+      providerCache.delete(userId);
+      const { user_id: _userId, ...savedValues } = saved;
+      return toStatus(savedValues);
+    },
+    async selectModel(userId, input) {
+      const values = await loadValues(userId);
       if (!values[keyColumns[input.provider]]) {
         throw new HttpError(
           400,
@@ -132,6 +140,8 @@ export function createAiSettingsService({
           "Selected provider requires an API key",
         );
       }
+      values.provider = input.provider;
+      values.model = input.model;
       const saved = await repository.save(userId, values);
       providerCache.delete(userId);
       const { user_id: _userId, ...savedValues } = saved;
