@@ -21,9 +21,10 @@ import {
   listApiKeys,
   listCategories,
   revokeApiKey,
+  saveAiProviderKey,
+  selectAiModel,
   sendTestPush,
   testAiProviderConnection,
-  updateAiSettings,
   updateCategory,
 } from "../../lib/api-client";
 import {
@@ -471,6 +472,11 @@ const aiProviderLabels: Record<AiProviderName, string> = {
   openai: "OpenAI",
 };
 const aiProviderNames = ["gemini", "anthropic", "openai"] as const;
+const emptyAiKeys: Record<AiProviderName, string> = {
+  gemini: "",
+  anthropic: "",
+  openai: "",
+};
 
 function getModelConfig(model: AiModelId) {
   const config = AI_MODEL_CATALOG.find((item) => item.model === model);
@@ -484,169 +490,230 @@ export function AiSection() {
   const queryClient = useQueryClient();
   const aiQuery = useQuery({ queryKey: ["ai"], queryFn: getAiStatus });
   const [model, setModel] = useState<AiModelId>("gemini-flash-lite-latest");
-  const [apiKey, setApiKey] = useState("");
-  const selectedModel = getModelConfig(model);
-  const provider = selectedModel.provider;
+  const [apiKeys, setApiKeys] = useState(emptyAiKeys);
+  const availableModels = AI_MODEL_CATALOG.filter(
+    (item) => aiQuery.data?.providers[item.provider].configured,
+  );
 
   useEffect(() => {
-    if (aiQuery.data) {
+    if (!aiQuery.data) {
+      return;
+    }
+    const activeConfigured =
+      aiQuery.data.providers[aiQuery.data.provider].configured;
+    const firstAvailable = AI_MODEL_CATALOG.find(
+      (item) => aiQuery.data?.providers[item.provider].configured,
+    );
+    if (activeConfigured) {
       setModel(aiQuery.data.model);
+    } else if (firstAvailable) {
+      setModel(firstAvailable.model);
     }
   }, [aiQuery.data]);
 
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      updateAiSettings({
-        provider,
-        model,
-        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-      }),
+  const keyMutation = useMutation({
+    mutationFn: ({
+      provider,
+      apiKey,
+    }: {
+      provider: AiProviderName;
+      apiKey: string;
+    }) => saveAiProviderKey(provider, { apiKey }),
+    onSuccess: (status, variables) => {
+      queryClient.setQueryData(["ai"], status);
+      setApiKeys((current) => ({ ...current, [variables.provider]: "" }));
+      toast.success(
+        `${aiProviderLabels[variables.provider]} API 키를 저장했어요`,
+      );
+    },
+    onError: () => toast.error("AI API 키를 저장하지 못했어요"),
+  });
+  const modelMutation = useMutation({
+    mutationFn: () => {
+      const selected = getModelConfig(model);
+      return selectAiModel({ provider: selected.provider, model });
+    },
     onSuccess: (status) => {
       queryClient.setQueryData(["ai"], status);
-      setApiKey("");
-      toast.success("AI 설정을 저장했어요");
+      toast.success("사용 모델을 저장했어요");
     },
-    onError: () => toast.error("AI 설정을 저장하지 못했어요"),
+    onError: () => toast.error("사용 모델을 저장하지 못했어요"),
   });
   const testMutation = useMutation({
-    mutationFn: (name: AiProviderName) => testAiProviderConnection(name),
+    mutationFn: (provider: AiProviderName) =>
+      testAiProviderConnection(provider),
     onSuccess: (result) => {
       const label = aiProviderLabels[result.provider];
-      if (result.ok) {
-        toast.success(`${label} 연결에 성공했어요`);
-      } else {
-        toast.error(`${label} API 키를 확인해 주세요`);
-      }
+      result.ok
+        ? toast.success(`${label} 연결에 성공했어요`)
+        : toast.error(`${label} API 키를 확인해 주세요`);
     },
     onError: () => toast.error("연결 테스트를 완료하지 못했어요"),
   });
   const deleteMutation = useMutation({
-    mutationFn: (name: AiProviderName) => deleteAiProviderKey(name),
+    mutationFn: (provider: AiProviderName) => deleteAiProviderKey(provider),
     onSuccess: (status) => {
       queryClient.setQueryData(["ai"], status);
       toast.success("AI API 키를 삭제했어요");
     },
     onError: () => toast.error("AI API 키를 삭제하지 못했어요"),
   });
-  const selectedConfigured =
-    aiQuery.data?.providers[provider].configured ?? false;
-  const controlsPending = saveMutation.isPending || deleteMutation.isPending;
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="font-bold">AI 분류</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        자동 분류 모델과 provider별 API 키를 관리합니다. 저장된 키는 다시
-        표시되지 않습니다.
+        provider API 키를 관리하고, 키가 등록된 provider의 모델을 선택합니다.
       </p>
       {aiQuery.isError ? (
         <p className="mt-3 text-sm text-red-600">
           AI 설정을 불러오지 못했어요.
         </p>
       ) : null}
-      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,18rem)_1fr_auto] sm:items-end">
-        <label className="grid gap-1 text-sm font-medium">
-          AI 모델
-          <select
-            className="input"
-            disabled={controlsPending}
-            onChange={(event) =>
-              setModel(aiModelIdSchema.parse(event.target.value))
-            }
-            value={model}
-          >
-            {aiProviderNames.map((name) => (
-              <optgroup key={name} label={aiProviderLabels[name]}>
-                {AI_MODEL_CATALOG.filter((item) => item.provider === name).map(
-                  (item) => {
-                    const configured =
-                      aiQuery.data?.providers[name].configured ?? false;
-                    return (
-                      <option key={item.model} value={item.model}>
-                        {item.label} · {item.tier}
-                        {configured ? "" : " · API 키 필요"}
-                      </option>
-                    );
-                  },
-                )}
-              </optgroup>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          {aiProviderLabels[provider]} API 키
-          <input
-            autoComplete="off"
-            className="input"
-            maxLength={512}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={
-              selectedConfigured ? "새 키를 입력하면 교체됩니다" : "API 키 입력"
-            }
-            type="password"
-            value={apiKey}
-          />
-        </label>
-        <button
-          aria-label="AI 설정 저장"
-          className="btn-primary justify-center"
-          disabled={controlsPending}
-          onClick={() => saveMutation.mutate()}
-          type="button"
-        >
-          저장
-        </button>
-      </div>
-      <div className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-        {aiProviderNames.map((name) => {
-          const configured = aiQuery.data?.providers[name].configured ?? false;
-          const testing =
-            testMutation.isPending && testMutation.variables === name;
-          return (
-            <div
-              className="flex min-h-11 items-center justify-between gap-3 px-3 py-2"
-              key={name}
-            >
-              <div className="text-sm">
-                <span className="font-medium">{aiProviderLabels[name]}</span>
-                <span className="ml-2 text-zinc-500">
-                  {configured ? "설정됨" : "API 키 필요"}
-                </span>
-              </div>
-              {configured ? (
-                <div className="flex items-center gap-3">
-                  <button
-                    aria-label={`${aiProviderLabels[name]} 연결 테스트`}
-                    className="text-sm text-blue-600 disabled:opacity-50"
-                    disabled={controlsPending || testMutation.isPending}
-                    onClick={() => testMutation.mutate(name)}
-                    type="button"
-                  >
-                    {testing ? "확인 중…" : "연결 테스트"}
-                  </button>
-                  <button
-                    aria-label={`${aiProviderLabels[name]} 키 삭제`}
-                    className="text-sm text-red-600 disabled:opacity-50"
-                    disabled={controlsPending || testMutation.isPending}
-                    onClick={() => deleteMutation.mutate(name)}
-                    type="button"
-                  >
-                    키 삭제
-                  </button>
+
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold">AI API 키</h3>
+        <div className="mt-2 grid gap-3 lg:grid-cols-3">
+          {aiProviderNames.map((provider) => {
+            const configured =
+              aiQuery.data?.providers[provider].configured ?? false;
+            const saving =
+              keyMutation.isPending &&
+              keyMutation.variables?.provider === provider;
+            const testing =
+              testMutation.isPending && testMutation.variables === provider;
+            return (
+              <div
+                className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+                key={provider}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {aiProviderLabels[provider]}
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    {configured ? "설정됨" : "API 키 필요"}
+                  </span>
                 </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-      <p className="mt-3 text-xs text-zinc-500">
-        연결 테스트는 Models API로 키 인증만 확인하며 추론을 실행하지 않습니다.
-      </p>
-      {aiQuery.data && !aiQuery.data.enabled ? (
-        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-          선택한 provider의 API 키를 함께 입력해 저장하세요.
+                <label className="mt-3 grid gap-1 text-sm">
+                  {aiProviderLabels[provider]} API 키
+                  <input
+                    autoComplete="off"
+                    className="input"
+                    maxLength={512}
+                    onChange={(event) =>
+                      setApiKeys((current) => ({
+                        ...current,
+                        [provider]: event.target.value,
+                      }))
+                    }
+                    placeholder={
+                      configured ? "새 키를 입력하면 교체됩니다" : "API 키 입력"
+                    }
+                    type="password"
+                    value={apiKeys[provider]}
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    aria-label={`${aiProviderLabels[provider]} 키 저장`}
+                    className="btn-secondary"
+                    disabled={
+                      !apiKeys[provider].trim() || keyMutation.isPending
+                    }
+                    onClick={() =>
+                      keyMutation.mutate({
+                        provider,
+                        apiKey: apiKeys[provider].trim(),
+                      })
+                    }
+                    type="button"
+                  >
+                    {saving ? "저장 중…" : configured ? "키 교체" : "키 저장"}
+                  </button>
+                  {configured ? (
+                    <>
+                      <button
+                        aria-label={`${aiProviderLabels[provider]} 연결 테스트`}
+                        className="btn-secondary"
+                        disabled={
+                          testMutation.isPending || deleteMutation.isPending
+                        }
+                        onClick={() => testMutation.mutate(provider)}
+                        type="button"
+                      >
+                        {testing ? "확인 중…" : "연결 테스트"}
+                      </button>
+                      <button
+                        aria-label={`${aiProviderLabels[provider]} 키 삭제`}
+                        className="btn-secondary text-red-600"
+                        disabled={
+                          testMutation.isPending || deleteMutation.isPending
+                        }
+                        onClick={() => deleteMutation.mutate(provider)}
+                        type="button"
+                      >
+                        키 삭제
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          연결 테스트는 Models API로 키 인증만 확인하며 추론을 실행하지
+          않습니다.
         </p>
-      ) : null}
+      </div>
+
+      <div className="mt-6 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+        <h3 className="text-sm font-semibold">사용 모델</h3>
+        {availableModels.length === 0 ? (
+          <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950">
+            먼저 provider API 키를 등록하세요
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="grid flex-1 gap-1 text-sm">
+              사용 모델
+              <select
+                className="input"
+                disabled={modelMutation.isPending}
+                onChange={(event) =>
+                  setModel(aiModelIdSchema.parse(event.target.value))
+                }
+                value={model}
+              >
+                {aiProviderNames.map((provider) => {
+                  const models = availableModels.filter(
+                    (item) => item.provider === provider,
+                  );
+                  return models.length > 0 ? (
+                    <optgroup key={provider} label={aiProviderLabels[provider]}>
+                      {models.map((item) => (
+                        <option key={item.model} value={item.model}>
+                          {item.label} · {item.tier}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null;
+                })}
+              </select>
+            </label>
+            <button
+              aria-label="모델 저장"
+              className="btn-primary justify-center"
+              disabled={modelMutation.isPending}
+              onClick={() => modelMutation.mutate()}
+              type="button"
+            >
+              모델 저장
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

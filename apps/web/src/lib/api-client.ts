@@ -31,7 +31,8 @@ import {
   type RemindersResponse,
   reminderResponseSchema,
   remindersResponseSchema,
-  type UpdateAiSettingsRequest,
+  type SaveAiProviderKeyRequest,
+  type SelectAiModelRequest,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
@@ -128,10 +129,23 @@ export async function getAiStatus(): Promise<AiStatusResponse> {
   );
 }
 
-export async function updateAiSettings(
-  body: UpdateAiSettingsRequest,
+export async function saveAiProviderKey(
+  provider: AiProviderName,
+  body: SaveAiProviderKeyRequest,
 ): Promise<AiStatusResponse> {
-  const response = await apiFetch("/api/ai", {
+  const response = await apiFetch(`/api/ai/keys/${provider}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    aiStatusResponseSchema.parse(json),
+  );
+}
+
+export async function selectAiModel(
+  body: SelectAiModelRequest,
+): Promise<AiStatusResponse> {
+  const response = await apiFetch("/api/ai/model", {
     method: "PUT",
     body: JSON.stringify(body),
   });
