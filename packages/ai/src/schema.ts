@@ -5,12 +5,12 @@ export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("existing"),
     categoryId: z.string().min(1),
-    confidence: z.number().min(0).max(1),
+    confidence: z.number().min(0).max(1).default(0),
   }),
   z.object({
     type: z.literal("new"),
     name: z.string().trim().min(1).max(10),
-    confidence: z.number().min(0).max(1),
+    confidence: z.number().min(0).max(1).default(0),
   }),
   z.object({ type: z.literal("none") }),
 ]);

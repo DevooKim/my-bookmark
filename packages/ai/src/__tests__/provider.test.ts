@@ -126,6 +126,27 @@ describe("AI provider contract", () => {
     );
   });
 
+  it("defaults omitted Gemini confidence without failing the analysis", async () => {
+    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
+      text: JSON.stringify({
+        ...expected,
+        category: { type: "existing", categoryId: "cat-dev" },
+      }),
+    });
+
+    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
+
+    await expect(
+      provider.categorize({
+        url: "https://example.com",
+        existingCategories: [{ id: "cat-dev", name: "개발" }],
+      }),
+    ).resolves.toEqual({
+      ...expected,
+      category: { type: "existing", categoryId: "cat-dev", confidence: 0 },
+    });
+  });
+
   it("parses Anthropic forced tool-use responses", async () => {
     sdkMocks.anthropicCreate.mockResolvedValueOnce({
       content: [
