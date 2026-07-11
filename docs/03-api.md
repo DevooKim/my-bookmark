@@ -88,8 +88,9 @@ keyset 페이지네이션: `(created_at, id) < cursor` order by `created_at desc
 
 ## AI 설정 (Bearer 전용)
 
-- `GET /api/ai` → 활성 `provider`, 활성 키 사용 가능 여부 `enabled`, provider별 `{ configured }` 반환. 키 원문/암호문은 반환하지 않음
-- `PUT /api/ai` `{ provider, apiKey? }` → provider 선택 저장. `apiKey`가 있으면 해당 provider 키를 암호화해 신규 저장/교체하고, 생략하면 기존 키 유지
+- `GET /api/ai` → 활성 `provider`/`model`, 활성 키 사용 가능 여부 `enabled`, provider별 `{ configured }` 반환. 키 원문/암호문은 반환하지 않음
+- `PUT /api/ai` `{ provider, model, apiKey? }` → 고정 카탈로그의 provider/model 선택 저장. `apiKey`가 있으면 해당 provider 키를 암호화해 신규 저장/교체하고, 생략하면 기존 키 유지. 해당 provider 키가 없으면 400
+- `POST /api/ai/test/:provider` → 저장된 키로 provider Models API 호출. 성공/실패를 `{ provider, ok }`로 반환하며 추론은 실행하지 않음
 - `DELETE /api/ai/keys/:provider` → 해당 provider 키 삭제. 활성 provider 키도 삭제 가능하며 이때 `enabled=false`
 
 ## API Keys (Bearer 전용)
