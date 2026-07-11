@@ -19,6 +19,7 @@ vi.mock("../../lib/api-client", () => ({
   listApiKeys: vi.fn(),
   listCategories: vi.fn(),
   revokeApiKey: vi.fn(),
+  testAiProviderConnection: vi.fn(),
   updateAiSettings: vi.fn(),
   updateCategory: vi.fn(),
 }));
@@ -26,6 +27,7 @@ vi.mock("../../lib/api-client", () => ({
 import {
   deleteAiProviderKey,
   getAiStatus,
+  testAiProviderConnection,
   updateAiSettings,
 } from "../../lib/api-client";
 import { AiSection, copyApiKeyToClipboard } from "./settings";
@@ -37,6 +39,7 @@ afterEach(() => {
 
 const aiStatus = {
   provider: "gemini" as const,
+  model: "gemini-flash-lite-latest" as const,
   enabled: true,
   providers: {
     gemini: { configured: true },
@@ -62,6 +65,7 @@ describe("AI settings", () => {
     vi.mocked(updateAiSettings).mockResolvedValue({
       ...aiStatus,
       provider: "anthropic",
+      model: "claude-sonnet-4-6",
       enabled: true,
       providers: {
         ...aiStatus.providers,
@@ -71,8 +75,8 @@ describe("AI settings", () => {
     renderAiSection();
 
     await screen.findByRole("button", { name: "Gemini 키 삭제" });
-    fireEvent.change(screen.getByLabelText("AI provider"), {
-      target: { value: "anthropic" },
+    fireEvent.change(screen.getByLabelText("AI 모델"), {
+      target: { value: "claude-sonnet-4-6" },
     });
     fireEvent.change(screen.getByLabelText("Anthropic API 키"), {
       target: { value: "new-secret" },
@@ -82,6 +86,7 @@ describe("AI settings", () => {
     await waitFor(() =>
       expect(updateAiSettings).toHaveBeenCalledWith({
         provider: "anthropic",
+        model: "claude-sonnet-4-6",
         apiKey: "new-secret",
       }),
     );
@@ -89,6 +94,37 @@ describe("AI settings", () => {
       expect(
         (screen.getByLabelText("Anthropic API 키") as HTMLInputElement).value,
       ).toBe(""),
+    );
+  });
+
+  it("groups fixed models and marks models whose provider needs a key", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    renderAiSection();
+
+    await screen.findByRole("button", { name: "Gemini 키 삭제" });
+    const selector = screen.getByLabelText("AI 모델") as HTMLSelectElement;
+    expect(selector.querySelectorAll("optgroup")).toHaveLength(3);
+    expect(
+      screen.getByRole("option", {
+        name: "Claude Sonnet 4.6 · 균형 · API 키 필요",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("tests a configured provider connection", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    vi.mocked(testAiProviderConnection).mockResolvedValue({
+      provider: "gemini",
+      ok: true,
+    });
+    renderAiSection();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Gemini 연결 테스트" }),
+    );
+
+    await waitFor(() =>
+      expect(testAiProviderConnection).toHaveBeenCalledWith("gemini"),
     );
   });
 

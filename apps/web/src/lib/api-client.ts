@@ -1,7 +1,9 @@
 import {
+  type AiConnectionTestResponse,
   type AiProviderName,
   type AiStatusResponse,
   type ApiKeysResponse,
+  aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
   apiKeysResponseSchema,
   type Bookmark,
@@ -135,6 +137,17 @@ export async function updateAiSettings(
   });
   return parseJsonResponse(response, (json) =>
     aiStatusResponseSchema.parse(json),
+  );
+}
+
+export async function testAiProviderConnection(
+  provider: AiProviderName,
+): Promise<AiConnectionTestResponse> {
+  const response = await apiFetch(`/api/ai/test/${provider}`, {
+    method: "POST",
+  });
+  return parseJsonResponse(response, (json) =>
+    aiConnectionTestResponseSchema.parse(json),
   );
 }
 
