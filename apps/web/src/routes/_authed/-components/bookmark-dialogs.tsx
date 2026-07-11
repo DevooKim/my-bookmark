@@ -14,6 +14,7 @@ import {
   updateBookmark,
 } from "../../../lib/api-client";
 import { toDatetimeLocalValue } from "../../../lib/datetime";
+import { TagInput } from "./tag-input";
 
 export function BookmarkDialog({
   categories,
@@ -176,11 +177,13 @@ export function EditBookmarkDialog({
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(bookmark.title ?? "");
   const [description, setDescription] = useState(bookmark.description ?? "");
+  const [tags, setTags] = useState(bookmark.tags);
   const mutation = useMutation({
     mutationFn: () =>
       updateBookmark(bookmark.id, {
         title: title || null,
         description: description || null,
+        tags,
       }),
     onSuccess: () => {
       toast.success("수정했어요");
@@ -212,6 +215,7 @@ export function EditBookmarkDialog({
             value={description}
           />
         </Field>
+        <TagInput value={tags} onChange={setTags} />
         <button
           className="btn-primary w-full justify-center"
           disabled={mutation.isPending}
