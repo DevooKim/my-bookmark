@@ -1,4 +1,5 @@
 import {
+  type AiProviderName,
   type AiStatusResponse,
   type ApiKeysResponse,
   aiStatusResponseSchema,
@@ -28,6 +29,7 @@ import {
   type RemindersResponse,
   reminderResponseSchema,
   remindersResponseSchema,
+  type UpdateAiSettingsRequest,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
@@ -119,6 +121,29 @@ export async function getMe(): Promise<MeResponse> {
 
 export async function getAiStatus(): Promise<AiStatusResponse> {
   const response = await apiFetch("/api/ai");
+  return parseJsonResponse(response, (json) =>
+    aiStatusResponseSchema.parse(json),
+  );
+}
+
+export async function updateAiSettings(
+  body: UpdateAiSettingsRequest,
+): Promise<AiStatusResponse> {
+  const response = await apiFetch("/api/ai", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    aiStatusResponseSchema.parse(json),
+  );
+}
+
+export async function deleteAiProviderKey(
+  provider: AiProviderName,
+): Promise<AiStatusResponse> {
+  const response = await apiFetch(`/api/ai/keys/${provider}`, {
+    method: "DELETE",
+  });
   return parseJsonResponse(response, (json) =>
     aiStatusResponseSchema.parse(json),
   );

@@ -1,4 +1,6 @@
 import {
+  type AiProviderName,
+  aiProviderNameSchema,
   type CategoryWithCount,
   categoryColorSchema,
 } from "@my-bookmark/shared";
@@ -10,6 +12,7 @@ import { toast } from "sonner";
 import {
   createApiKey,
   createCategory,
+  deleteAiProviderKey,
   deleteCategory,
   getAiStatus,
   getPushStatus,
@@ -17,6 +20,7 @@ import {
   listCategories,
   revokeApiKey,
   sendTestPush,
+  updateAiSettings,
   updateCategory,
 } from "../../lib/api-client";
 import {
@@ -458,14 +462,137 @@ function ApiKeySection() {
   );
 }
 
-function AiSection() {
+const aiProviderLabels: Record<AiProviderName, string> = {
+  gemini: "Gemini",
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+};
+const aiProviderNames = ["gemini", "anthropic", "openai"] as const;
+
+export function AiSection() {
+  const queryClient = useQueryClient();
   const aiQuery = useQuery({ queryKey: ["ai"], queryFn: getAiStatus });
+  const [provider, setProvider] = useState<AiProviderName>("gemini");
+  const [apiKey, setApiKey] = useState("");
+
+  useEffect(() => {
+    if (aiQuery.data) {
+      setProvider(aiQuery.data.provider);
+    }
+  }, [aiQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      updateAiSettings({
+        provider,
+        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+      }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(["ai"], status);
+      setApiKey("");
+      toast.success("AI 설정을 저장했어요");
+    },
+    onError: () => toast.error("AI 설정을 저장하지 못했어요"),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (name: AiProviderName) => deleteAiProviderKey(name),
+    onSuccess: (status) => {
+      queryClient.setQueryData(["ai"], status);
+      toast.success("AI API 키를 삭제했어요");
+    },
+    onError: () => toast.error("AI API 키를 삭제하지 못했어요"),
+  });
+  const selectedConfigured =
+    aiQuery.data?.providers[provider].configured ?? false;
+
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="font-bold">AI 분류</h2>
-      <p className="mt-2 text-sm text-zinc-500">
-        현재 provider: {aiQuery.data?.provider ?? "불러오는 중…"}
+      <p className="mt-1 text-sm text-zinc-500">
+        자동 분류에 사용할 provider와 API 키를 관리합니다. 저장된 키는 다시
+        표시되지 않습니다.
       </p>
+      {aiQuery.isError ? (
+        <p className="mt-3 text-sm text-red-600">
+          AI 설정을 불러오지 못했어요.
+        </p>
+      ) : null}
+      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,12rem)_1fr_auto] sm:items-end">
+        <label className="grid gap-1 text-sm font-medium">
+          AI provider
+          <select
+            className="input"
+            disabled={saveMutation.isPending || deleteMutation.isPending}
+            onChange={(event) =>
+              setProvider(aiProviderNameSchema.parse(event.target.value))
+            }
+            value={provider}
+          >
+            {aiProviderNames.map((name) => (
+              <option key={name} value={name}>
+                {aiProviderLabels[name]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium">
+          {aiProviderLabels[provider]} API 키
+          <input
+            autoComplete="off"
+            className="input"
+            maxLength={512}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder={
+              selectedConfigured ? "새 키를 입력하면 교체됩니다" : "API 키 입력"
+            }
+            type="password"
+            value={apiKey}
+          />
+        </label>
+        <button
+          aria-label="AI 설정 저장"
+          className="btn-primary justify-center"
+          disabled={saveMutation.isPending || deleteMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          type="button"
+        >
+          저장
+        </button>
+      </div>
+      <div className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+        {aiProviderNames.map((name) => {
+          const configured = aiQuery.data?.providers[name].configured ?? false;
+          return (
+            <div
+              className="flex min-h-11 items-center justify-between gap-3 px-3 py-2"
+              key={name}
+            >
+              <div className="text-sm">
+                <span className="font-medium">{aiProviderLabels[name]}</span>
+                <span className="ml-2 text-zinc-500">
+                  {configured ? "설정됨" : "API 키 필요"}
+                </span>
+              </div>
+              {configured ? (
+                <button
+                  aria-label={`${aiProviderLabels[name]} 키 삭제`}
+                  className="text-sm text-red-600 disabled:opacity-50"
+                  disabled={saveMutation.isPending || deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate(name)}
+                  type="button"
+                >
+                  키 삭제
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {aiQuery.data && !aiQuery.data.enabled ? (
+        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+          선택한 provider의 API 키를 저장해야 AI 분류를 사용할 수 있어요.
+        </p>
+      ) : null}
     </section>
   );
 }

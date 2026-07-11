@@ -1,17 +1,118 @@
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/api-client", () => ({
   createApiKey: vi.fn(),
   createCategory: vi.fn(),
+  deleteAiProviderKey: vi.fn(),
   deleteCategory: vi.fn(),
   getAiStatus: vi.fn(),
   listApiKeys: vi.fn(),
   listCategories: vi.fn(),
   revokeApiKey: vi.fn(),
+  updateAiSettings: vi.fn(),
   updateCategory: vi.fn(),
 }));
 
-import { copyApiKeyToClipboard } from "./settings";
+import {
+  deleteAiProviderKey,
+  getAiStatus,
+  updateAiSettings,
+} from "../../lib/api-client";
+import { AiSection, copyApiKeyToClipboard } from "./settings";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+const aiStatus = {
+  provider: "gemini" as const,
+  enabled: true,
+  providers: {
+    gemini: { configured: true },
+    anthropic: { configured: false },
+    openai: { configured: false },
+  },
+};
+
+function renderAiSection() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AiSection />
+    </QueryClientProvider>,
+  );
+}
+
+describe("AI settings", () => {
+  it("selects a provider and saves its replacement key", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    vi.mocked(updateAiSettings).mockResolvedValue({
+      ...aiStatus,
+      provider: "anthropic",
+      enabled: true,
+      providers: {
+        ...aiStatus.providers,
+        anthropic: { configured: true },
+      },
+    });
+    renderAiSection();
+
+    await screen.findByRole("button", { name: "Gemini 키 삭제" });
+    fireEvent.change(screen.getByLabelText("AI provider"), {
+      target: { value: "anthropic" },
+    });
+    fireEvent.change(screen.getByLabelText("Anthropic API 키"), {
+      target: { value: "new-secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "AI 설정 저장" }));
+
+    await waitFor(() =>
+      expect(updateAiSettings).toHaveBeenCalledWith({
+        provider: "anthropic",
+        apiKey: "new-secret",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Anthropic API 키") as HTMLInputElement).value,
+      ).toBe(""),
+    );
+  });
+
+  it("deletes a configured provider key", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    vi.mocked(deleteAiProviderKey).mockResolvedValue({
+      ...aiStatus,
+      enabled: false,
+      providers: {
+        ...aiStatus.providers,
+        gemini: { configured: false },
+      },
+    });
+    renderAiSection();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Gemini 키 삭제" }),
+    );
+
+    await waitFor(() =>
+      expect(deleteAiProviderKey).toHaveBeenCalledWith("gemini"),
+    );
+  });
+});
 
 describe("copyApiKeyToClipboard", () => {
   it("reports success only after the clipboard write resolves", async () => {
