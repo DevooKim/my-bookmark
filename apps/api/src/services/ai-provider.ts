@@ -4,8 +4,11 @@ import {
   createAiProvider,
 } from "@my-bookmark/ai";
 import {
+  type AiModelId,
   type AiProviderName,
   type AiStatusResponse,
+  API_ERROR_CODES,
+  aiModelIdSchema,
   aiProviderNameSchema,
   type UpdateAiSettingsRequest,
 } from "@my-bookmark/shared";
@@ -17,10 +20,12 @@ import {
   type SecretCipher,
 } from "../lib/secret-crypto";
 import { supabaseAdmin } from "../lib/supabase";
+import { HttpError } from "../middleware/error";
 
 const aiSettingsRowSchema = z.object({
   user_id: z.string().uuid(),
   provider: aiProviderNameSchema,
+  model: aiModelIdSchema,
   gemini_api_key_encrypted: z.string().nullable(),
   anthropic_api_key_encrypted: z.string().nullable(),
   openai_api_key_encrypted: z.string().nullable(),
@@ -45,6 +50,7 @@ export interface AiSettingsService {
     provider: AiProviderName,
   ): Promise<AiStatusResponse>;
   getProvider(userId: string): Promise<AiProvider | null>;
+  testConnection(userId: string, provider: AiProviderName): Promise<boolean>;
   invalidate(userId: string): void;
 }
 
@@ -56,10 +62,17 @@ interface AiSettingsServiceOptions {
 
 const emptyValues: AiSettingsValues = {
   provider: "gemini",
+  model: "gemini-flash-lite-latest",
   gemini_api_key_encrypted: null,
   anthropic_api_key_encrypted: null,
   openai_api_key_encrypted: null,
 };
+
+const defaultModels = {
+  gemini: "gemini-flash-lite-latest",
+  anthropic: "claude-haiku-4-5",
+  openai: "gpt-4o-mini",
+} as const satisfies Record<AiProviderName, AiModelId>;
 
 const keyColumns = {
   gemini: "gemini_api_key_encrypted",
@@ -91,6 +104,7 @@ export function createAiSettingsService({
     };
     return {
       provider: values.provider,
+      model: values.model,
       enabled: configured[values.provider],
       providers: {
         gemini: { configured: configured.gemini },
@@ -107,8 +121,16 @@ export function createAiSettingsService({
     async save(userId, input) {
       const values = await loadValues(userId);
       values.provider = input.provider;
+      values.model = input.model;
       if (input.apiKey !== undefined) {
         values[keyColumns[input.provider]] = cipher.encrypt(input.apiKey);
+      }
+      if (!values[keyColumns[input.provider]]) {
+        throw new HttpError(
+          400,
+          API_ERROR_CODES.VALIDATION_ERROR,
+          "Selected provider requires an API key",
+        );
       }
       const saved = await repository.save(userId, values);
       providerCache.delete(userId);
@@ -132,11 +154,38 @@ export function createAiSettingsService({
       const provider = encryptedKey
         ? providerFactory({
             provider: values.provider,
+            model: values.model,
             apiKey: cipher.decrypt(encryptedKey),
           })
         : null;
       providerCache.set(userId, provider);
       return provider;
+    },
+    async testConnection(userId, provider) {
+      const values = await loadValues(userId);
+      const encryptedKey = values[keyColumns[provider]];
+      if (!encryptedKey) {
+        throw new HttpError(
+          400,
+          API_ERROR_CODES.VALIDATION_ERROR,
+          "Provider requires an API key",
+        );
+      }
+      try {
+        const instance = providerFactory({
+          provider,
+          model:
+            values.provider === provider
+              ? values.model
+              : defaultModels[provider],
+          apiKey: cipher.decrypt(encryptedKey),
+        });
+        await instance.validateConnection();
+        return true;
+      } catch (error) {
+        console.warn(`AI provider ${provider} connection test failed`, error);
+        return false;
+      }
     },
     invalidate(userId) {
       providerCache.delete(userId);

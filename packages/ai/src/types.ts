@@ -14,6 +14,7 @@ export type CategorizeResult =
 export interface AiProvider {
   readonly name: string;
   categorize(input: CategorizeInput): Promise<CategorizeResult>;
+  validateConnection(): Promise<void>;
 }
 
 export type AiProviderName = "gemini" | "anthropic" | "openai";

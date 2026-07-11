@@ -2,13 +2,21 @@ import { describe, expect, it, vi } from "vitest";
 
 const sdkMocks = vi.hoisted(() => ({
   anthropicCreate: vi.fn(),
+  anthropicListModels: vi.fn(),
   geminiGenerateContent: vi.fn(),
+  geminiListModels: vi.fn(),
+  openAiListModels: vi.fn(),
   openAiParse: vi.fn(),
 }));
 
 vi.mock("@google/genai", () => ({
   GoogleGenAI: vi.fn(function GoogleGenAI() {
-    return { models: { generateContent: sdkMocks.geminiGenerateContent } };
+    return {
+      models: {
+        generateContent: sdkMocks.geminiGenerateContent,
+        list: sdkMocks.geminiListModels,
+      },
+    };
   }),
   Type: {
     NUMBER: "number",
@@ -19,13 +27,19 @@ vi.mock("@google/genai", () => ({
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: vi.fn(function Anthropic() {
-    return { messages: { create: sdkMocks.anthropicCreate } };
+    return {
+      messages: { create: sdkMocks.anthropicCreate },
+      models: { list: sdkMocks.anthropicListModels },
+    };
   }),
 }));
 
 vi.mock("openai", () => ({
   default: vi.fn(function OpenAI() {
-    return { responses: { parse: sdkMocks.openAiParse } };
+    return {
+      responses: { parse: sdkMocks.openAiParse },
+      models: { list: sdkMocks.openAiListModels },
+    };
   }),
 }));
 
@@ -48,6 +62,7 @@ describe("AI provider contract", () => {
         categoryId: "dev",
         confidence: 0.9,
       }),
+      validateConnection: async () => undefined,
     };
 
     await expect(
@@ -189,6 +204,45 @@ describe("AI provider contract", () => {
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("validates provider connections through Models APIs without inference", async () => {
+    sdkMocks.geminiGenerateContent.mockClear();
+    sdkMocks.anthropicCreate.mockClear();
+    sdkMocks.openAiParse.mockClear();
+    sdkMocks.geminiListModels.mockResolvedValueOnce({});
+    sdkMocks.anthropicListModels.mockResolvedValueOnce({});
+    sdkMocks.openAiListModels.mockResolvedValueOnce({});
+
+    await createAiProvider({
+      provider: "gemini",
+      apiKey: "test",
+    }).validateConnection();
+    await createAiProvider({
+      provider: "anthropic",
+      apiKey: "test",
+    }).validateConnection();
+    await createAiProvider({
+      provider: "openai",
+      apiKey: "test",
+    }).validateConnection();
+
+    expect(sdkMocks.geminiListModels).toHaveBeenCalledWith({
+      config: {
+        pageSize: 1,
+        abortSignal: expect.any(AbortSignal),
+      },
+    });
+    expect(sdkMocks.anthropicListModels).toHaveBeenCalledWith(
+      { limit: 1 },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(sdkMocks.openAiListModels).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
+    });
+    expect(sdkMocks.geminiGenerateContent).not.toHaveBeenCalled();
+    expect(sdkMocks.anthropicCreate).not.toHaveBeenCalled();
+    expect(sdkMocks.openAiParse).not.toHaveBeenCalled();
   });
 
   it("falls back to none when provider output parsing fails", async () => {

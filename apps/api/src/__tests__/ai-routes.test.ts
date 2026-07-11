@@ -9,6 +9,7 @@ import type { AiSettingsService } from "../services/ai-provider";
 const userId = "11111111-1111-4111-8111-111111111111";
 const status = {
   provider: "gemini" as const,
+  model: "gemini-flash-lite-latest" as const,
   enabled: false,
   providers: {
     gemini: { configured: false },
@@ -23,6 +24,7 @@ function setup() {
     save: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     deleteKey: vi.fn().mockResolvedValue(status),
     getProvider: vi.fn(),
+    testConnection: vi.fn().mockResolvedValue(true),
     invalidate: vi.fn(),
   };
   const app = express();
@@ -53,14 +55,42 @@ describe("AI settings routes", () => {
     const response = await request(app)
       .put("/api/ai")
       .set("Authorization", "Bearer token")
-      .send({ provider: "anthropic", apiKey: "new-secret" });
+      .send({
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        apiKey: "new-secret",
+      });
 
     expect(response.status).toBe(200);
     expect(service.save).toHaveBeenCalledWith(userId, {
       provider: "anthropic",
+      model: "claude-sonnet-4-6",
       apiKey: "new-secret",
     });
     expect(JSON.stringify(response.body)).not.toContain("new-secret");
+  });
+
+  it("tests a configured provider connection", async () => {
+    const { app, service } = setup();
+    const response = await request(app)
+      .post("/api/ai/test/openai")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ provider: "openai", ok: true });
+    expect(service.testConnection).toHaveBeenCalledWith(userId, "openai");
+  });
+
+  it("returns a safe failed result when provider validation fails", async () => {
+    const { app, service } = setup();
+    vi.mocked(service.testConnection).mockResolvedValueOnce(false);
+
+    const response = await request(app)
+      .post("/api/ai/test/openai")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ provider: "openai", ok: false });
   });
 
   it("deletes a provider key", async () => {
@@ -81,7 +111,11 @@ describe("AI settings routes", () => {
     const blankKey = await request(app)
       .put("/api/ai")
       .set("Authorization", "Bearer token")
-      .send({ provider: "gemini", apiKey: " " });
+      .send({
+        provider: "gemini",
+        model: "gemini-flash-lite-latest",
+        apiKey: " ",
+      });
 
     expect(invalidProvider.status).toBe(400);
     expect(blankKey.status).toBe(400);

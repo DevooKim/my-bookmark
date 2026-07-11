@@ -56,6 +56,16 @@ class GeminiProvider implements AiProvider {
     this.client = new GoogleGenAI({ apiKey });
   }
 
+  async validateConnection(): Promise<void> {
+    await withTimeout(
+      (signal) =>
+        this.client.models.list({
+          config: { pageSize: 1, abortSignal: signal },
+        }),
+      10_000,
+    );
+  }
+
   async categorize(input: CategorizeInput): Promise<CategorizeResult> {
     return withTimeout(async (signal) => {
       const response = await this.client.models.generateContent({
@@ -93,6 +103,13 @@ class AnthropicProvider implements AiProvider {
     this.client = new Anthropic({ apiKey });
   }
 
+  async validateConnection(): Promise<void> {
+    await withTimeout(
+      (signal) => this.client.models.list({ limit: 1 }, { signal }),
+      10_000,
+    );
+  }
+
   async categorize(input: CategorizeInput): Promise<CategorizeResult> {
     return withTimeout(async (signal) => {
       const message = await this.client.messages.create(
@@ -127,6 +144,10 @@ class OpenAiProvider implements AiProvider {
     private readonly model: string,
   ) {
     this.client = new OpenAI({ apiKey });
+  }
+
+  async validateConnection(): Promise<void> {
+    await withTimeout((signal) => this.client.models.list({ signal }), 10_000);
   }
 
   async categorize(input: CategorizeInput): Promise<CategorizeResult> {

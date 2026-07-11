@@ -167,9 +167,56 @@ export const updateReminderRequestSchema = z
 
 export const meResponseSchema = z.object({ userId: uuidSchema });
 export const aiProviderNameSchema = z.enum(["gemini", "anthropic", "openai"]);
+export const aiModelIdSchema = z.enum([
+  "gemini-flash-lite-latest",
+  "gemini-flash-latest",
+  "claude-haiku-4-5",
+  "claude-sonnet-4-6",
+  "gpt-4o-mini",
+  "gpt-5.4-mini",
+]);
+export const AI_MODEL_CATALOG = [
+  {
+    provider: "gemini",
+    model: "gemini-flash-lite-latest",
+    label: "Gemini Flash Lite",
+    tier: "저비용",
+  },
+  {
+    provider: "gemini",
+    model: "gemini-flash-latest",
+    label: "Gemini Flash",
+    tier: "균형",
+  },
+  {
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    tier: "저비용",
+  },
+  {
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    tier: "균형",
+  },
+  {
+    provider: "openai",
+    model: "gpt-4o-mini",
+    label: "GPT-4o mini",
+    tier: "저비용",
+  },
+  {
+    provider: "openai",
+    model: "gpt-5.4-mini",
+    label: "GPT-5.4 mini",
+    tier: "균형",
+  },
+] as const;
 export const aiProviderStatusSchema = z.object({ configured: z.boolean() });
 export const aiStatusResponseSchema = z.object({
   provider: aiProviderNameSchema,
+  model: aiModelIdSchema,
   enabled: z.boolean(),
   providers: z.object({
     gemini: aiProviderStatusSchema,
@@ -177,9 +224,23 @@ export const aiStatusResponseSchema = z.object({
     openai: aiProviderStatusSchema,
   }),
 });
-export const updateAiSettingsRequestSchema = z.object({
+export const updateAiSettingsRequestSchema = z
+  .object({
+    provider: aiProviderNameSchema,
+    model: aiModelIdSchema,
+    apiKey: z.string().trim().min(1).max(512).optional(),
+  })
+  .refine(
+    (value) =>
+      AI_MODEL_CATALOG.some(
+        (item) =>
+          item.provider === value.provider && item.model === value.model,
+      ),
+    { message: "Model does not belong to provider", path: ["model"] },
+  );
+export const aiConnectionTestResponseSchema = z.object({
   provider: aiProviderNameSchema,
-  apiKey: z.string().trim().min(1).max(512).optional(),
+  ok: z.boolean(),
 });
 
 export const createApiKeyRequestSchema = z.object({
@@ -246,7 +307,11 @@ export type PushSubscriptionRequest = z.infer<
 >;
 export type MeResponse = z.infer<typeof meResponseSchema>;
 export type AiProviderName = z.infer<typeof aiProviderNameSchema>;
+export type AiModelId = z.infer<typeof aiModelIdSchema>;
 export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
+export type AiConnectionTestResponse = z.infer<
+  typeof aiConnectionTestResponseSchema
+>;
 export type UpdateAiSettingsRequest = z.infer<
   typeof updateAiSettingsRequestSchema
 >;

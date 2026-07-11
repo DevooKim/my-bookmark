@@ -32,6 +32,7 @@ function setup() {
   const provider = {
     name: "fake",
     categorize: vi.fn(),
+    validateConnection: vi.fn().mockResolvedValue(undefined),
   } as unknown as AiProvider;
   const providerFactory = vi.fn((_config: AiProviderConfig) => provider);
   const service = createAiSettingsService({
@@ -48,6 +49,7 @@ describe("AI settings service", () => {
 
     await expect(service.getStatus(userId)).resolves.toEqual({
       provider: "gemini",
+      model: "gemini-flash-lite-latest",
       enabled: false,
       providers: {
         gemini: { configured: false },
@@ -58,26 +60,47 @@ describe("AI settings service", () => {
     expect(repository.requestedUsers).toEqual([userId]);
   });
 
-  it("encrypts provider keys and retains them across provider-only updates", async () => {
+  it("encrypts provider keys and retains them across model updates", async () => {
     const { repository, service } = setup();
 
-    await service.save(userId, { provider: "gemini", apiKey: "gemini-key" });
-    await service.save(userId, { provider: "openai" });
+    await service.save(userId, {
+      provider: "gemini",
+      model: "gemini-flash-lite-latest",
+      apiKey: "gemini-key",
+    });
+    await service.save(userId, {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: "openai-key",
+    });
+    await service.save(userId, {
+      provider: "gemini",
+      model: "gemini-flash-latest",
+    });
 
     const row = repository.rows.get(userId);
-    expect(row?.provider).toBe("openai");
+    expect(row?.provider).toBe("gemini");
+    expect(row?.model).toBe("gemini-flash-latest");
     expect(row?.gemini_api_key_encrypted).toMatch(/^v1:/);
     expect(row?.gemini_api_key_encrypted).not.toContain("gemini-key");
     expect(await service.getStatus(userId)).toMatchObject({
-      provider: "openai",
-      enabled: false,
-      providers: { gemini: { configured: true } },
+      provider: "gemini",
+      model: "gemini-flash-latest",
+      enabled: true,
+      providers: {
+        gemini: { configured: true },
+        openai: { configured: true },
+      },
     });
   });
 
   it("deletes one provider key and disables it when selected", async () => {
     const { repository, service } = setup();
-    await service.save(userId, { provider: "openai", apiKey: "openai-key" });
+    await service.save(userId, {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: "openai-key",
+    });
 
     const status = await service.deleteKey(userId, "openai");
 
@@ -87,7 +110,11 @@ describe("AI settings service", () => {
 
   it("caches providers and invalidates the cache after settings changes", async () => {
     const { provider, providerFactory, service } = setup();
-    await service.save(userId, { provider: "anthropic", apiKey: "key-one" });
+    await service.save(userId, {
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      apiKey: "key-one",
+    });
 
     await expect(service.getProvider(userId)).resolves.toBe(provider);
     await expect(service.getProvider(userId)).resolves.toBe(provider);
@@ -95,14 +122,53 @@ describe("AI settings service", () => {
     expect(providerFactory).toHaveBeenCalledWith({
       provider: "anthropic",
       apiKey: "key-one",
+      model: "claude-haiku-4-5",
     });
 
-    await service.save(userId, { provider: "anthropic", apiKey: "key-two" });
+    await service.save(userId, {
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      apiKey: "key-two",
+    });
     await service.getProvider(userId);
     expect(providerFactory).toHaveBeenCalledTimes(2);
     expect(providerFactory).toHaveBeenLastCalledWith({
       provider: "anthropic",
       apiKey: "key-two",
+      model: "claude-sonnet-4-6",
     });
+  });
+
+  it("rejects selecting a model whose provider has no stored or submitted key", async () => {
+    const { service } = setup();
+
+    await expect(
+      service.save(userId, {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("tests a configured provider without adding the temporary instance to cache", async () => {
+    const { provider, providerFactory, service } = setup();
+    await service.save(userId, {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: "openai-key",
+    });
+
+    await expect(service.testConnection(userId, "openai")).resolves.toBe(true);
+    expect(provider.validateConnection).toHaveBeenCalledOnce();
+    expect(providerFactory).toHaveBeenCalledWith({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      apiKey: "openai-key",
+    });
+
+    vi.mocked(provider.validateConnection).mockRejectedValueOnce(
+      new Error("invalid key"),
+    );
+    await expect(service.testConnection(userId, "openai")).resolves.toBe(false);
   });
 });

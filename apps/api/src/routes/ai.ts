@@ -1,4 +1,5 @@
 import {
+  aiConnectionTestResponseSchema,
   aiProviderNameSchema,
   aiStatusResponseSchema,
   updateAiSettingsRequestSchema,
@@ -26,6 +27,12 @@ export function createAiRouter(
     const body = updateAiSettingsRequestSchema.parse(request.body);
     const status = await service.save(getUserId(request), body);
     response.json(aiStatusResponseSchema.parse(status));
+  });
+
+  router.post("/ai/test/:provider", async (request, response) => {
+    const provider = aiProviderNameSchema.parse(request.params.provider);
+    const ok = await service.testConnection(getUserId(request), provider);
+    response.json(aiConnectionTestResponseSchema.parse({ provider, ok }));
   });
 
   router.delete("/ai/keys/:provider", async (request, response) => {
