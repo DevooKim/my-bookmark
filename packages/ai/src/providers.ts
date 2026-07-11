@@ -3,9 +3,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import {
+  analyzeResponseSchema,
   jsonSchema,
-  openAiCategorizeResponseSchema,
-  parseCategorizeResponse,
+  parseAnalyzeResponse,
   systemPrompt,
   userPrompt,
   withTimeout,
@@ -13,8 +13,8 @@ import {
 import type {
   AiProvider,
   AiProviderConfig,
+  AnalyzeResult,
   CategorizeInput,
-  CategorizeResult,
 } from "./types";
 
 export const DEFAULT_MODELS = {
@@ -66,7 +66,7 @@ class GeminiProvider implements AiProvider {
     );
   }
 
-  async categorize(input: CategorizeInput): Promise<CategorizeResult> {
+  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
     return withTimeout(async (signal) => {
       const response = await this.client.models.generateContent({
         model: this.model,
@@ -77,12 +77,23 @@ class GeminiProvider implements AiProvider {
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              type: { type: Type.STRING, enum: ["existing", "new", "none"] },
-              categoryId: { type: Type.STRING },
-              name: { type: Type.STRING },
-              confidence: { type: Type.NUMBER },
+              category: {
+                type: Type.OBJECT,
+                properties: {
+                  type: {
+                    type: Type.STRING,
+                    enum: ["existing", "new", "none"],
+                  },
+                  categoryId: { type: Type.STRING },
+                  name: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER },
+                },
+                required: ["type"],
+              },
+              summaryTitle: { type: Type.STRING },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["type"],
+            required: ["category", "summaryTitle", "tags"],
           },
           abortSignal: signal,
         },
@@ -110,7 +121,7 @@ class AnthropicProvider implements AiProvider {
     );
   }
 
-  async categorize(input: CategorizeInput): Promise<CategorizeResult> {
+  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
     return withTimeout(async (signal) => {
       const message = await this.client.messages.create(
         {
@@ -120,17 +131,18 @@ class AnthropicProvider implements AiProvider {
           messages: [{ role: "user", content: userPrompt(input) }],
           tools: [
             {
-              name: "categorize_bookmark",
-              description: "Return the bookmark category decision.",
+              name: "analyze_bookmark",
+              description:
+                "Return the bookmark category, summary title, and tags.",
               input_schema: jsonSchema,
             },
           ],
-          tool_choice: { type: "tool", name: "categorize_bookmark" },
+          tool_choice: { type: "tool", name: "analyze_bookmark" },
         },
         { signal },
       );
       const toolUse = message.content.find((part) => part.type === "tool_use");
-      return parseCategorizeResponse(toolUse?.input ?? { type: "none" });
+      return requireAnalyzeResponse(toolUse?.input);
     });
   }
 }
@@ -150,7 +162,7 @@ class OpenAiProvider implements AiProvider {
     await withTimeout((signal) => this.client.models.list({ signal }), 10_000);
   }
 
-  async categorize(input: CategorizeInput): Promise<CategorizeResult> {
+  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
     return withTimeout(async (signal) => {
       const response = await this.client.responses.parse(
         {
@@ -158,26 +170,32 @@ class OpenAiProvider implements AiProvider {
           instructions: systemPrompt(),
           input: userPrompt(input),
           text: {
-            format: zodTextFormat(
-              openAiCategorizeResponseSchema,
-              "bookmark_category",
-            ),
+            format: zodTextFormat(analyzeResponseSchema, "bookmark_analysis"),
           },
         },
         { signal },
       );
-      return parseCategorizeResponse(
-        response.output_parsed?.result ?? { type: "none" },
-      );
+      return requireAnalyzeResponse(response.output_parsed);
     });
   }
 }
 
-function parseJsonText(text: string): CategorizeResult {
+function parseJsonText(text: string): AnalyzeResult {
   try {
-    return parseCategorizeResponse(JSON.parse(text));
+    return requireAnalyzeResponse(JSON.parse(text));
   } catch (error) {
-    console.warn("AI JSON parse failed", error);
-    return { type: "none" };
+    if (error instanceof SyntaxError) {
+      console.warn("AI JSON parse failed", error);
+      throw new Error("AI analysis response is malformed", { cause: error });
+    }
+    throw error;
   }
+}
+
+function requireAnalyzeResponse(value: unknown): AnalyzeResult {
+  const result = parseAnalyzeResponse(value);
+  if (!result) {
+    throw new Error("AI analysis response is malformed");
+  }
+  return result;
 }

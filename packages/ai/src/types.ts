@@ -11,9 +11,15 @@ export type CategorizeResult =
   | { type: "new"; name: string; confidence: number }
   | { type: "none" };
 
+export interface AnalyzeResult {
+  category: CategorizeResult;
+  summaryTitle: string;
+  tags: string[];
+}
+
 export interface AiProvider {
   readonly name: string;
-  categorize(input: CategorizeInput): Promise<CategorizeResult>;
+  categorize(input: CategorizeInput): Promise<AnalyzeResult>;
   validateConnection(): Promise<void>;
 }
 

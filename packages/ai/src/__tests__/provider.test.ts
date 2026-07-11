@@ -19,6 +19,7 @@ vi.mock("@google/genai", () => ({
     };
   }),
   Type: {
+    ARRAY: "array",
     NUMBER: "number",
     OBJECT: "object",
     STRING: "string",
@@ -47,21 +48,24 @@ vi.mock("openai/helpers/zod", () => ({
   zodTextFormat: vi.fn((schema, name) => ({ name, schema })),
 }));
 
-import {
-  type AiProvider,
-  createAiProvider,
-  parseCategorizeResponse,
-} from "../index";
+import { type AiProvider, createAiProvider } from "../index";
+import { parseAnalyzeResponse } from "../schema";
+
+const expected = {
+  category: {
+    type: "existing" as const,
+    categoryId: "cat-dev",
+    confidence: 0.91,
+  },
+  summaryTitle: "React 19 핵심 변경 사항",
+  tags: ["React", "프론트엔드", "자바스크립트"],
+};
 
 describe("AI provider contract", () => {
   it("describes a categorize interface", async () => {
     const provider: AiProvider = {
       name: "fake",
-      categorize: async () => ({
-        type: "existing",
-        categoryId: "dev",
-        confidence: 0.9,
-      }),
+      categorize: async () => expected,
       validateConnection: async () => undefined,
     };
 
@@ -70,43 +74,19 @@ describe("AI provider contract", () => {
         url: "https://example.com",
         existingCategories: [],
       }),
-    ).resolves.toEqual({
-      type: "existing",
-      categoryId: "dev",
-      confidence: 0.9,
-    });
+    ).resolves.toEqual(expected);
   });
 
-  it("parses existing, new, none, and falls back on malformed responses", () => {
+  it("parses a complete analysis and rejects malformed analysis", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(parseAnalyzeResponse(expected)).toEqual(expected);
     expect(
-      parseCategorizeResponse({
-        type: "existing",
-        categoryId: "1",
-        confidence: 1,
+      parseAnalyzeResponse({
+        category: { type: "none" },
+        summaryTitle: "가".repeat(41),
+        tags: ["하나", "둘"],
       }),
-    ).toEqual({
-      type: "existing",
-      categoryId: "1",
-      confidence: 1,
-    });
-    expect(
-      parseCategorizeResponse({ type: "new", name: "개발", confidence: 0.7 }),
-    ).toEqual({
-      type: "new",
-      name: "개발",
-      confidence: 0.7,
-    });
-    expect(parseCategorizeResponse({ type: "none" })).toEqual({ type: "none" });
-    expect(
-      parseCategorizeResponse({
-        type: "new",
-        name: "너무길어서실패하는카테고리",
-        confidence: 2,
-      }),
-    ).toEqual({
-      type: "none",
-    });
+    ).toBeNull();
     warn.mockRestore();
   });
 
@@ -124,11 +104,7 @@ describe("AI provider contract", () => {
 
   it("parses Gemini structured JSON responses and passes an abort signal", async () => {
     sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({
-        type: "existing",
-        categoryId: "cat-dev",
-        confidence: 0.91,
-      }),
+      text: JSON.stringify(expected),
     });
 
     const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
@@ -139,11 +115,7 @@ describe("AI provider contract", () => {
         title: "React 19",
         existingCategories: [{ id: "cat-dev", name: "개발" }],
       }),
-    ).resolves.toEqual({
-      type: "existing",
-      categoryId: "cat-dev",
-      confidence: 0.91,
-    });
+    ).resolves.toEqual(expected);
     expect(sdkMocks.geminiGenerateContent).toHaveBeenCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({
@@ -159,7 +131,7 @@ describe("AI provider contract", () => {
       content: [
         {
           type: "tool_use",
-          input: { type: "new", name: "디자인", confidence: 0.82 },
+          input: expected,
         },
       ],
     });
@@ -174,10 +146,10 @@ describe("AI provider contract", () => {
         url: "https://example.com",
         existingCategories: [],
       }),
-    ).resolves.toEqual({ type: "new", name: "디자인", confidence: 0.82 });
+    ).resolves.toEqual(expected);
     expect(sdkMocks.anthropicCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        tool_choice: { type: "tool", name: "categorize_bookmark" },
+        tool_choice: { type: "tool", name: "analyze_bookmark" },
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
@@ -185,7 +157,7 @@ describe("AI provider contract", () => {
 
   it("parses OpenAI structured output responses", async () => {
     sdkMocks.openAiParse.mockResolvedValueOnce({
-      output_parsed: { result: { type: "none" } },
+      output_parsed: expected,
     });
 
     const provider = createAiProvider({ provider: "openai", apiKey: "test" });
@@ -195,11 +167,11 @@ describe("AI provider contract", () => {
         url: "https://example.com",
         existingCategories: [],
       }),
-    ).resolves.toEqual({ type: "none" });
+    ).resolves.toEqual(expected);
     expect(sdkMocks.openAiParse).toHaveBeenCalledWith(
       expect.objectContaining({
         text: expect.objectContaining({
-          format: expect.objectContaining({ name: "bookmark_category" }),
+          format: expect.objectContaining({ name: "bookmark_analysis" }),
         }),
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -245,18 +217,42 @@ describe("AI provider contract", () => {
     expect(sdkMocks.openAiParse).not.toHaveBeenCalled();
   });
 
-  it("falls back to none when provider output parsing fails", async () => {
+  it.each([
+    [
+      "gemini",
+      () =>
+        sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
+          text: "not json",
+        }),
+    ],
+    [
+      "anthropic",
+      () =>
+        sdkMocks.anthropicCreate.mockResolvedValueOnce({
+          content: [
+            { type: "tool_use", input: { category: { type: "none" } } },
+          ],
+        }),
+    ],
+    [
+      "openai",
+      () => sdkMocks.openAiParse.mockResolvedValueOnce({ output_parsed: null }),
+    ],
+  ] as const)("throws when %s output is malformed", async (providerName, arrange) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({ text: "not json" });
+    arrange();
 
-    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
+    const provider = createAiProvider({
+      provider: providerName,
+      apiKey: "test",
+    });
 
     await expect(
       provider.categorize({
         url: "https://example.com",
         existingCategories: [],
       }),
-    ).resolves.toEqual({ type: "none" });
+    ).rejects.toThrow("AI analysis response is malformed");
     warn.mockRestore();
   });
 });
