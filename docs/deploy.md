@@ -4,7 +4,7 @@ Docker Compose 기반 배포 절차. Supabase는 클라우드를 사용하므로
 
 ## 0. 사전 준비 체크리스트
 
-- [ ] Supabase 프로젝트 생성 완료, 마이그레이션 반영(`pnpm exec supabase db push`)
+- [ ] Supabase 프로젝트 생성 완료, `ai_settings` 포함 최신 마이그레이션 반영(`pnpm exec supabase db push`)
 - [ ] Supabase Auth 설정: 이메일/비밀번호 로그인 활성, **신규 가입 차단**(개인용), 계정 1개 생성 — 상세는 `docs/04-auth.md`
 - [ ] `.env` 작성 (아래 표)
 - [ ] VAPID 키 생성 (아래)
@@ -20,8 +20,7 @@ Docker Compose 기반 배포 절차. Supabase는 클라우드를 사용하므로
 | `WEB_ORIGIN` | api CORS 허용 origin | 배포 도메인 (예: `https://bm.example.com`) |
 | `SUPABASE_URL` | Supabase 프로젝트 URL | |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`) | **서버 전용. 절대 클라이언트 노출 금지** |
-| `AI_PROVIDER` | `gemini`(기본)/`anthropic`/`openai` | |
-| `GEMINI_API_KEY` 등 | 선택한 provider의 키 | 없으면 AI 비활성으로 기동 |
+| `AI_SETTINGS_ENCRYPTION_KEY` | AI provider API 키 암호화 마스터 키 | `openssl rand -base64 32`로 최초 1회 생성. **교체하면 저장된 키를 복호화할 수 없음** |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
 | `TRUST_PROXY` | 리버스 프록시 hop 수 | Caddy 등 프록시 뒤에서는 `1` — 미설정 시 rate limit이 프록시 IP를 클라이언트로 본다 |
@@ -31,6 +30,8 @@ Docker Compose 기반 배포 절차. Supabase는 클라우드를 사용하므로
 | `VITE_VAPID_PUBLIC_KEY` | 푸시 구독용 공개키 | `VAPID_PUBLIC_KEY`와 동일 값 |
 
 주의: `VITE_*` 값은 **web 이미지 빌드 시점**에 번들로 구워진다. 값을 바꾸면 `docker compose build web`을 다시 해야 한다.
+
+AI provider와 provider별 API 키는 배포 후 웹의 **설정 → AI 분류**에서 저장한다. `.env`의 provider/API 키 fallback은 없으며 키 원문은 설정 조회 응답에 다시 노출되지 않는다.
 
 ## 2. VAPID 키 생성
 

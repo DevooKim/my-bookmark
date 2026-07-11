@@ -86,6 +86,12 @@ keyset 페이지네이션: `(created_at, id) < cursor` order by `created_at desc
 - `POST /api/push/unsubscribe` `{ endpoint }` → 204
 - `POST /api/push/test` — 이 사용자의 모든 구독에 테스트 알림 발송 → `{ sent: n, failed: n }` (푸시 설정 검증용)
 
+## AI 설정 (Bearer 전용)
+
+- `GET /api/ai` → 활성 `provider`, 활성 키 사용 가능 여부 `enabled`, provider별 `{ configured }` 반환. 키 원문/암호문은 반환하지 않음
+- `PUT /api/ai` `{ provider, apiKey? }` → provider 선택 저장. `apiKey`가 있으면 해당 provider 키를 암호화해 신규 저장/교체하고, 생략하면 기존 키 유지
+- `DELETE /api/ai/keys/:provider` → 해당 provider 키 삭제. 활성 provider 키도 삭제 가능하며 이때 `enabled=false`
+
 ## API Keys (Bearer 전용)
 
 - `POST /api/keys` `{ name }` → 201 `{ id, name, key: "bm_<43자 base64url>", keyPrefix, createdAt }` — **`key` 원문은 이 응답에서만 노출**

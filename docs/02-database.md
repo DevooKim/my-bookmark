@@ -66,6 +66,17 @@ create table public.api_keys (
   created_at   timestamptz not null default now()
 );
 
+create table public.ai_settings (
+  user_id                     uuid primary key references auth.users(id) on delete cascade,
+  provider                    text not null default 'gemini'
+                              check (provider in ('gemini', 'anthropic', 'openai')),
+  gemini_api_key_encrypted    text,
+  anthropic_api_key_encrypted text,
+  openai_api_key_encrypted    text,
+  created_at                  timestamptz not null default now(),
+  updated_at                  timestamptz not null default now()
+);
+
 create table public.push_subscriptions (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users(id) on delete cascade,
@@ -98,6 +109,7 @@ Express는 secret key로 접근하므로 RLS를 bypass한다. RLS는 **publishab
 alter table public.categories         enable row level security;
 alter table public.bookmarks          enable row level security;
 alter table public.api_keys           enable row level security;
+alter table public.ai_settings         enable row level security;
 alter table public.push_subscriptions enable row level security;
 alter table public.reminders          enable row level security;
 
@@ -116,6 +128,7 @@ create policy "owner_all" on public.categories
 - **URL 중복**: `unique(user_id, url)`. 같은 URL 재등록 시 API는 409 + 기존 북마크를 돌려준다. URL은 저장 전 정규화한다: trim, fragment(#…) 제거, 트래킹 파라미터(`utm_*`, `fbclid`, `gclid`) 제거. 과도한 정규화(쿼리 전체 제거 등)는 하지 않는다.
 - **카테고리 삭제** → 소속 북마크는 `on delete set null`로 미분류가 된다. UI에서 이를 안내.
 - **`ai_status` 상태 전이**: `idle → pending`(AI 재분류 요청), `pending → done | failed`, `failed → pending`(재시도). `done/pending` 북마크의 카테고리를 사용자가 수동 변경하면 `idle`로 되돌린다 (사용자 판단이 AI 결과를 덮음).
+- **ai_settings**는 사용자별 1행이며 provider별 API 키는 AES-256-GCM 암호문만 저장한다. 평문과 표시용 prefix는 저장하지 않는다. 설정 행이 없으면 Gemini 선택·키 미설정 상태로 해석한다.
 - **reminders**는 단발성(one-shot). 반복 규칙은 추후 컬럼 추가로 확장 (`rrule text` 예약 — 지금은 만들지 않음).
 - 사용자 계정은 Supabase 대시보드에서 수동 생성 1개뿐 — `profiles` 테이블 불필요.
 

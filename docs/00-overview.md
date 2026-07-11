@@ -26,7 +26,7 @@
 |---|---|---|
 | 2026-07-06 | 접근 제어: Supabase Auth + 가입 차단 (사용자 선택) | 구현 비용 최소, RLS 연동 자연스러움, PWA 세션 안정. Passkey는 Supabase 미지원으로 비용 큼 |
 | 2026-07-06 | 배포: 미정 — Docker Compose로 이식성 확보 (사용자 선택) | 홈서버/VPS/PaaS 어디든 이동 가능. 리마인더 스케줄러 때문에 상시 실행 프로세스 필요 → 서버리스 배제 |
-| 2026-07-06 | AI 기본 provider: Gemini. Anthropic/OpenAI도 구현 (사용자 선택) | 인터페이스로 추상화, env `AI_PROVIDER`로 전환 |
+| 2026-07-11 | AI 기본 provider: Gemini. Anthropic/OpenAI도 구현 (사용자 선택) | 인터페이스로 추상화하고 설정 화면에서 provider 및 암호화 API 키 관리 |
 | 2026-07-06 | 데이터 경로: 웹도 CRUD는 전부 Express 경유 (단일 API 표면) | 웹/단축어가 같은 API 사용 → 로직 중복 없음, 검증·AI·푸시가 서버 한 곳에 모임. RLS는 심층 방어로 유지 |
 | 2026-07-06 | AI 분류는 비동기 (등록 즉시 201 → 백그라운드 분류) | 단축어 응답 속도 확보, AI 장애가 등록을 막지 않음. 1인용이라 큐 없이 in-process로 충분 |
 | 2026-07-06 | 서비스 워커: vite-plugin-pwa 대신 수동 SW + 별도 esbuild | vite-plugin-pwa가 TanStack Start 프로덕션 빌드와 비호환 (TanStack/router#4988) |

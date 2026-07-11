@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 7 구현 완료 — 로드맵 전체 완료. 다음: 배포처 확정 + 배포 후 TODO, 필요 시 Phase 8+ 백로그
-- **최종 갱신**: 2026-07-10 (Phase 7 완료)
+- **현재 Phase**: Phase 8 후속 기능 완료 — 설정 기반 AI provider/API 키 관리. 다음: 배포처 확정 + 배포 후 TODO
+- **최종 갱신**: 2026-07-11 (AI 설정 관리 완료)
 
 ## Phase 체크리스트
 
@@ -17,6 +17,7 @@
 - [x] Phase 5 — PWA
 - [x] Phase 6 — Web Push + 리마인더
 - [x] Phase 7 — 성능 + Docker + 마무리
+- [x] Phase 8 후속 — 설정 기반 AI provider/API 키 관리
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
@@ -53,6 +54,7 @@
 | 2026-07-10 | Phase 7: `styles.css`를 해시 없는 `/assets/app-styles.css`로 고정 emit하고 cache-control 3600으로 예외 처리했다. nitro `compressPublicAssets`(gzip+brotli)도 활성화. | linux Docker 빌드에서 SSR 패스가 자기 해시의 CSS를 링크하는데 public에는 클라이언트 패스 해시만 존재 → 404 → 무스타일 첫 페인트(CLS 0.47, Lighthouse 65). 고정 이름으로 두 패스가 같은 URL을 공유. 수정 후 Lighthouse 98. |
 | 2026-07-10 | Phase 7: Gemini 기본 모델을 `gemini-flash-lite-latest`로 변경했다(docs/05-ai 표도 갱신). | `gemini-2.5-flash`가 generateContent 404(서비스 종료), `gemini-flash-latest`는 실호출이 15s 타임아웃/불안정. lite는 0.65s 안정 응답이며 단일 라벨 분류에 적합. docs/05의 "모델명은 바뀐다 — 현행으로 쓰고 기록" 지침 준수. |
 | 2026-07-10 | Phase 7: VAPID 키가 `.env`에서 비어 있어 새로 생성해 채웠다(`VITE_VAPID_PUBLIC_KEY` 포함). | push_subscriptions가 0행이라 키 교체 부작용 없음. Docker 스택에서 cron 기동 조건(VAPID 완전 설정) 충족을 위해 필요. |
+| 2026-07-11 | AI provider와 provider별 API 키의 원본을 서버 env에서 사용자별 `ai_settings` DB 행으로 변경하고, API 키는 `AI_SETTINGS_ENCRYPTION_KEY` 기반 AES-256-GCM 암호문만 저장한다. env fallback/자동 이관은 하지 않는다. | 사용자가 설정 화면에서 재시작 없이 provider와 키를 관리해야 하며, 키 원문은 DB·조회 응답·로그에 남기지 않아야 한다. 사용자 승인 설계(`docs/superpowers/specs/2026-07-11-ai-settings-design.md`) 준수. |
 | 2026-07-10 | Phase 7: 시드 북마크는 `https://seed.my-bookmark.test/article/N` URL 마커를 사용하고 `--clean`으로만 삭제한다. `load-env`는 cwd `.env` 폴백을 추가했다. | 실데이터와 시드의 안전한 분리. dist 번들에서 URL 상대 경로가 저장소 루트를 벗어나 `node dist/index.js` 로컬 실행이 env를 못 읽던 문제 수정. |
 
 ## 알려진 이슈 / 기술 부채
@@ -94,6 +96,9 @@
   - LOW: `load-env`는 cwd `.env`를 URL 상대 경로보다 우선하도록 순서 교체(dist 실행 시 저장소 밖 경로가 우선되는 문제 제거).
   - LOW: `TRUST_PROXY` env 추가(`app.set("trust proxy", …)` — hop 수/boolean/서브넷 문자열 파싱 + 테스트). `.env.example`, docs/01-architecture, docs/deploy.md(Caddy 뒤 `TRUST_PROXY=1`)에 반영.
   - 재검증: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 통과(26 파일 84 테스트), `docker compose build && up` → api/web healthy, 서빙된 `sw.js`에 app-styles 분기 포함 확인.
+
+- Phase 8 후속 AI 설정 자동 검증 완료: AES-256-GCM 무작위 IV/변조·오키 실패, env 검증, 사용자별 설정 기본값/암호화 저장/키 유지·삭제/provider 캐시 무효화, Bearer 전용 GET/PUT/DELETE API, 키 비노출, 분류 시 사용자별 provider 해석, 설정 UI 저장·삭제 테스트를 추가했다. 전체 검증 루프 통과(29 파일 104 테스트).
+- Phase 8 Supabase/Docker/E2E 완료: `0002_ai_settings.sql`을 원격 DB에 push했고 MCP에서 migration 존재, `ai_settings` 컬럼·PK·FK·RLS 활성화를 확인했다. Docker api/web 재빌드 후 모두 healthy. 실계정 API에서 provider 선택+임시 키 저장→응답 비노출→삭제→Gemini 복원, 브라우저 설정에서 Anthropic 선택→password 키 저장→`설정됨`/입력 초기화→키 삭제→Gemini 복원을 확인했다. 임시 키는 삭제했다.
 
 ## 배포 후 TODO
 
