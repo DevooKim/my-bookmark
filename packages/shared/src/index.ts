@@ -166,8 +166,20 @@ export const updateReminderRequestSchema = z
   });
 
 export const meResponseSchema = z.object({ userId: uuidSchema });
+export const aiProviderNameSchema = z.enum(["gemini", "anthropic", "openai"]);
+export const aiProviderStatusSchema = z.object({ configured: z.boolean() });
 export const aiStatusResponseSchema = z.object({
-  provider: z.enum(["gemini", "anthropic", "openai"]),
+  provider: aiProviderNameSchema,
+  enabled: z.boolean(),
+  providers: z.object({
+    gemini: aiProviderStatusSchema,
+    anthropic: aiProviderStatusSchema,
+    openai: aiProviderStatusSchema,
+  }),
+});
+export const updateAiSettingsRequestSchema = z.object({
+  provider: aiProviderNameSchema,
+  apiKey: z.string().trim().min(1).max(512).optional(),
 });
 
 export const createApiKeyRequestSchema = z.object({
@@ -233,7 +245,11 @@ export type PushSubscriptionRequest = z.infer<
   typeof pushSubscriptionRequestSchema
 >;
 export type MeResponse = z.infer<typeof meResponseSchema>;
+export type AiProviderName = z.infer<typeof aiProviderNameSchema>;
 export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
+export type UpdateAiSettingsRequest = z.infer<
+  typeof updateAiSettingsRequestSchema
+>;
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;
 export type CreateApiKeyResponse = z.infer<typeof createApiKeyResponseSchema>;

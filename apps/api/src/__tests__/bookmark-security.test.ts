@@ -2,6 +2,7 @@ import { API_ERROR_CODES } from "@my-bookmark/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
   assertCategoryBelongsToUser,
+  categorizeBookmarkForUser,
   updateBookmarkMetadata,
 } from "../routes/bookmarks";
 
@@ -51,6 +52,52 @@ describe("bookmark route security helpers", () => {
       ["user_id", userId],
       ["id", categoryId],
     ]);
+  });
+
+  it("resolves the AI provider for the authenticated user", async () => {
+    const provider = { name: "fake", categorize: vi.fn() };
+    const providerResolver = vi.fn().mockResolvedValue(provider);
+    const categorize = vi.fn().mockResolvedValue(undefined);
+    const db = { from: vi.fn() };
+
+    await categorizeBookmarkForUser({
+      db,
+      userId,
+      bookmarkId,
+      providerResolver,
+      categorize,
+    });
+
+    expect(providerResolver).toHaveBeenCalledWith(userId);
+    expect(categorize).toHaveBeenCalledWith({
+      db,
+      userId,
+      bookmarkId,
+      provider,
+    });
+  });
+
+  it("continues categorization without a provider when credentials cannot be decrypted", async () => {
+    const providerResolver = vi
+      .fn()
+      .mockRejectedValue(new Error("decrypt failed"));
+    const categorize = vi.fn().mockResolvedValue(undefined);
+    const db = { from: vi.fn() };
+
+    await categorizeBookmarkForUser({
+      db,
+      userId,
+      bookmarkId,
+      providerResolver,
+      categorize,
+    });
+
+    expect(categorize).toHaveBeenCalledWith({
+      db,
+      userId,
+      bookmarkId,
+      provider: null,
+    });
   });
 
   it("updates bookmark metadata with both bookmark id and user id filters", async () => {

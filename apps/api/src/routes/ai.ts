@@ -1,13 +1,40 @@
-import { aiStatusResponseSchema } from "@my-bookmark/shared";
-import { Router } from "express";
+import {
+  aiProviderNameSchema,
+  aiStatusResponseSchema,
+  updateAiSettingsRequestSchema,
+} from "@my-bookmark/shared";
+import { type RequestHandler, Router } from "express";
 import { getUserId, requireAuth } from "../middleware/auth";
-import { getAiProviderLabel } from "../services/ai-provider";
+import {
+  type AiSettingsService,
+  aiSettingsService,
+} from "../services/ai-provider";
 
-export const aiRouter = Router();
+export function createAiRouter(
+  service: AiSettingsService,
+  authMiddleware: RequestHandler = requireAuth(),
+): Router {
+  const router = Router();
+  router.use("/ai", authMiddleware);
 
-aiRouter.get("/ai", requireAuth(), (request, response) => {
-  getUserId(request);
-  response.json(
-    aiStatusResponseSchema.parse({ provider: getAiProviderLabel() }),
-  );
-});
+  router.get("/ai", async (request, response) => {
+    const status = await service.getStatus(getUserId(request));
+    response.json(aiStatusResponseSchema.parse(status));
+  });
+
+  router.put("/ai", async (request, response) => {
+    const body = updateAiSettingsRequestSchema.parse(request.body);
+    const status = await service.save(getUserId(request), body);
+    response.json(aiStatusResponseSchema.parse(status));
+  });
+
+  router.delete("/ai/keys/:provider", async (request, response) => {
+    const provider = aiProviderNameSchema.parse(request.params.provider);
+    const status = await service.deleteKey(getUserId(request), provider);
+    response.json(aiStatusResponseSchema.parse(status));
+  });
+
+  return router;
+}
+
+export const aiRouter = createAiRouter(aiSettingsService);

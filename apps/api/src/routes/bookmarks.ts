@@ -104,11 +104,10 @@ bookmarksRouter.post("/bookmarks", async (request, response) => {
 
   const bookmark = mapBookmark(data);
   if (body.mode === "ai") {
-    void categorizeBookmark({
+    void categorizeBookmarkForUser({
       db,
       userId,
       bookmarkId: bookmark.id,
-      provider: getAiProvider(),
     }).catch((error) => console.warn("AI categorization task failed", error));
   } else {
     void updateBookmarkMetadata(
@@ -140,11 +139,10 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
   const bookmark = mapBookmark(data);
-  void categorizeBookmark({
+  void categorizeBookmarkForUser({
     db,
     userId,
     bookmarkId: bookmark.id,
-    provider: getAiProvider(),
   }).catch((taskError) =>
     console.warn("AI categorization task failed", taskError),
   );
@@ -296,6 +294,30 @@ async function handleBookmarkInsertError(
     });
   }
   throw error;
+}
+
+interface CategorizeBookmarkForUserOptions {
+  db: Parameters<typeof categorizeBookmark>[0]["db"];
+  userId: string;
+  bookmarkId: string;
+  providerResolver?: typeof getAiProvider;
+  categorize?: typeof categorizeBookmark;
+}
+
+export async function categorizeBookmarkForUser({
+  db,
+  userId,
+  bookmarkId,
+  providerResolver = getAiProvider,
+  categorize = categorizeBookmark,
+}: CategorizeBookmarkForUserOptions): Promise<void> {
+  let provider = null;
+  try {
+    provider = await providerResolver(userId);
+  } catch (error) {
+    console.warn("AI provider credentials could not be loaded", error);
+  }
+  await categorize({ db, userId, bookmarkId, provider });
 }
 
 export async function assertCategoryBelongsToUser(
