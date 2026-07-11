@@ -63,6 +63,31 @@ describe("PWA configuration", () => {
     expect(dockerfile).toContain("ENV NITRO_PRESET=node-server");
   });
 
+  it("pins TypeScript 7 across every workspace", () => {
+    const repositoryRoot = path.resolve(__dirname, "../../../..");
+    const manifestPaths = [
+      "package.json",
+      "apps/web/package.json",
+      "apps/api/package.json",
+      "packages/shared/package.json",
+      "packages/ai/package.json",
+    ];
+
+    for (const manifestPath of manifestPaths) {
+      const manifest = JSON.parse(
+        readFileSync(path.join(repositoryRoot, manifestPath), "utf8"),
+      ) as { devDependencies?: { typescript?: string } };
+
+      expect(manifest.devDependencies?.typescript, manifestPath).toBe("7.0.2");
+    }
+
+    const webManifest = JSON.parse(
+      readFileSync(path.join(repositoryRoot, "apps/web/package.json"), "utf8"),
+    ) as { devDependencies: Record<string, string> };
+
+    expect(webManifest.devDependencies["@types/node"]).toMatch(/^\^24\./);
+  });
+
   it("sets runtime cache headers for PWA assets", () => {
     const viteConfig = readFileSync(
       path.resolve(__dirname, "../../vite.config.ts"),

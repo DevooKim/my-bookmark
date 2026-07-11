@@ -41,7 +41,7 @@
 | DB/인증 | Supabase (Postgres + Auth, 클라우드), supabase CLI 마이그레이션 |
 | AI | 자체 provider 인터페이스 — Gemini(기본)/Anthropic/OpenAI |
 | 푸시 | web-push (VAPID), node-cron 스케줄러 |
-| 품질 도구 | Biome (lint+format), Vitest, TypeScript strict |
+| 품질 도구 | Biome (lint+format), Vitest, TypeScript 7.0.2 strict |
 | 배포 | web: Vercel Bun Runtime Beta, api: Docker (Node LTS) |
 | Node | 24 LTS |
 

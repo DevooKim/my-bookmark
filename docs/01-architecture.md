@@ -73,7 +73,7 @@ my-bookmark/
 
 ## 버전 정책
 
-2026-07 기준: TanStack Start v1(1.168+), React 19, Vite(Start에 포함된 버전 사용), Express 5, Tailwind v4, Node 24 LTS, Bun 1.3+.
+2026-07 기준: TanStack Start v1(1.168+), React 19, Vite(Start에 포함된 버전 사용), Express 5, Tailwind v4, TypeScript 7.0.2, Node 24 LTS, Bun 1.3+.
 
 **정확한 버전과 API는 스캐폴딩 시점의 공식 도구가 결정한다.** TanStack Start는 공식 CLI(`bun create @tanstack/start`) 또는 공식 examples에서 시작하고, 이 문서와 스캐폴드가 충돌하면 스캐폴드(현행 API)를 따르되 구조(라우트 경로, 디렉토리 역할)는 이 문서를 따른다.
 
