@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "vitest run",
-    "build": "tsup src/index.ts --format esm --target node22 --clean --sourcemap"
+    "build": "tsup src/index.ts --format esm --target node24 --clean --sourcemap"
   },
   "dependencies": {
     "@my-bookmark/ai": "workspace:*",

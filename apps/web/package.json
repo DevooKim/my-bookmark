@@ -9,10 +9,10 @@
     "build:sw": "esbuild src/sw/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js",
     "dev": "esbuild src/sw/sw.ts --bundle --format=iife --target=es2022 --outfile=public/sw.js --watch=forever & vite dev --port 3000",
     "generate-routes": "tsr generate",
-    "typecheck": "pnpm generate-routes && tsc --noEmit",
+    "typecheck": "bun run generate-routes && tsc --noEmit",
     "lint": "biome check .",
     "test": "vitest run --passWithNoTests",
-    "build": "pnpm build:sw && pnpm generate-routes && vite build",
+    "build": "bun run build:sw && bun run generate-routes && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -8,6 +8,8 @@
       "!**/dist",
       "!.output",
       "!**/.output",
+      "!.vercel",
+      "!**/.vercel",
       "!.vinxi",
       "!**/.vinxi",
       "!coverage",

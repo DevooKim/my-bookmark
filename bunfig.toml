@@ -1,0 +1,5 @@
+# Nitro is installed through the `nitro` -> `nitro-nightly` npm alias and
+# imports itself by the alias name. A hoisted install keeps that alias visible
+# from inside the package when Node loads the Vite/Nitro build configuration.
+[install]
+linker = "hoisted"

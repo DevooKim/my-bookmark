@@ -1,14 +1,15 @@
 # 배포 가이드
 
-Docker Compose 기반 배포 절차. Supabase는 클라우드를 사용하므로 배포 대상은 `web`(TanStack Start SSR)과 `api`(Express) 두 컨테이너뿐이다.
+기본 배포 구성은 `web`(TanStack Start SSR)은 Vercel Bun Runtime Beta, `api`(Express)는 Node.js 24 Docker다. Docker Compose는 로컬 프로덕션 검증과 두 서비스를 함께 자체 호스팅하는 대안으로 유지한다. Supabase는 클라우드를 사용한다.
 
 ## 0. 사전 준비 체크리스트
 
-- [ ] Supabase 프로젝트 생성 완료, `ai_settings` 포함 최신 마이그레이션 반영(`pnpm exec supabase db push`)
+- [ ] Supabase 프로젝트 생성 완료, `ai_settings` 포함 최신 마이그레이션 반영(`bunx supabase db push`)
 - [ ] Supabase Auth 설정: 이메일/비밀번호 로그인 활성, **신규 가입 차단**(개인용), 계정 1개 생성 — 상세는 `docs/04-auth.md`
 - [ ] `.env` 작성 (아래 표)
 - [ ] VAPID 키 생성 (아래)
-- [ ] Docker / Docker Compose 설치된 호스트
+- [ ] API를 실행할 Docker 호스트
+- [ ] 저장소와 연결된 Vercel 프로젝트 (`apps/web`을 Root Directory로 설정)
 
 ## 1. 환경변수 (.env)
 
@@ -36,14 +37,40 @@ AI provider와 provider별 API 키는 배포 후 웹의 **설정 → AI 분류**
 ## 2. VAPID 키 생성
 
 ```bash
-pnpm --filter @my-bookmark/api exec web-push generate-vapid-keys
+bunx --no-install web-push generate-vapid-keys
 ```
 
 출력된 Public/Private key를 `.env`의 `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VITE_VAPID_PUBLIC_KEY`에 넣는다. 상세는 `docs/vapid-guide.md`.
 
 **키를 교체하면 기존 푸시 구독이 전부 무효화**된다(브라우저에서 알림을 다시 켜야 함).
 
-## 3. 기동
+## 3. 배포
+
+### 3.1 API — Node.js 24 Docker
+
+API 이미지는 Bun으로 의존성을 설치하고 빌드하지만, 최종 컨테이너는 Node.js 24 LTS에서 실행된다.
+
+```bash
+docker compose build api
+docker compose up -d api
+curl http://localhost:3001/api/health   # {"ok":true}
+```
+
+API 호스트에는 서버 전용 환경변수(`SUPABASE_SECRET_KEY`, `AI_SETTINGS_ENCRYPTION_KEY`, VAPID private key 포함)를 설정한다. web의 Vercel 프로젝트에는 이 값을 넣지 않는다.
+
+### 3.2 web — Vercel Bun Runtime Beta
+
+Vercel 프로젝트 설정:
+
+1. 저장소를 연결하고 **Root Directory**를 `apps/web`으로 지정한다.
+2. 저장소 루트의 `bun.lock`으로 Bun 설치가 자동 감지되는지 배포 로그에서 확인한다.
+3. Build Command는 package script인 `bun run build`를 사용한다. `VERCEL=1` 환경에서 Nitro가 Vercel preset을 자동 선택한다.
+4. `apps/web/vercel.json`의 `bunVersion: "1.x"`가 Vercel Functions를 Bun Runtime Beta로 실행한다.
+5. `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`, `VITE_VAPID_PUBLIC_KEY`를 Preview와 Production 환경에 설정한다.
+
+`VITE_API_URL`은 브라우저에서 접근 가능한 HTTPS API origin이어야 한다. 배포 로그에는 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions` 생성이 나타나야 한다.
+
+### 3.3 Docker Compose 대안
 
 ```bash
 docker compose build
@@ -53,13 +80,13 @@ curl http://localhost:3001/api/health   # {"ok":true}
 curl -I http://localhost:3000/login     # 200
 ```
 
-- api 헬스체크: `GET /api/health`, web 헬스체크: `GET /manifest.webmanifest` (compose에 내장).
+- api 헬스체크: `GET /api/health`, web 헬스체크: `GET /manifest.webmanifest` (Compose에 내장).
 - api는 기동 시 VAPID 설정이 완전할 때만 리마인더 cron을 시작한다. 로그에서 확인:
   `docker compose logs api | grep -i cron`
 
-## 4. HTTPS / 리버스 프록시 (Caddy)
+## 4. 자체 호스팅 HTTPS / 리버스 프록시 (Caddy)
 
-**PWA 설치와 Web Push는 HTTPS가 필수**다(localhost 제외). 배포처가 정해지면 Caddy를 앞단에 둔다.
+**PWA 설치와 Web Push는 HTTPS가 필수**다(localhost 제외). Vercel은 web HTTPS를 제공한다. Docker Compose로 두 서비스를 자체 호스팅할 때는 Caddy를 앞단에 둔다.
 
 `Caddyfile` 예시 (web과 api를 한 도메인에서 서빙 — CORS 불필요):
 
@@ -95,7 +122,7 @@ volumes:
 
 - Auth → URL Configuration: Site URL을 배포 도메인으로.
 - Auth → Sign In / Up: 신규 가입 차단 유지.
-- 마이그레이션: `supabase/migrations`를 `pnpm exec supabase db push`로 반영 (CI/수동).
+- 마이그레이션: `supabase/migrations`를 `bunx supabase db push`로 반영 (CI/수동).
 - api는 secret key로 접근하므로 RLS는 심층 방어용 — 정책 변경 불필요.
 
 ## 6. iOS 푸시 확인 체크리스트 (배포 후)
@@ -115,4 +142,4 @@ iOS는 **홈 화면에 설치된 PWA에서만** Web Push가 동작한다 (iOS 16
 - 로그: `docker compose logs -f api` (pino JSON). `Authorization`/`X-API-Key` 헤더는 redact됨.
 - 종료: `docker compose down` — api는 SIGTERM에서 cron 중지 후 서버를 닫는다(graceful).
 - 이미지 갱신 배포: `git pull && docker compose build && docker compose up -d`.
-- 시드/정리(개발용): `pnpm --filter @my-bookmark/api seed:bookmarks [--count N] [--clean]` — `https://seed.my-bookmark.test/…` URL만 건드린다.
+- 시드/정리(개발용): `bun run --filter @my-bookmark/api seed:bookmarks -- [--count N] [--clean]` — `https://seed.my-bookmark.test/…` URL만 건드린다.

@@ -3,7 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
-  target: "node22",
+  target: "node24",
   sourcemap: true,
   clean: true,
   // Single-file output: esm chunk splitting evaluates shared chunks (env.ts)

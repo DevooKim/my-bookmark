@@ -6,7 +6,7 @@
 
 | 지표 | 목표 | 측정 방법 |
 |---|---|---|
-| Lighthouse Performance (모바일, 프로덕션 빌드) | ≥ 90 | `pnpm dlx lighthouse` 또는 Chrome DevTools |
+| Lighthouse Performance (모바일, 프로덕션 빌드) | ≥ 90 | `bunx lighthouse` 또는 Chrome DevTools |
 | LCP | < 2.5s | 〃 |
 | 초기 라우트 JS (gzip) | < 150KB | `vite build` 출력 + `du` |
 | 북마크 1,000개에서 홈 스크롤 | 60fps 체감, 프리징 없음 | DevTools Performance |
@@ -47,7 +47,7 @@
 
 ## 검증 절차 (Phase 7 수용 기준과 연동)
 
-1. `pnpm build` → 프로덕션 모드로 기동 (`docker compose up`)
+1. `bun run build` → 프로덕션 모드로 기동 (`docker compose up`)
 2. 시드 스크립트로 북마크 1,000개 삽입 → 홈 스크롤/검색/필터 체감 확인
 3. Lighthouse 모바일 프리셋 실행 → 90 미만이면 리포트의 상위 항목부터 수정
 4. 결과 수치를 PROGRESS.md에 기록

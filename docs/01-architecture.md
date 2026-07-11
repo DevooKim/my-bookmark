@@ -30,8 +30,9 @@
 
 ```
 my-bookmark/
-├── pnpm-workspace.yaml
-├── package.json              # 루트: dev/typecheck/lint/test/build 스크립트 (pnpm -r)
+├── bun.lock
+├── bunfig.toml               # Nitro npm alias 호환을 위한 hoisted linker
+├── package.json              # Bun workspaces + 루트 dev/typecheck/lint/test/build
 ├── biome.json
 ├── tsconfig.base.json
 ├── docker-compose.yml
@@ -72,9 +73,9 @@ my-bookmark/
 
 ## 버전 정책
 
-2026-07 기준: TanStack Start v1(1.168+), React 19, Vite(Start에 포함된 버전 사용), Express 5, Tailwind v4, Node 22 LTS.
+2026-07 기준: TanStack Start v1(1.168+), React 19, Vite(Start에 포함된 버전 사용), Express 5, Tailwind v4, Node 24 LTS, Bun 1.3+.
 
-**정확한 버전과 API는 스캐폴딩 시점의 공식 도구가 결정한다.** TanStack Start는 공식 CLI(`pnpm create @tanstack/start@latest`) 또는 공식 examples에서 시작하고, 이 문서와 스캐폴드가 충돌하면 스캐폴드(현행 API)를 따르되 구조(라우트 경로, 디렉토리 역할)는 이 문서를 따른다.
+**정확한 버전과 API는 스캐폴딩 시점의 공식 도구가 결정한다.** TanStack Start는 공식 CLI(`bun create @tanstack/start`) 또는 공식 examples에서 시작하고, 이 문서와 스캐폴드가 충돌하면 스캐폴드(현행 API)를 따르되 구조(라우트 경로, 디렉토리 역할)는 이 문서를 따른다.
 
 ## 환경변수 (.env.example의 원본 명세)
 
@@ -104,10 +105,12 @@ api 부팅 시 `lib/env.ts`에서 zod로 전체 env를 검증하고, 누락 시 
 
 ## Docker 구성 (Phase 7)
 
-- `apps/api`: node:22-alpine 멀티스테이지 (pnpm fetch → build → 실행 스테이지엔 dist만)
-- `apps/web`: TanStack Start 빌드 산출물의 Node 서버 실행 (SSR)
+- 빌드 단계: Bun 1.3.14로 `bun.lock` 기반 의존성 설치와 workspace build 수행.
+- `apps/api`: node:24-alpine 실행 스테이지에서 프로덕션 의존성과 dist 번들 실행.
+- `apps/web`: node:24-alpine에서 TanStack Start Node 서버 산출물 실행 (Compose/자체 호스팅 대안).
 - Supabase는 클라우드 사용 — 로컬 컨테이너 불필요. (로컬 개발 시 `supabase start`는 선택사항)
-- 리버스 프록시/HTTPS(Caddy)는 배포처 확정 후 docker-compose 오버라이드로 추가. **푸시와 PWA 설치는 HTTPS 필수**이므로 배포 시 반드시 필요하다는 점만 기록해둔다.
+- 기본 web 배포는 Vercel이며 `apps/web/vercel.json`에서 Bun 1.x Runtime Beta를 사용한다. API는 Node 24 Docker로 별도 배포한다.
+- 자체 호스팅 시 리버스 프록시/HTTPS(Caddy)를 docker-compose 앞에 둔다. **푸시와 PWA 설치는 HTTPS 필수**다.
 
 ## 횡단 관심사
 

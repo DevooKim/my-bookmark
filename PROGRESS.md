@@ -58,6 +58,8 @@
 | 2026-07-11 | AI 모델은 동적 목록 대신 provider별 저비용/균형 2개씩 총 6개의 고정 카탈로그로 제공하고, 고성능 모델은 제외한다. 키 미설정 provider 모델도 선택 가능하되 `API 키 필요`를 표시하고 같은 폼에서 키 입력을 요구한다. | 사용자가 고정 추천 목록을 선택했고 고성능 모델 제외를 요청했다. 미설정 모델을 disabled 처리하면 해당 provider 키를 최초 등록할 진입점이 사라지므로 승인 설계의 disabled 표현을 사용 가능한 안내 옵션으로 정정했다. |
 | 2026-07-11 | AI 키 저장 API/UI를 모델 선택에서 분리했다. provider별 카드가 키를 독립 관리하고, 모델 선택에는 키가 설정된 provider의 모델만 표시한다. | 결합 폼은 모델마다 키가 필요한 것처럼 보였다. `PUT /api/ai/keys/:provider`와 `PUT /api/ai/model`로 쓰기 경계를 분리해 키 저장이 활성 모델을 바꾸지 않게 했다. |
 | 2026-07-10 | Phase 7: 시드 북마크는 `https://seed.my-bookmark.test/article/N` URL 마커를 사용하고 `--clean`으로만 삭제한다. `load-env`는 cwd `.env` 폴백을 추가했다. | 실데이터와 시드의 안전한 분리. dist 번들에서 URL 상대 경로가 저장소 루트를 벗어나 `node dist/index.js` 로컬 실행이 env를 못 읽던 문제 수정. |
+| 2026-07-11 | 패키지 매니저를 Bun 1.3.14 workspaces로 교체하고 `bun.lock`을 단일 잠금 파일로 사용한다. Nitro nightly의 `nitro` npm alias 자기 import를 지원하기 위해 Bun linker는 hoisted로 고정한다. | Bun isolated linker에서는 alias가 앱 위치에만 생겨 Nitro 패키지 내부의 `import "nitro"`가 실패했다. hoisted linker가 pnpm과 동일하게 루트 alias를 제공하며 frozen install과 web build가 통과한다. |
+| 2026-07-11 | Node 기반 경로는 Node.js 24 LTS로 고정하고, Vercel web Functions만 `bunVersion: "1.x"` Beta를 사용한다. Docker web은 `NITRO_PRESET=node-server`, Vercel 빌드는 환경 자동 감지 `preset: vercel`을 사용한다. | 사용자가 Node 24와 Vercel Bun Beta를 선택했다. 패키지 매니저, Docker 런타임, Vercel 함수 런타임을 명시적으로 분리해 각 배포 산출물의 런타임을 일치시킨다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -104,6 +106,7 @@
 - AI 모델/연결 테스트 검증 완료: `0003_ai_model.sql` 원격 push 및 기존 OpenAI 행의 `gpt-4o-mini` backfill 확인. 고정 6-model 카탈로그/provider-model 검증, 선택 모델 provider 생성 전달, 세 SDK Models API mock, 연결 API, 그룹 모델 UI 테스트 포함 전체 113 테스트 통과. Docker 스택에서 실계정 상태가 OpenAI + GPT-4o mini + 암호화 키 설정으로 조회됐고, 실제 OpenAI Models API 연결 성공 및 브라우저의 “OpenAI 연결에 성공했어요” 토스트를 확인했다.
 - AI 키/모델 UX 분리 검증 완료: provider 키 저장이 활성 모델을 보존하고 키가 있는 provider만 모델 선택 가능한 서비스/API 테스트, 결합 endpoint 제거, provider별 독립 입력 3개, 키 0개 빈 상태, 필터 모델/별도 저장 UI 테스트를 추가해 전체 117 테스트 통과. Docker 브라우저에서 Gemini/Anthropic/OpenAI 입력이 각각 표시되고, 저장된 OpenAI 키의 모델 2개만 목록에 표시되며 모델 저장과 OpenAI 연결 테스트 성공을 확인했다.
 - AI 설정 레이아웃 개선: `사용 모델`을 `AI API 키`보다 위로 이동하고 독립 `rounded-xl` border 카드로 묶었다. DOM 순서/카드 스타일 회귀 테스트를 추가해 전체 118 테스트 통과.
+- Bun/Node 24/Vercel 전환 검증 완료: Node 24.14.0 + Bun 1.3.14에서 frozen install, typecheck, lint, 전체 123 테스트, Node/Docker build 통과. `VERCEL=1` web build가 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions`를 생성했다. Docker는 Bun install/build 후 Node 24 runtime에서 api/web 모두 healthy였고 `/api/health`는 `{"ok":true}`, `/manifest.webmanifest`는 200을 반환했다.
 
 ## 배포 후 TODO
 

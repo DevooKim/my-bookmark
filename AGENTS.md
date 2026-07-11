@@ -1,4 +1,4 @@
-# CLAUDE.md — my-bookmark 작업 지침
+# AGENTS.md — my-bookmark 작업 지침
 
 개인용(1인) 북마크 관리 웹서비스. AI 자동 카테고리 분류, PWA + Web Push 리마인더, iOS 단축어 등록 API를 제공한다.
 

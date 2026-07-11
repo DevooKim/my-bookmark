@@ -6,7 +6,7 @@
 
 ## 상태
 
-현재 **설계/문서 단계**. 구현은 `docs/09-roadmap.md`의 Phase 0부터 진행한다.
+Phase 0~7과 AI 설정 후속 기능 구현을 완료했다. 현재 배포 설정을 정리하고 있다.
 
 ## 문서
 
@@ -27,4 +27,4 @@
 
 ## 기술 스택
 
-pnpm workspaces · TanStack Start(React) · Express 5 · Supabase (Postgres/Auth) · Tailwind CSS v4 · Web Push · Docker
+Bun workspaces · TanStack Start(React) · Express 5 · Supabase (Postgres/Auth) · Tailwind CSS v4 · Web Push · Vercel · Docker · Node.js 24 LTS
