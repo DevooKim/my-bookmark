@@ -36,7 +36,7 @@ const ReminderDialog = lazy(() =>
 
 export const Route = createFileRoute("/_authed/")({ component: HomePage });
 
-function HomePage() {
+export function HomePage() {
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [search, setSearch] = useState("");
@@ -236,6 +236,7 @@ function HomePage() {
                     recategorizeMutation.mutate(bookmark.id)
                   }
                   onSetReminder={() => setReminderTarget(bookmark)}
+                  onTagSearch={setSearch}
                 />
               </div>
             );
@@ -322,6 +323,7 @@ function BookmarkCard({
   onMove,
   onRecategorize,
   onSetReminder,
+  onTagSearch,
 }: {
   bookmark: Bookmark;
   categories: CategoryWithCount[];
@@ -330,6 +332,7 @@ function BookmarkCard({
   onMove: (categoryId: string | null) => void;
   onRecategorize: () => void;
   onSetReminder: () => void;
+  onTagSearch: (tag: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const category = categories.find((item) => item.id === bookmark.categoryId);
@@ -356,6 +359,21 @@ function BookmarkCard({
           >
             {title}
           </a>
+          {bookmark.tags.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {bookmark.tags.map((tag) => (
+                <button
+                  aria-label={`${tag} 태그 검색`}
+                  className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                  key={tag}
+                  onClick={() => onTagSearch(tag)}
+                  type="button"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <p className="mt-1 truncate text-sm text-zinc-500">
             {new URL(bookmark.url).hostname.replace(/^www\./, "")} ·{" "}
             {category?.name ?? "미분류"}
