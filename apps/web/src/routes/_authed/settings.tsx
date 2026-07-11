@@ -571,7 +571,54 @@ export function AiSection() {
         </p>
       ) : null}
 
-      <div className="mt-5">
+      <div className="mt-5 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <h3 className="text-sm font-semibold">사용 모델</h3>
+        {availableModels.length === 0 ? (
+          <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950">
+            먼저 provider API 키를 등록하세요
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="grid flex-1 gap-1 text-sm">
+              사용 모델
+              <select
+                className="input"
+                disabled={modelMutation.isPending}
+                onChange={(event) =>
+                  setModel(aiModelIdSchema.parse(event.target.value))
+                }
+                value={model}
+              >
+                {aiProviderNames.map((provider) => {
+                  const models = availableModels.filter(
+                    (item) => item.provider === provider,
+                  );
+                  return models.length > 0 ? (
+                    <optgroup key={provider} label={aiProviderLabels[provider]}>
+                      {models.map((item) => (
+                        <option key={item.model} value={item.model}>
+                          {item.label} · {item.tier}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null;
+                })}
+              </select>
+            </label>
+            <button
+              aria-label="모델 저장"
+              className="btn-primary justify-center"
+              disabled={modelMutation.isPending}
+              onClick={() => modelMutation.mutate()}
+              type="button"
+            >
+              모델 저장
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6">
         <h3 className="text-sm font-semibold">AI API 키</h3>
         <div className="mt-2 grid gap-3 lg:grid-cols-3">
           {aiProviderNames.map((provider) => {
@@ -666,53 +713,6 @@ export function AiSection() {
           연결 테스트는 Models API로 키 인증만 확인하며 추론을 실행하지
           않습니다.
         </p>
-      </div>
-
-      <div className="mt-6 border-t border-zinc-200 pt-5 dark:border-zinc-800">
-        <h3 className="text-sm font-semibold">사용 모델</h3>
-        {availableModels.length === 0 ? (
-          <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950">
-            먼저 provider API 키를 등록하세요
-          </p>
-        ) : (
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="grid flex-1 gap-1 text-sm">
-              사용 모델
-              <select
-                className="input"
-                disabled={modelMutation.isPending}
-                onChange={(event) =>
-                  setModel(aiModelIdSchema.parse(event.target.value))
-                }
-                value={model}
-              >
-                {aiProviderNames.map((provider) => {
-                  const models = availableModels.filter(
-                    (item) => item.provider === provider,
-                  );
-                  return models.length > 0 ? (
-                    <optgroup key={provider} label={aiProviderLabels[provider]}>
-                      {models.map((item) => (
-                        <option key={item.model} value={item.model}>
-                          {item.label} · {item.tier}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null;
-                })}
-              </select>
-            </label>
-            <button
-              aria-label="모델 저장"
-              className="btn-primary justify-center"
-              disabled={modelMutation.isPending}
-              onClick={() => modelMutation.mutate()}
-              type="button"
-            >
-              모델 저장
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );

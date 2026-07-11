@@ -62,6 +62,23 @@ function renderAiSection() {
 }
 
 describe("AI settings", () => {
+  it("shows the model selector first inside a rounded card", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    renderAiSection();
+
+    const modelHeading = await screen.findByRole("heading", {
+      name: "사용 모델",
+    });
+    const keyHeading = screen.getByRole("heading", { name: "AI API 키" });
+
+    expect(
+      modelHeading.compareDocumentPosition(keyHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(modelHeading.parentElement?.className).toContain("rounded-xl");
+    expect(modelHeading.parentElement?.className).toContain("border");
+  });
+
   it("renders independent API key controls for all providers", async () => {
     vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
     renderAiSection();
