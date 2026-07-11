@@ -51,6 +51,13 @@ export const categoryWithCountSchema = categorySchema.extend({
 
 export const aiStatusSchema = z.enum(["idle", "pending", "done", "failed"]);
 
+const bookmarkTagSchema = z.string().trim().min(1).max(20);
+
+export const bookmarkTagsSchema = z
+  .array(bookmarkTagSchema)
+  .max(5)
+  .transform((tags) => [...new Set(tags)]);
+
 export const bookmarkSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
@@ -61,6 +68,7 @@ export const bookmarkSchema = z.object({
   faviconUrl: z.url().nullable(),
   ogImageUrl: z.url().nullable(),
   categoryId: uuidSchema.nullable(),
+  tags: bookmarkTagsSchema,
   aiStatus: aiStatusSchema,
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -123,6 +131,7 @@ export const updateBookmarkRequestSchema = z
     title: z.string().min(1).nullable().optional(),
     description: z.string().nullable().optional(),
     categoryId: uuidSchema.nullable().optional(),
+    tags: bookmarkTagsSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",

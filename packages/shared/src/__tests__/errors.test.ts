@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   API_ERROR_CODES,
   bookmarkSchema,
+  bookmarkTagsSchema,
   createBookmarkRequestSchema,
+  updateBookmarkRequestSchema,
 } from "../index";
 
 describe("API_ERROR_CODES", () => {
@@ -12,6 +14,18 @@ describe("API_ERROR_CODES", () => {
 });
 
 describe("domain schemas", () => {
+  it("normalizes editable bookmark tags", () => {
+    expect(bookmarkTagsSchema.parse([" React ", "개발", "React"])).toEqual([
+      "React",
+      "개발",
+    ]);
+    expect(() =>
+      bookmarkTagsSchema.parse(["1", "2", "3", "4", "5", "6"]),
+    ).toThrow();
+    expect(() => bookmarkTagsSchema.parse(["가".repeat(21)])).toThrow();
+    expect(updateBookmarkRequestSchema.parse({ tags: [] })).toEqual({ tags: [] });
+  });
+
   it("requires categoryId for manual bookmark creation", () => {
     expect(() =>
       createBookmarkRequestSchema.parse({
@@ -33,6 +47,7 @@ describe("domain schemas", () => {
         faviconUrl: null,
         ogImageUrl: null,
         categoryId: null,
+        tags: [],
         aiStatus: "idle",
         createdAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
