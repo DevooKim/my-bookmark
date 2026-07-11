@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Phase 8 후속 기능 완료 — provider 키 관리/사용 모델 선택 분리. 다음: 배포처 확정 + 배포 후 TODO
-- **최종 갱신**: 2026-07-12 (OpenAI 구조화 출력 루트 스키마 호환성 수정)
+- **현재 Phase**: AI 한국어 요약 제목·태그 기능 자동 검증 및 원격 마이그레이션 완료. 다음: 브라우저 수동 검증 + 배포처 확정
+- **최종 갱신**: 2026-07-12 (AI 요약 제목·태그 Task 8 자동 검증 및 원격 마이그레이션)
 
 ## Phase 체크리스트
 
@@ -110,6 +110,9 @@
 - OpenAI 구조화 출력 수정: OpenAI SDK 6.45의 root object 요구에 맞춰 discriminated union을 `{ result: ... }` 객체로 감싸고 응답을 해제한다. 실제 `zodTextFormat` 변환 회귀 테스트를 추가했으며 전체 검증 루프를 통과했다.
 - Bun/Node 24/Vercel 전환 검증 완료: Node 24.14.0 + Bun 1.3.14에서 frozen install, typecheck, lint, 전체 123 테스트, Node/Docker build 통과. `VERCEL=1` web build가 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions`를 생성했다. Docker는 Bun install/build 후 Node 24 runtime에서 api/web 모두 healthy였고 `/api/health`는 `{"ok":true}`, `/manifest.webmanifest`는 200을 반환했다.
 - TypeScript 7 전환 검증 완료: 다섯 package manifest가 모두 TypeScript 7.0.2를 사용하고 web은 Node 24 타입 선언을 사용한다. Node 24.14.0에서 frozen install, compiler version, typecheck, lint, 전체 124 테스트, build가 통과했다. Docker api/web 이미지를 재빌드해 모두 healthy, `/api/health` `{"ok":true}`, `/manifest.webmanifest` 200을 확인했다.
+- AI 한국어 요약 제목·태그 Task 8 자동 검증 완료: `bun run typecheck && bun run lint && bun run test && bun run build`가 통과했다(32 파일, 143 테스트: shared 9, AI 11, API 76, web 47). Gemini/Anthropic/OpenAI는 모두 mock 기반 provider 테스트만 통과했으며 이번 작업에서 실제 provider 호출은 하지 않았다. Biome은 API seed script의 기존 info 1건과 web build의 기존 dynamic import 경고를 출력했지만 모두 exit 0이었다.
+- Supabase `0004_bookmark_tags.sql` 적용 완료: dry-run에서 해당 migration 1개만 확인 후 원격 push했다. CLI가 적용 뒤 pg-delta migration catalog cache의 인증서 파일 누락 경고를 출력했지만 push는 완료됐고, MCP에서 migration `0004 bookmark_tags`, `bookmarks.tags` ARRAY/NOT NULL/`'{}'::text[]`, `public.search_bookmarks` 7-인자 함수를 확인했다. `information_schema.routines`에서는 set-returning SQL 함수가 조회되지 않아 `pg_proc`로 존재와 시그니처를 재확인했다.
+- AI 요약 제목·태그 브라우저/수동 UI 검증은 coordinator가 수행 예정이며 이번 작업에서는 실행하거나 완료로 주장하지 않는다. 남은 확인: 실제 AI 생성의 40자 이하 한국어 제목·3~5개 태그, 태그 클릭 검색, 편집 후 유지, 카테고리+태그 복합 필터.
 
 ## 배포 후 TODO
 

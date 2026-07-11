@@ -23,7 +23,9 @@ describe("domain schemas", () => {
       bookmarkTagsSchema.parse(["1", "2", "3", "4", "5", "6"]),
     ).toThrow();
     expect(() => bookmarkTagsSchema.parse(["가".repeat(21)])).toThrow();
-    expect(updateBookmarkRequestSchema.parse({ tags: [] })).toEqual({ tags: [] });
+    expect(updateBookmarkRequestSchema.parse({ tags: [] })).toEqual({
+      tags: [],
+    });
   });
 
   it("requires categoryId for manual bookmark creation", () => {
