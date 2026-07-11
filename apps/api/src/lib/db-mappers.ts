@@ -21,6 +21,7 @@ interface BookmarkDbRow {
   favicon_url: string | null;
   og_image_url: string | null;
   category_id: string | null;
+  tags: string[];
   ai_status: "idle" | "pending" | "done" | "failed";
   created_at: string;
   updated_at: string;
@@ -59,6 +60,7 @@ export function mapBookmark(row: BookmarkDbRow): Bookmark {
     faviconUrl: row.favicon_url,
     ogImageUrl: row.og_image_url,
     categoryId: row.category_id,
+    tags: row.tags,
     aiStatus: row.ai_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -68,6 +68,7 @@ interface BookmarkUpdate {
   title?: string | null;
   description?: string | null;
   category_id?: string | null;
+  tags?: string[];
   ai_status?: "idle";
 }
 
@@ -153,35 +154,17 @@ bookmarksRouter.get("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
   const query = bookmarkListQuerySchema.parse(request.query);
   const db = getDb();
-  let builder = db
-    .from("bookmarks")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(query.limit + 1);
-
-  if (query.categoryId === "none") {
-    builder = builder.is("category_id", null);
-  } else if (query.categoryId) {
-    builder = builder.eq("category_id", query.categoryId);
-  }
-
-  if (query.q) {
-    const escaped = query.q.replaceAll("%", "\\%").replaceAll("_", "\\_");
-    builder = builder.or(
-      `title.ilike.%${escaped}%,url.ilike.%${escaped}%,description.ilike.%${escaped}%`,
-    );
-  }
-
-  if (query.cursor) {
-    const cursor = decodeCursor(query.cursor);
-    builder = builder.or(
-      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
-    );
-  }
-
-  const { data, error } = await builder;
+  const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+  const { data, error } = await db.rpc("search_bookmarks", {
+    p_user_id: userId,
+    p_query: query.q ?? null,
+    p_category_id:
+      query.categoryId && query.categoryId !== "none" ? query.categoryId : null,
+    p_uncategorized: query.categoryId === "none",
+    p_cursor_created_at: cursor?.createdAt ?? null,
+    p_cursor_id: cursor?.id ?? null,
+    p_limit: query.limit + 1,
+  });
   if (error) {
     throw error;
   }
@@ -226,6 +209,9 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   }
   if (body.description !== undefined) {
     updates.description = body.description;
+  }
+  if (body.tags !== undefined) {
+    updates.tags = body.tags;
   }
   const db = getDb();
   if (body.categoryId !== undefined) {
