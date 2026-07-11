@@ -43,6 +43,7 @@ create table public.bookmarks (
   favicon_url  text,
   og_image_url text,
   category_id  uuid references public.categories(id) on delete set null,
+  tags         text[] not null default '{}',
   -- idle: AI 미사용(수동/미지정), pending: 분류 대기/진행, done: AI 분류 완료, failed: 분류 실패(재시도 가능)
   ai_status    text not null default 'idle'
                check (ai_status in ('idle','pending','done','failed')),
@@ -129,6 +130,7 @@ create policy "owner_all" on public.categories
 - **URL 중복**: `unique(user_id, url)`. 같은 URL 재등록 시 API는 409 + 기존 북마크를 돌려준다. URL은 저장 전 정규화한다: trim, fragment(#…) 제거, 트래킹 파라미터(`utm_*`, `fbclid`, `gclid`) 제거. 과도한 정규화(쿼리 전체 제거 등)는 하지 않는다.
 - **카테고리 삭제** → 소속 북마크는 `on delete set null`로 미분류가 된다. UI에서 이를 안내.
 - **`ai_status` 상태 전이**: `idle → pending`(AI 재분류 요청), `pending → done | failed`, `failed → pending`(재시도). `done/pending` 북마크의 카테고리를 사용자가 수동 변경하면 `idle`로 되돌린다 (사용자 판단이 AI 결과를 덮음).
+- **태그**는 별도 조인 테이블 대신 `bookmarks.tags text[]`에 저장한다. 북마크당 최대 5개를 제약으로 강제하고, 배열 검색을 위해 GIN 인덱스를 둔다. `search_bookmarks` 함수는 API가 인증에서 얻은 `p_user_id`를 필수 조건으로 적용하고 카테고리·커서 조건과 제목·URL·설명·태그 부분 검색을 한 번에 처리한다. 함수 실행 권한은 `service_role`에만 부여한다.
 - **ai_settings**는 사용자별 1행이며 provider별 API 키는 AES-256-GCM 암호문만 저장한다. 평문과 표시용 prefix는 저장하지 않는다. 활성 `provider`/`model` 조합은 `packages/shared` 고정 카탈로그의 6개 조합만 허용한다. 설정 행이 없으면 Gemini Flash Lite 선택·키 미설정 상태로 해석한다.
 - **reminders**는 단발성(one-shot). 반복 규칙은 추후 컬럼 추가로 확장 (`rrule text` 예약 — 지금은 만들지 않음).
 - 사용자 계정은 Supabase 대시보드에서 수동 생성 1개뿐 — `profiles` 테이블 불필요.
