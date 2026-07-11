@@ -15,6 +15,10 @@ export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),
 ]);
 
+export const openAiCategorizeResponseSchema = z.object({
+  result: categorizeResponseSchema,
+});
+
 export function parseCategorizeResponse(value: unknown): CategorizeResult {
   const parsed = categorizeResponseSchema.safeParse(value);
   if (!parsed.success) {

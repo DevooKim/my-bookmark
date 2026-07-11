@@ -5,7 +5,7 @@
 ## 현재 상태
 
 - **현재 Phase**: Phase 8 후속 기능 완료 — provider 키 관리/사용 모델 선택 분리. 다음: 배포처 확정 + 배포 후 TODO
-- **최종 갱신**: 2026-07-11 (AI 키/모델 설정 UX 분리 완료)
+- **최종 갱신**: 2026-07-12 (OpenAI 구조화 출력 루트 스키마 호환성 수정)
 
 ## Phase 체크리스트
 
@@ -107,6 +107,7 @@
 - AI 모델/연결 테스트 검증 완료: `0003_ai_model.sql` 원격 push 및 기존 OpenAI 행의 `gpt-4o-mini` backfill 확인. 고정 6-model 카탈로그/provider-model 검증, 선택 모델 provider 생성 전달, 세 SDK Models API mock, 연결 API, 그룹 모델 UI 테스트 포함 전체 113 테스트 통과. Docker 스택에서 실계정 상태가 OpenAI + GPT-4o mini + 암호화 키 설정으로 조회됐고, 실제 OpenAI Models API 연결 성공 및 브라우저의 “OpenAI 연결에 성공했어요” 토스트를 확인했다.
 - AI 키/모델 UX 분리 검증 완료: provider 키 저장이 활성 모델을 보존하고 키가 있는 provider만 모델 선택 가능한 서비스/API 테스트, 결합 endpoint 제거, provider별 독립 입력 3개, 키 0개 빈 상태, 필터 모델/별도 저장 UI 테스트를 추가해 전체 117 테스트 통과. Docker 브라우저에서 Gemini/Anthropic/OpenAI 입력이 각각 표시되고, 저장된 OpenAI 키의 모델 2개만 목록에 표시되며 모델 저장과 OpenAI 연결 테스트 성공을 확인했다.
 - AI 설정 레이아웃 개선: `사용 모델`을 `AI API 키`보다 위로 이동하고 독립 `rounded-xl` border 카드로 묶었다. DOM 순서/카드 스타일 회귀 테스트를 추가해 전체 118 테스트 통과.
+- OpenAI 구조화 출력 수정: OpenAI SDK 6.45의 root object 요구에 맞춰 discriminated union을 `{ result: ... }` 객체로 감싸고 응답을 해제한다. 실제 `zodTextFormat` 변환 회귀 테스트를 추가했으며 전체 검증 루프를 통과했다.
 - Bun/Node 24/Vercel 전환 검증 완료: Node 24.14.0 + Bun 1.3.14에서 frozen install, typecheck, lint, 전체 123 테스트, Node/Docker build 통과. `VERCEL=1` web build가 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions`를 생성했다. Docker는 Bun install/build 후 Node 24 runtime에서 api/web 모두 healthy였고 `/api/health`는 `{"ok":true}`, `/manifest.webmanifest`는 200을 반환했다.
 - TypeScript 7 전환 검증 완료: 다섯 package manifest가 모두 TypeScript 7.0.2를 사용하고 web은 Node 24 타입 선언을 사용한다. Node 24.14.0에서 frozen install, compiler version, typecheck, lint, 전체 124 테스트, build가 통과했다. Docker api/web 이미지를 재빌드해 모두 healthy, `/api/health` `{"ok":true}`, `/manifest.webmanifest` 200을 확인했다.
 

@@ -185,7 +185,7 @@ describe("AI provider contract", () => {
 
   it("parses OpenAI structured output responses", async () => {
     sdkMocks.openAiParse.mockResolvedValueOnce({
-      output_parsed: { type: "none" },
+      output_parsed: { result: { type: "none" } },
     });
 
     const provider = createAiProvider({ provider: "openai", apiKey: "test" });

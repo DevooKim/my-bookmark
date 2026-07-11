@@ -3,8 +3,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import {
-  categorizeResponseSchema,
   jsonSchema,
+  openAiCategorizeResponseSchema,
   parseCategorizeResponse,
   systemPrompt,
   userPrompt,
@@ -159,7 +159,7 @@ class OpenAiProvider implements AiProvider {
           input: userPrompt(input),
           text: {
             format: zodTextFormat(
-              categorizeResponseSchema,
+              openAiCategorizeResponseSchema,
               "bookmark_category",
             ),
           },
@@ -167,7 +167,7 @@ class OpenAiProvider implements AiProvider {
         { signal },
       );
       return parseCategorizeResponse(
-        response.output_parsed ?? { type: "none" },
+        response.output_parsed?.result ?? { type: "none" },
       );
     });
   }
