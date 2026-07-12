@@ -14,6 +14,7 @@ import {
   MoreVertical,
   Plus,
   Search,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import {
@@ -468,13 +469,23 @@ function BookmarkCard({
               >
                 <Edit className="h-4 w-4" /> 편집
               </button>
-              {bookmark.aiStatus === "failed" ? (
+              {bookmark.aiStatus !== "pending" ? (
                 <button
                   className="menu-item"
-                  onClick={() => runMenuAction(onRecategorize)}
+                  onClick={() =>
+                    runMenuAction(() => {
+                      if (
+                        window.confirm(
+                          "AI가 제목, 요약, 태그, 카테고리를 다시 생성합니다. 계속할까요?",
+                        )
+                      ) {
+                        onRecategorize();
+                      }
+                    })
+                  }
                   type="button"
                 >
-                  AI 재분류
+                  <Sparkles className="h-4 w-4" /> AI 재분류
                 </button>
               ) : null}
               <button

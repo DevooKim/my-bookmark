@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listBookmarks,
   listCategories,
+  recategorizeBookmark,
   updateBookmark,
 } from "../../lib/api-client";
 import { requestBookmarkDialog } from "../../lib/bookmark-dialog";
@@ -394,5 +395,53 @@ describe("EditBookmarkDialog", () => {
         categoryId: category.id,
       }),
     );
+  });
+
+  it("recategorizes a done bookmark after user confirmation", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [bookmark],
+      nextCursor: null,
+    });
+    vi.mocked(recategorizeBookmark).mockResolvedValue(bookmark);
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    renderHome();
+
+    fireEvent.click(await screen.findByRole("button", { name: "북마크 메뉴" }));
+    fireEvent.click(screen.getByRole("button", { name: /AI 재분류/ }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(recategorizeBookmark).toHaveBeenCalled());
+    expect(vi.mocked(recategorizeBookmark).mock.calls[0]?.[0]).toBe(
+      bookmark.id,
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("does not recategorize when the user cancels the confirmation", async () => {
+    // 이 테스트 파일은 afterEach에서 clearAllMocks를 하지 않으므로
+    // 앞 테스트의 호출 기록을 지워야 not.toHaveBeenCalled가 유효하다.
+    vi.mocked(recategorizeBookmark).mockClear();
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [bookmark],
+      nextCursor: null,
+    });
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => false),
+    );
+
+    renderHome();
+
+    fireEvent.click(await screen.findByRole("button", { name: "북마크 메뉴" }));
+    fireEvent.click(screen.getByRole("button", { name: /AI 재분류/ }));
+
+    expect(recategorizeBookmark).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
   });
 });
