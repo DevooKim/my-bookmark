@@ -26,6 +26,7 @@ const events = [
     status: "success" as const,
     errorCode: null,
     durationMs: 700,
+    isByok: true,
     createdAt: "2026-07-12T10:00:00.000Z",
   },
   {
@@ -36,6 +37,7 @@ const events = [
     status: "failed" as const,
     errorCode: "429",
     durationMs: 400,
+    isByok: null,
     createdAt: "2026-07-12T09:00:00.000Z",
   },
   {
@@ -46,6 +48,7 @@ const events = [
     status: "success" as const,
     errorCode: null,
     durationMs: 900,
+    isByok: false,
     createdAt: "2026-07-11T10:00:00.000Z",
   },
 ];
@@ -109,6 +112,8 @@ describe("AiUsagePage", () => {
     expect(geminiRow).not.toBeNull();
     expect(within(geminiRow as HTMLElement).getByText(/성공 1/)).toBeTruthy();
     expect(screen.getByText("429")).toBeTruthy();
+    expect(screen.getByText("BYOK")).toBeTruthy();
+    expect(screen.getByText("크레딧")).toBeTruthy();
   });
 
   it("shows the OpenRouter account usage card with today/week/month USD", async () => {

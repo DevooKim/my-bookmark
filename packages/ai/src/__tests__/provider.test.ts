@@ -24,6 +24,7 @@ function completionResponse(
           },
         },
       ],
+      usage: { is_byok: true },
     }),
     { status: 200 },
   );
@@ -44,6 +45,7 @@ describe("OpenRouter preset provider", () => {
 
     expect(outcome.analysis).toEqual(analysis);
     expect(outcome.model).toBe("google/gemini-3.1-flash-lite-20260507");
+    expect(outcome.isByok).toBe(true);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");

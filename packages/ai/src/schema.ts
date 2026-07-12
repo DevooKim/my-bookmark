@@ -85,6 +85,7 @@ export const openRouterCompletionSchema = z.object({
   choices: z
     .array(z.object({ message: z.object({ content: z.string().nullable() }) }))
     .min(1),
+  usage: z.object({ is_byok: z.boolean().nullish() }).nullish(),
 });
 
 export function systemPrompt(): string {

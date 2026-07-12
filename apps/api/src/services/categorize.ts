@@ -34,6 +34,7 @@ export interface AiUsageEventInput {
   status: "success" | "failed";
   errorCode: string | null;
   durationMs: number;
+  isByok: boolean | null;
 }
 
 interface CategorizeOptions {
@@ -103,6 +104,7 @@ export async function categorizeBookmark({
         status: "success",
         errorCode: null,
         durationMs: Date.now() - startedAt,
+        isByok: outcome.isByok,
       });
       await applyCategorizeResult(
         db,
@@ -121,6 +123,7 @@ export async function categorizeBookmark({
         status: "failed",
         errorCode: extractErrorCode(error),
         durationMs: Date.now() - startedAt,
+        isByok: null,
       });
       await markFailed(db, userId, bookmarkId);
     }

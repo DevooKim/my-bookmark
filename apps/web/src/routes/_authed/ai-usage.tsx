@@ -222,6 +222,11 @@ export function AiUsagePage() {
               <span className="min-w-0 flex-1 truncate">
                 {modelLabel(event.model)}
               </span>
+              {event.isByok === null ? null : (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  {event.isByok ? "BYOK" : "크레딧"}
+                </span>
+              )}
               {event.status === "success" ? (
                 <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700 dark:bg-green-950 dark:text-green-200">
                   성공

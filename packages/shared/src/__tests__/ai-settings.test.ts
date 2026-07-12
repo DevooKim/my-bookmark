@@ -54,6 +54,7 @@ describe("AI schemas", () => {
         status: "success",
         errorCode: null,
         durationMs: 700,
+        isByok: true,
         createdAt: "2026-07-12T10:00:00.000Z",
       }),
     ).toMatchObject({ provider: "google" });

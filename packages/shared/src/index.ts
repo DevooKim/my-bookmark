@@ -194,6 +194,7 @@ export const aiUsageEventSchema = z.object({
   status: aiUsageStatusSchema,
   errorCode: z.string().nullable(),
   durationMs: z.number().int().nullable(),
+  isByok: z.boolean().nullable(),
   createdAt: isoDateTimeSchema,
 });
 export const aiUsageQuerySchema = z.object({

@@ -300,11 +300,17 @@ describe("categorizeBookmark", () => {
 
   it("records the actual model used on success", async () => {
     const db = new FakeDb();
-    const events: { model: string; provider: string; status: string }[] = [];
+    const events: {
+      model: string;
+      provider: string;
+      status: string;
+      isByok: boolean | null;
+    }[] = [];
     const provider = fakeProvider(
       vi.fn().mockResolvedValue({
         analysis: successResult,
         model: "google/gemini-3.1-flash-lite-20260507",
+        isByok: true,
       }),
     );
 
@@ -318,6 +324,7 @@ describe("categorizeBookmark", () => {
           model: event.model,
           provider: event.provider,
           status: event.status,
+          isByok: event.isByok,
         });
       },
       metadataFetcher: vi.fn().mockResolvedValue({
@@ -339,13 +346,19 @@ describe("categorizeBookmark", () => {
         model: "google/gemini-3.1-flash-lite-20260507",
         provider: "google",
         status: "success",
+        isByok: true,
       },
     ]);
   });
 
   it("records a failed event with the preset model when the request throws", async () => {
     const db = new FakeDb();
-    const events: { model: string; provider: string; status: string }[] = [];
+    const events: {
+      model: string;
+      provider: string;
+      status: string;
+      isByok: boolean | null;
+    }[] = [];
     const provider = fakeProvider(
       vi
         .fn()
@@ -364,6 +377,7 @@ describe("categorizeBookmark", () => {
           model: event.model,
           provider: event.provider,
           status: event.status,
+          isByok: event.isByok,
         });
       },
       metadataFetcher: vi.fn().mockResolvedValue({
@@ -381,6 +395,7 @@ describe("categorizeBookmark", () => {
         model: "@preset/my-bookmark",
         provider: "openrouter",
         status: "failed",
+        isByok: null,
       },
     ]);
   });

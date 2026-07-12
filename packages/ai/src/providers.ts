@@ -109,7 +109,11 @@ class OpenRouterProvider implements AiProvider {
         throw new Error("AI analysis response is malformed");
       }
 
-      return { analysis, model: parsed.model || PRESET_MODEL };
+      return {
+        analysis,
+        model: parsed.model || PRESET_MODEL,
+        isByok: parsed.usage?.is_byok ?? null,
+      };
     });
   }
 }

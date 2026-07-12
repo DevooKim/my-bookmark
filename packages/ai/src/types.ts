@@ -25,6 +25,7 @@ export interface AiProviderConfig {
 export interface AnalyzeOutcome {
   analysis: AnalyzeResult;
   model: string;
+  isByok: boolean | null;
 }
 
 export interface AiProvider {

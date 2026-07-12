@@ -25,6 +25,7 @@ interface UsageRow {
   status: "success" | "failed";
   error_code: string | null;
   duration_ms: number | null;
+  is_byok: boolean | null;
   created_at: string;
 }
 
@@ -68,6 +69,7 @@ export function createAiUsageRecorder(db: unknown, userId: string) {
           status: event.status,
           error_code: event.errorCode,
           duration_ms: event.durationMs,
+          is_byok: event.isByok,
         });
       if (error) {
         throw error;
@@ -103,6 +105,7 @@ export async function listAiUsageEvents(
       status: row.status,
       errorCode: row.error_code,
       durationMs: row.duration_ms,
+      isByok: row.is_byok,
       createdAt: row.created_at,
     }),
   );

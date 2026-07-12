@@ -20,6 +20,7 @@ describe("ai usage recorder", () => {
       status: "failed",
       errorCode: "429",
       durationMs: 1200,
+      isByok: null,
     });
 
     expect(db.from).toHaveBeenCalledWith("ai_usage_events");
@@ -31,6 +32,7 @@ describe("ai usage recorder", () => {
       status: "failed",
       error_code: "429",
       duration_ms: 1200,
+      is_byok: null,
     });
   });
 
@@ -48,6 +50,7 @@ describe("ai usage recorder", () => {
         status: "success",
         errorCode: null,
         durationMs: 800,
+        isByok: true,
       }),
     ).resolves.toBeUndefined();
     warn.mockRestore();
@@ -66,6 +69,7 @@ describe("listAiUsageEvents", () => {
         status: "success",
         error_code: null,
         duration_ms: 700,
+        is_byok: true,
         created_at: "2026-07-12T10:00:00.000Z",
       },
     ];
@@ -83,6 +87,7 @@ describe("listAiUsageEvents", () => {
       model: "gemini-flash-lite-latest",
       status: "success",
       durationMs: 700,
+      isByok: true,
     });
   });
 });

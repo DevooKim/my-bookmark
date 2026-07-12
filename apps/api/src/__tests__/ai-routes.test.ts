@@ -88,6 +88,7 @@ describe("AI routes", () => {
         status: "success",
         error_code: null,
         duration_ms: 700,
+        is_byok: false,
         created_at: "2026-07-12T10:00:00.000Z",
       },
     ];
