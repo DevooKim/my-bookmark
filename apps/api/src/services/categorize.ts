@@ -197,13 +197,21 @@ async function markFailed(
   }
 }
 
+// AI는 "💻 개발"처럼 이모지 접두 이름을 제안하므로, 중복 판정은
+// 선두의 비문자(이모지·기호) 부분을 제거한 뒤 비교한다.
+function normalizeCategoryName(name: string): string {
+  const trimmed = name.trim().toLowerCase();
+  const stripped = trimmed.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  return stripped.length > 0 ? stripped : trimmed;
+}
+
 function findCategoryByNormalizedName(
   categories: CategoryRow[],
   name: string,
 ): CategoryRow | undefined {
-  const normalizedName = name.trim().toLowerCase();
+  const normalizedName = normalizeCategoryName(name);
   return categories.find(
-    (item) => item.name.trim().toLowerCase() === normalizedName,
+    (item) => normalizeCategoryName(item.name) === normalizedName,
   );
 }
 

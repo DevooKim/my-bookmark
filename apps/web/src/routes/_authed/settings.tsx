@@ -235,7 +235,7 @@ function CategorySection() {
         <input
           className="input"
           onChange={(event) => setName(event.target.value)}
-          placeholder="새 카테고리"
+          placeholder="새 카테고리 (예: 💻 개발)"
           required
           value={name}
         />

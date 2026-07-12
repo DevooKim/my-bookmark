@@ -9,7 +9,7 @@ export const categorizeResponseSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("new"),
-    name: z.string().trim().min(1).max(10),
+    name: z.string().trim().min(1).max(16),
     confidence: z.number().min(0).max(1).default(0),
   }),
   z.object({ type: z.literal("none") }),
@@ -78,7 +78,7 @@ export function systemPrompt(): string {
     "규칙:",
     "1. 기존 카테고리 중 명확히 맞는 것이 있으면 반드시 그것을 선택한다 (id로).",
     "2. 기존 카테고리로 무리 없이 분류할 수 없을 때만 새 카테고리를 제안한다.",
-    "3. 새 이름은 한국어, 1~10자, 일반적·재사용 가능한 수준으로 한다.",
+    "3. 새 카테고리 이름은 '이모지 1개 + 공백 + 한국어 이름(1~10자)' 형식의 한 문자열로 만든다. 예: '💻 개발', '📰 뉴스', '🎨 디자인'. 이모지는 주제를 대표하는 것 1개만 앞에 붙이고, 이름은 일반적·재사용 가능한 수준으로 한다.",
     "4. 정보가 부족해 판단이 어려우면 category에 none을 반환한다.",
     "5. confidence는 0~1이다.",
     "6. summaryTitle은 원문을 핵심만 요약한 한국어 제목 스타일로 작성하며 최대 40자다.",

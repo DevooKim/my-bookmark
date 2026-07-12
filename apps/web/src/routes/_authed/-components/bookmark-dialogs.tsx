@@ -134,7 +134,7 @@ export function BookmarkDialog({
               <input
                 className="input"
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="새 카테고리 이름"
+                placeholder="새 카테고리 (예: 💻 개발)"
                 value={newCategoryName}
               />
               <button

@@ -87,6 +87,15 @@ describe("AI provider contract", () => {
         tags: ["하나", "둘"],
       }),
     ).toBeNull();
+    expect(
+      parseAnalyzeResponse({
+        ...expected,
+        category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
+      }),
+    ).toEqual({
+      ...expected,
+      category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
+    });
     warn.mockRestore();
   });
 

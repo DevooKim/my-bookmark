@@ -185,6 +185,35 @@ describe("applyCategorizeResult", () => {
     expect(db.categories.at(-1)).toEqual({ id: "cat-2", name: "디자인" });
     expect(db.bookmark.category_id).toBe("cat-2");
   });
+
+  it("reuses an existing plain-name category when AI proposes an emoji-prefixed name", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      analysis({ type: "new", name: "💻 개발", confidence: 0.8 }),
+    );
+
+    expect(db.categories).toHaveLength(1);
+    expect(db.bookmark.category_id).toBe("cat-dev");
+  });
+
+  it("reuses an existing emoji-prefixed category when AI proposes a plain name", async () => {
+    const db = new FakeDb();
+    db.categories = [{ id: "cat-news", name: "📰 뉴스" }];
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      analysis({ type: "new", name: "뉴스", confidence: 0.8 }),
+    );
+
+    expect(db.categories).toHaveLength(1);
+    expect(db.bookmark.category_id).toBe("cat-news");
+  });
 });
 
 describe("categorizeBookmark", () => {
