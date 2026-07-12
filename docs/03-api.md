@@ -97,6 +97,7 @@ AI 분류는 OpenRouter preset(`@preset/my-bookmark`) 단일 호출로 동작한
 - `POST /api/ai/test` → 저장된 키로 OpenRouter `GET /key`를 호출해 유효성만 확인. `{ ok }` 반환, 추론은 실행하지 않음
 - `GET /api/ai/usage?days=` (기본 30, 최대 90) → 이 사용자의 최근 분류 시도 이벤트 원본 목록(최대 1000행, `created_at desc`). `{ days, items: [{ id, provider, model, bookmarkId, status, errorCode, durationMs, isByok, createdAt }] }`. 집계(모델별/일별)는 클라이언트가 수행
 - `GET /api/ai/account` → OpenRouter 계정 사용액(`GET /key` 프록시): `{ usage, usageDaily, usageWeekly, usageMonthly, limit, limitRemaining, isFreeTier }` (USD). `OPEN_ROUTER_API_KEY` 미설정 시 400
+- `GET /api/ai/analytics?days=` (기본 30, 최대 90) → OpenRouter Analytics API 프록시(모델별·일별): `{ days, configured, rows: [{ date, model, usage, tokens, requests }] }`. `OPEN_ROUTER_MANAGEMENT_KEY` 미설정 시 `configured: false`에 빈 rows(에러 아님)
 
 ## API Keys (Bearer 전용)
 
