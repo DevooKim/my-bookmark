@@ -5,10 +5,11 @@ import {
   type CategoryWithCount,
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Bell,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Copy,
   KeyRound,
@@ -623,6 +624,12 @@ export function AiSection() {
       <p className="mt-1 text-sm text-zinc-500">
         provider API 키를 관리하고, 키가 등록된 provider의 모델을 선택합니다.
       </p>
+      <Link
+        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600"
+        to="/ai-usage"
+      >
+        사용량 대시보드 <ChevronRight className="h-4 w-4" />
+      </Link>
       {aiQuery.isError ? (
         <p className="mt-3 text-sm text-red-600">
           AI 설정을 불러오지 못했어요.

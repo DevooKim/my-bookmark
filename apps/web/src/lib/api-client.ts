@@ -2,9 +2,11 @@ import {
   type AiConnectionTestResponse,
   type AiProviderName,
   type AiStatusResponse,
+  type AiUsageResponse,
   type ApiKeysResponse,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
+  aiUsageResponseSchema,
   apiKeysResponseSchema,
   type Bookmark,
   type BookmarksResponse,
@@ -151,6 +153,13 @@ export async function reorderAiModels(
   });
   return parseJsonResponse(response, (json) =>
     aiStatusResponseSchema.parse(json),
+  );
+}
+
+export async function getAiUsage(days: number): Promise<AiUsageResponse> {
+  const response = await apiFetch(`/api/ai/usage?days=${days}`);
+  return parseJsonResponse(response, (json) =>
+    aiUsageResponseSchema.parse(json),
   );
 }
 

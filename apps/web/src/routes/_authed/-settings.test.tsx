@@ -26,6 +26,22 @@ vi.mock("../../lib/api-client", () => ({
   updateCategory: vi.fn(),
 }));
 vi.mock("../../lib/logout", () => ({ performLogout: vi.fn() }));
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@tanstack/react-router")>();
+  return {
+    ...actual,
+    Link: (props: {
+      to: string;
+      className?: string;
+      children?: React.ReactNode;
+    }) => (
+      <a className={props.className} href={props.to}>
+        {props.children}
+      </a>
+    ),
+  };
+});
 
 import {
   deleteAiProviderKey,
@@ -101,6 +117,16 @@ describe("AI settings", () => {
     ).not.toBe(0);
     expect(modelHeading.parentElement?.className).toContain("rounded-xl");
     expect(modelHeading.parentElement?.className).toContain("border");
+  });
+
+  it("links to the AI usage dashboard", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    renderAiSection();
+
+    const link = await screen.findByRole("link", {
+      name: /사용량 대시보드/,
+    });
+    expect(link.getAttribute("href")).toBe("/ai-usage");
   });
 
   it("renders independent API key controls for all providers", async () => {
