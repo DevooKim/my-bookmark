@@ -243,6 +243,18 @@ export async function deleteCategory(id: string): Promise<void> {
   }
 }
 
+export async function reorderCategories(
+  ids: string[],
+): Promise<CategoriesResponse> {
+  const response = await apiFetch("/api/categories/order", {
+    method: "PUT",
+    body: JSON.stringify({ ids }),
+  });
+  return parseJsonResponse(response, (json) =>
+    categoriesResponseSchema.parse(json),
+  );
+}
+
 export async function listBookmarks(params: {
   categoryId?: string;
   q?: string;

@@ -18,6 +18,7 @@ vi.mock("../../lib/api-client", () => ({
   getAiStatus: vi.fn(),
   listApiKeys: vi.fn(),
   listCategories: vi.fn(),
+  reorderCategories: vi.fn(),
   revokeApiKey: vi.fn(),
   saveAiProviderKey: vi.fn(),
   selectAiModel: vi.fn(),
@@ -29,12 +30,19 @@ vi.mock("../../lib/logout", () => ({ performLogout: vi.fn() }));
 import {
   deleteAiProviderKey,
   getAiStatus,
+  listCategories,
+  reorderCategories,
   saveAiProviderKey,
   selectAiModel,
   testAiProviderConnection,
 } from "../../lib/api-client";
 import { performLogout } from "../../lib/logout";
-import { AiSection, copyApiKeyToClipboard, LogoutSection } from "./settings";
+import {
+  AiSection,
+  CategorySection,
+  copyApiKeyToClipboard,
+  LogoutSection,
+} from "./settings";
 
 afterEach(() => {
   cleanup();
@@ -237,5 +245,72 @@ describe("copyApiKeyToClipboard", () => {
     expect(error).toHaveBeenCalledWith(
       "복사하지 못했어요. 직접 선택해서 복사하세요.",
     );
+  });
+});
+
+describe("category ordering", () => {
+  const categories = {
+    items: [
+      {
+        id: "00000000-0000-4000-8000-00000000000a",
+        userId: "00000000-0000-4000-8000-000000000002",
+        name: "💻 개발",
+        sortOrder: 0,
+        createdAt: "2026-07-12T00:00:00.000Z",
+        bookmarkCount: 2,
+      },
+      {
+        id: "00000000-0000-4000-8000-00000000000b",
+        userId: "00000000-0000-4000-8000-000000000002",
+        name: "📰 뉴스",
+        sortOrder: 1,
+        createdAt: "2026-07-12T00:00:00.000Z",
+        bookmarkCount: 1,
+      },
+    ],
+  };
+
+  function renderCategorySection() {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <CategorySection />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("moves a category up by sending the full reordered id list", async () => {
+    vi.mocked(listCategories).mockResolvedValue(categories);
+    vi.mocked(reorderCategories).mockResolvedValue(categories);
+    renderCategorySection();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "📰 뉴스 위로 이동" }),
+    );
+
+    await waitFor(() => expect(reorderCategories).toHaveBeenCalled());
+    expect(vi.mocked(reorderCategories).mock.calls[0]?.[0]).toEqual([
+      "00000000-0000-4000-8000-00000000000b",
+      "00000000-0000-4000-8000-00000000000a",
+    ]);
+  });
+
+  it("disables boundary move buttons", async () => {
+    vi.mocked(listCategories).mockResolvedValue(categories);
+    renderCategorySection();
+
+    const firstUp = await screen.findByRole<HTMLButtonElement>("button", {
+      name: "💻 개발 위로 이동",
+    });
+    const lastDown = screen.getByRole<HTMLButtonElement>("button", {
+      name: "📰 뉴스 아래로 이동",
+    });
+    expect(firstUp.disabled).toBe(true);
+    expect(lastDown.disabled).toBe(true);
   });
 });
