@@ -213,7 +213,7 @@ async function createCategory(
   name: string,
 ): Promise<string> {
   const { data, error } = await (db.from("categories") as CategoryInsertTable)
-    .insert({ user_id: userId, name, color: null })
+    .insert({ user_id: userId, name })
     .select("id")
     .single();
   if (error) {

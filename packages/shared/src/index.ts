@@ -25,22 +25,10 @@ export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>;
 export const uuidSchema = z.uuid();
 export const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
-export const categoryColorSchema = z.enum([
-  "red",
-  "orange",
-  "amber",
-  "green",
-  "teal",
-  "blue",
-  "violet",
-  "pink",
-]);
-
 export const categorySchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
   name: z.string().min(1).max(50),
-  color: categoryColorSchema.nullable(),
   sortOrder: z.number().int(),
   createdAt: isoDateTimeSchema,
 });
@@ -146,13 +134,11 @@ export const bookmarkListQuerySchema = z.object({
 
 export const createCategoryRequestSchema = z.object({
   name: z.string().trim().min(1).max(50),
-  color: categoryColorSchema.nullable().optional(),
 });
 
 export const updateCategoryRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(50).optional(),
-    color: categoryColorSchema.nullable().optional(),
     sortOrder: z.number().int().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {

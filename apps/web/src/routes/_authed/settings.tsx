@@ -4,7 +4,6 @@ import {
   type AiProviderName,
   aiModelIdSchema,
   type CategoryWithCount,
-  categoryColorSchema,
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -37,8 +36,6 @@ import {
 export const Route = createFileRoute("/_authed/settings")({
   component: SettingsPage,
 });
-
-const colors = categoryColorSchema.options;
 
 function SettingsPage() {
   return (
@@ -181,7 +178,6 @@ function NotificationSection() {
 function CategorySection() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [color, setColor] = useState<(typeof colors)[number] | null>("blue");
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
     queryFn: listCategories,
@@ -209,7 +205,6 @@ function CategorySection() {
     }) =>
       updateCategory(id, {
         name: next.name,
-        color: next.color,
         sortOrder: next.sortOrder,
       }),
     onSuccess: () => {
@@ -231,10 +226,10 @@ function CategorySection() {
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="font-bold">카테고리 관리</h2>
       <form
-        className="mt-4 grid gap-2 sm:grid-cols-[1fr_160px_auto]"
+        className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]"
         onSubmit={(event) => {
           event.preventDefault();
-          createMutation.mutate({ name, color });
+          createMutation.mutate({ name });
         }}
       >
         <input
@@ -244,19 +239,6 @@ function CategorySection() {
           required
           value={name}
         />
-        <select
-          className="input"
-          onChange={(event) =>
-            setColor(event.target.value as (typeof colors)[number])
-          }
-          value={color ?? "blue"}
-        >
-          {colors.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
         <button
           className="btn-primary justify-center"
           disabled={createMutation.isPending}
@@ -301,27 +283,14 @@ function CategoryRow({
   onDelete: () => void;
 }) {
   const [name, setName] = useState(category.name);
-  const [color, setColor] = useState(category.color ?? "blue");
   return (
-    <div className="grid gap-2 py-3 sm:grid-cols-[1fr_140px_80px_auto] sm:items-center">
+    <div className="grid gap-2 py-3 sm:grid-cols-[1fr_80px_auto] sm:items-center">
       <input
         className="input"
         onBlur={() => name !== category.name && onUpdate({ name })}
         onChange={(e) => setName(e.target.value)}
         value={name}
       />
-      <select
-        className="input"
-        onBlur={() => color !== category.color && onUpdate({ color })}
-        onChange={(e) => setColor(e.target.value as typeof color)}
-        value={color}
-      >
-        {colors.map((item) => (
-          <option key={item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
       <span className="text-sm text-zinc-500">
         {category.bookmarkCount ?? 0}개
       </span>

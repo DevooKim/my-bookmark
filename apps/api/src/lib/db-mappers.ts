@@ -31,7 +31,6 @@ interface CategoryDbRow {
   id: string;
   user_id: string;
   name: string;
-  color: Category["color"];
   sort_order: number;
   created_at: string;
   bookmark_count?: number;
@@ -72,7 +71,6 @@ export function mapCategory(row: CategoryDbRow): Category {
     id: row.id,
     userId: row.user_id,
     name: row.name,
-    color: row.color,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
   });

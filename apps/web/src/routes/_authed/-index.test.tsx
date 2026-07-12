@@ -76,7 +76,6 @@ const category: CategoryWithCount = {
   id: "00000000-0000-4000-8000-000000000003",
   userId: bookmark.userId,
   name: "개발",
-  color: "blue",
   sortOrder: 0,
   createdAt: "2026-07-12T00:00:00.000Z",
   bookmarkCount: 1,

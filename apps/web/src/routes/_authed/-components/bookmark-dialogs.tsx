@@ -143,10 +143,7 @@ export function BookmarkDialog({
                   createCategoryMutation.isPending || !newCategoryName.trim()
                 }
                 onClick={() =>
-                  createCategoryMutation.mutate({
-                    name: newCategoryName,
-                    color: "blue",
-                  })
+                  createCategoryMutation.mutate({ name: newCategoryName })
                 }
                 type="button"
               >

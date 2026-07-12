@@ -12,7 +12,6 @@ import { HttpError } from "../middleware/error";
 
 interface CategoryUpdate {
   name?: string;
-  color?: string | null;
   sort_order?: number;
 }
 
@@ -57,7 +56,6 @@ categoriesRouter.post("/categories", async (request, response) => {
     .insert({
       user_id: userId,
       name: body.name,
-      color: body.color ?? null,
     })
     .select("*")
     .single();
@@ -76,9 +74,6 @@ categoriesRouter.patch("/categories/:id", async (request, response) => {
   const updates: CategoryUpdate = {};
   if (body.name !== undefined) {
     updates.name = body.name;
-  }
-  if (body.color !== undefined) {
-    updates.color = body.color;
   }
   if (body.sortOrder !== undefined) {
     updates.sort_order = body.sortOrder;
