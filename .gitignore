@@ -17,3 +17,8 @@ coverage/
 .tanstack/
 **/.tanstack/
 .pi/supabase-mcp.env
+
+# local tooling caches / verification artifacts (not part of the repo)
+.pi/skills/
+.superpowers/
+output/
