@@ -18,8 +18,12 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#0a0a0a" },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover",
+      },
+      { name: "theme-color", content: "#f2f2f7" },
+      { name: "color-scheme", content: "light dark" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-title", content: "Bookmark" },
       { title: "My Bookmark" },
@@ -53,6 +57,14 @@ function App() {
       "dark",
       stored === "dark" || (!stored && prefersDark),
     );
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        "content",
+        document.documentElement.classList.contains("dark")
+          ? "#000000"
+          : "#f2f2f7",
+      );
   }, []);
 
   return (

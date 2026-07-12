@@ -5,48 +5,363 @@
 :root {
   color-scheme: light;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", system-ui, sans-serif;
+  font-synthesis: none;
+  --accent: #007aff;
+  --accent-hover: #006ee6;
+  --canvas: #f2f2f7;
+  --surface: rgb(255 255 255 / 0.88);
+  --surface-solid: #fff;
+  --surface-muted: rgb(118 118 128 / 0.08);
+  --line: rgb(60 60 67 / 0.13);
+  --text: #1d1d1f;
+  --secondary: #6e6e73;
+  --shadow: 0 16px 50px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.04);
 }
 
 :root.dark {
   color-scheme: dark;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --canvas: #000;
+  --surface: rgb(30 30 32 / 0.82);
+  --surface-solid: #1c1c1e;
+  --surface-muted: rgb(118 118 128 / 0.18);
+  --line: rgb(235 235 245 / 0.16);
+  --text: #f5f5f7;
+  --secondary: #a1a1a6;
+  --shadow: 0 20px 60px rgb(0 0 0 / 0.42), 0 2px 12px rgb(0 0 0 / 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--canvas);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #f8fafc;
+  background:
+    radial-gradient(
+      circle at 12% -10%,
+      rgb(10 132 255 / 0.1),
+      transparent 32rem
+    ),
+    var(--canvas);
+  color: var(--text);
+  text-rendering: optimizeLegibility;
 }
 
-.dark body {
-  background: #09090b;
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+button {
+  transition:
+    transform 100ms ease-out,
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:active:not(:disabled),
+a[role="button"]:active {
+  transform: scale(0.97);
+}
+
+:focus-visible {
+  outline: 3px solid rgb(0 122 255 / 0.38);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(0 122 255 / 0.22);
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}
+
+.glass-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1rem 0;
+}
+
+.glass-header-inner,
+.mobile-tab-bar {
+  border: 1px solid rgb(255 255 255 / 0.56);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+.glass-header-inner {
+  @apply mx-auto flex max-w-5xl items-center justify-between rounded-2xl px-3 py-2;
+}
+
+.brand-mark {
+  @apply flex min-h-11 items-center gap-2.5 rounded-xl px-2 text-[1.05rem] font-semibold;
+  letter-spacing: -0.025em;
+}
+
+.brand-icon {
+  @apply flex h-8 w-8 items-center justify-center rounded-[0.65rem] bg-blue-600 text-white shadow-sm dark:bg-blue-500;
+}
+
+.content-frame {
+  @apply mx-auto max-w-5xl px-4 pb-8 pt-7 sm:pb-24 sm:pt-10;
+}
+
+.mobile-tab-bar {
+  @apply fixed inset-x-4 bottom-3 z-40 grid grid-cols-4 rounded-[1.35rem] p-1 text-[0.68rem] sm:hidden;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.mobile-nav-item {
+  @apply flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-2xl font-medium text-zinc-500 dark:text-zinc-400;
+}
+
+.mobile-nav-active {
+  @apply bg-blue-500/10 text-blue-600 dark:text-blue-400;
+}
+
+.mobile-add-action {
+  @apply flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-2xl font-semibold text-blue-600 dark:text-blue-400;
+}
+
+.mobile-add-icon {
+  @apply flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-500/30 dark:bg-blue-500;
+}
+
+.page-stack {
+  @apply space-y-5;
+}
+
+.page-header {
+  @apply flex items-end justify-between gap-4;
+}
+
+.page-eyebrow {
+  @apply mb-1 text-xs font-semibold uppercase text-blue-600 dark:text-blue-400;
+  letter-spacing: 0.08em;
+}
+
+.page-title {
+  @apply text-[2rem] font-bold leading-[1.08] sm:text-[2.35rem];
+  letter-spacing: -0.035em;
+}
+
+.page-subtitle {
+  @apply mt-1.5 max-w-xl text-sm leading-6 text-zinc-500 dark:text-zinc-400;
+}
+
+.surface {
+  @apply rounded-[1.4rem] border p-4 sm:p-5;
+  border-color: var(--line);
+  background: var(--surface-solid);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.search-field {
+  @apply flex min-h-12 items-center gap-2.5 rounded-xl px-3.5;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.bookmark-card {
+  @apply rounded-[1.25rem] border p-4 transition duration-200 sm:p-5;
+  border-color: var(--line);
+  background: var(--surface-solid);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.035);
+}
+
+@media (hover: hover) {
+  .bookmark-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 30px rgb(15 23 42 / 0.08);
+  }
+}
+
+.bookmark-card:active {
+  transform: scale(0.995);
+}
+
+.empty-state {
+  @apply rounded-[1.4rem] border border-dashed p-10 text-center;
+  border-color: var(--line);
+  background: var(--surface-solid);
+}
+
+.dialog-scrim {
+  @apply fixed inset-0 z-50 flex items-end bg-black/35 p-0 sm:items-center sm:justify-center sm:p-4;
+  animation: scrim-in 180ms ease-out both;
+}
+
+.dialog-scrim-blur {
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.dialog-surface {
+  @apply max-h-[90dvh] w-full overflow-y-auto overscroll-contain rounded-t-[1.75rem] border border-white/50 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-[1.5rem] sm:p-6;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  animation: sheet-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dialog-surface-opaque {
+  background: var(--surface-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.settings-page > section {
+  border-color: var(--line);
+  border-radius: 1.4rem;
+  background: var(--surface-solid);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.settings-page > .settings-header {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .btn-primary {
-  @apply inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400;
 }
 
 .btn-secondary {
-  @apply inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800;
+  @apply inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10;
+  border-color: var(--line);
+  background: var(--surface-solid);
 }
 
 .icon-button {
-  @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-zinc-200 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800;
+  @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white;
 }
 
 .input {
-  @apply min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:ring-blue-950;
+  @apply min-h-11 w-full rounded-xl border bg-transparent px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:ring-3 focus:ring-blue-500/20;
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.chip,
+.chip-active {
+  @apply inline-flex min-h-11 shrink-0 items-center justify-center rounded-full px-3.5 py-2 text-sm font-medium;
 }
 
 .chip {
-  @apply inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800;
+  @apply text-zinc-600 hover:bg-black/[0.07] dark:text-zinc-300 dark:hover:bg-white/[0.12];
+  background: var(--surface-muted);
 }
 
 .chip-active {
-  @apply inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-blue-600 bg-blue-600 px-3 py-2 text-sm font-medium text-white;
+  @apply bg-blue-600 text-white shadow-sm dark:bg-blue-500;
 }
 
 .menu-item {
-  @apply flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800;
+  @apply flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/10;
+}
+
+.popover-surface {
+  @apply absolute right-0 z-20 mt-2 w-52 rounded-2xl border p-1.5 text-sm;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(1.5rem) scale(0.98);
+    opacity: 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .app-shell {
+    padding-bottom: 0;
+  }
+  .dialog-surface {
+    animation-name: dialog-in;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+    transition-duration: 1ms;
+  }
+  button:active:not(:disabled),
+  .bookmark-card:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-header-inner,
+  .mobile-tab-bar,
+  .dialog-scrim-blur,
+  .dialog-surface,
+  .popover-surface {
+    background: var(--surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: currentColor;
+  }
+  .glass-header-inner,
+  .mobile-tab-bar,
+  .surface,
+  .bookmark-card {
+    border-width: 2px;
+  }
 }

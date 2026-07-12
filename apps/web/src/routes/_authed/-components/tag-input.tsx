@@ -47,13 +47,13 @@ export function TagInput({ value, onChange }: TagInputProps) {
         <div className="flex flex-wrap gap-2">
           {value.map((tag) => (
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-sm dark:bg-zinc-800"
+              className="inline-flex min-h-11 items-center rounded-full bg-zinc-100 pl-3 text-sm dark:bg-zinc-800"
               key={tag}
             >
               {tag}
               <button
                 aria-label={`${tag} 태그 삭제`}
-                className="rounded-full px-1 text-zinc-500 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 dark:hover:text-zinc-100"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-zinc-500 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 dark:hover:text-zinc-100"
                 onClick={() => onChange(value.filter((item) => item !== tag))}
                 type="button"
               >

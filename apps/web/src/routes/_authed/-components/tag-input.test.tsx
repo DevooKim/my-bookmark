@@ -110,7 +110,11 @@ describe("EditBookmarkDialog", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <EditBookmarkDialog bookmark={bookmark} onClose={vi.fn()} />
+        <EditBookmarkDialog
+          bookmark={bookmark}
+          categories={[]}
+          onClose={vi.fn()}
+        />
       </QueryClientProvider>,
     );
 
@@ -124,6 +128,7 @@ describe("EditBookmarkDialog", () => {
         title: "예제",
         description: null,
         tags: ["개발", "React"],
+        categoryId: null,
       }),
     );
   });

@@ -7,16 +7,35 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Clock, Edit, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BookmarkPlus,
+  Clock,
+  Edit,
+  MoreVertical,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import {
+  Fragment,
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   deleteBookmark,
   listBookmarks,
   listCategories,
   recategorizeBookmark,
-  updateBookmark,
 } from "../../lib/api-client";
+import {
+  consumeBookmarkDialogRequest,
+  OPEN_BOOKMARK_DIALOG_EVENT,
+} from "../../lib/bookmark-dialog";
 
 const BookmarkDialog = lazy(() =>
   import("./-components/bookmark-dialogs").then((module) => ({
@@ -54,6 +73,19 @@ export function HomePage() {
     );
     return () => window.clearTimeout(handle);
   }, [search]);
+
+  useEffect(() => {
+    const openDialog = () => {
+      consumeBookmarkDialogRequest();
+      setIsAddOpen(true);
+    };
+    window.addEventListener(OPEN_BOOKMARK_DIALOG_EVENT, openDialog);
+    if (consumeBookmarkDialogRequest()) {
+      setIsAddOpen(true);
+    }
+    return () =>
+      window.removeEventListener(OPEN_BOOKMARK_DIALOG_EVENT, openDialog);
+  }, []);
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
@@ -122,22 +154,6 @@ export function HomePage() {
     onError: () => toast.error("삭제하지 못했어요"),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      categoryId: nextCategoryId,
-    }: {
-      id: string;
-      categoryId: string | null;
-    }) => updateBookmark(id, { categoryId: nextCategoryId }),
-    onSuccess: () => {
-      toast.success("카테고리를 변경했어요");
-      void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
-      void queryClient.invalidateQueries({ queryKey: ["categories"] });
-    },
-    onError: () => toast.error("변경하지 못했어요"),
-  });
-
   const recategorizeMutation = useMutation({
     mutationFn: recategorizeBookmark,
     onSuccess: () => {
@@ -150,30 +166,16 @@ export function HomePage() {
   const categories = categoriesQuery.data?.items ?? [];
 
   return (
-    <main className="space-y-4">
-      <section className="sticky top-[57px] z-[5] -mx-4 border-b border-zinc-200 bg-zinc-50 px-4 pb-4 pt-1 dark:border-zinc-800 dark:bg-zinc-950 sm:static sm:mx-0 sm:rounded-2xl sm:border sm:bg-white sm:p-5 sm:dark:bg-zinc-900">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">북마크</h1>
-            <p className="text-sm text-zinc-500">
-              읽고 싶은 링크를 저장하고 분류하세요.
-            </p>
-          </div>
-          <button
-            className="btn-primary"
-            onClick={() => setIsAddOpen(true)}
-            type="button"
-          >
-            <Plus className="h-4 w-4" /> 추가
-          </button>
-        </div>
-
-        <label className="mt-4 flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-950">
+    <main className="page-stack">
+      <section className="space-y-3">
+        <label className="search-field">
           <Search className="h-4 w-4 text-zinc-400" />
           <input
+            aria-label="북마크 검색"
             className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-400"
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="검색"
+            placeholder="제목, 설명, 태그 검색"
+            type="search"
             value={search}
           />
         </label>
@@ -199,6 +201,15 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
+      <button
+        aria-label="북마크 추가"
+        className="fixed bottom-6 right-6 z-30 hidden h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-700 sm:inline-flex dark:bg-blue-500 dark:hover:bg-blue-400"
+        onClick={() => setIsAddOpen(true)}
+        type="button"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       <section>
         <div
@@ -226,12 +237,6 @@ export function HomePage() {
                   categories={categories}
                   onDelete={() => deleteMutation.mutate(bookmark.id)}
                   onEdit={() => setEditing(bookmark)}
-                  onMove={(nextCategoryId) =>
-                    updateMutation.mutate({
-                      id: bookmark.id,
-                      categoryId: nextCategoryId,
-                    })
-                  }
                   onRecategorize={() =>
                     recategorizeMutation.mutate(bookmark.id)
                   }
@@ -247,9 +252,14 @@ export function HomePage() {
           <p className="py-8 text-center text-zinc-500">불러오는 중…</p>
         ) : null}
         {!bookmarksQuery.isLoading && bookmarks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <p className="font-medium">첫 북마크를 추가해보세요</p>
+          <div className="empty-state">
+            <BookmarkPlus className="mx-auto h-10 w-10 text-blue-500" />
+            <p className="mt-4 text-lg font-semibold">첫 링크를 담아보세요</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              AI가 제목과 분류를 정리해 드립니다.
+            </p>
             <button
+              aria-label="북마크 추가"
               className="btn-primary mx-auto mt-4"
               onClick={() => setIsAddOpen(true)}
               type="button"
@@ -281,6 +291,7 @@ export function HomePage() {
         {editing ? (
           <EditBookmarkDialog
             bookmark={editing}
+            categories={categories}
             onClose={() => setEditing(null)}
           />
         ) : null}
@@ -320,7 +331,6 @@ function BookmarkCard({
   categories,
   onDelete,
   onEdit,
-  onMove,
   onRecategorize,
   onSetReminder,
   onTagSearch,
@@ -329,17 +339,50 @@ function BookmarkCard({
   categories: CategoryWithCount[];
   onDelete: () => void;
   onEdit: () => void;
-  onMove: (categoryId: string | null) => void;
   onRecategorize: () => void;
   onSetReminder: () => void;
   onTagSearch: (tag: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const category = categories.find((item) => item.id === bookmark.categoryId);
   const title = bookmark.title ?? new URL(bookmark.url).hostname;
 
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !menuRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+    const dismissWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissWithEscape);
+    };
+  }, [menuOpen]);
+
+  const runMenuAction = (action: () => void) => {
+    setMenuOpen(false);
+    menuTriggerRef.current?.focus();
+    action();
+  };
+
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <article className="bookmark-card">
       <div className="flex gap-3">
         <img
           alt=""
@@ -352,36 +395,43 @@ function BookmarkCard({
         />
         <div className="min-w-0 flex-1">
           <a
-            className="font-medium hover:text-blue-600"
+            className="text-[1.02rem] font-semibold leading-snug tracking-[-0.01em] hover:text-blue-600"
             href={bookmark.url}
             rel="noreferrer"
             target="_blank"
           >
             {title}
           </a>
-          {bookmark.tags.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {bookmark.tags.map((tag) => (
-                <button
-                  aria-label={`${tag} 태그 검색`}
-                  className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
-                  key={tag}
-                  onClick={() => onTagSearch(tag)}
-                  type="button"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <p className="mt-1 truncate text-sm text-zinc-500">
-            {new URL(bookmark.url).hostname.replace(/^www\./, "")} ·{" "}
-            {category?.name ?? "미분류"}
-          </p>
           {bookmark.description ? (
             <p className="mt-2 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-300">
               {bookmark.description}
             </p>
+          ) : null}
+          <p className="mt-2 truncate text-sm text-zinc-500">
+            {new URL(bookmark.url).hostname.replace(/^www\./, "")} ·{" "}
+            {category?.name ?? "미분류"}
+          </p>
+          {bookmark.tags.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1 sm:gap-1.5">
+              {bookmark.tags.map((tag) => (
+                <Fragment key={tag}>
+                  <span
+                    className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] leading-4 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 sm:hidden"
+                    data-testid={`mobile-tag-${tag}`}
+                  >
+                    {tag}
+                  </span>
+                  <button
+                    aria-label={`${tag} 태그 검색`}
+                    className="hidden min-h-7 items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] leading-4 text-zinc-600 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100 sm:inline-flex"
+                    onClick={() => onTagSearch(tag)}
+                    type="button"
+                  >
+                    {tag}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
           ) : null}
           {bookmark.aiStatus === "pending" ? (
             <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-200">
@@ -394,41 +444,34 @@ function BookmarkCard({
             </span>
           ) : null}
         </div>
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
+            aria-controls={`bookmark-menu-${bookmark.id}`}
+            aria-expanded={menuOpen}
             aria-label="북마크 메뉴"
             className="icon-button"
             onClick={() => setMenuOpen((open) => !open)}
+            ref={menuTriggerRef}
             type="button"
           >
             <MoreVertical className="h-4 w-4" />
           </button>
           {menuOpen ? (
-            <div className="absolute right-0 z-10 mt-2 w-48 rounded-xl border border-zinc-200 bg-white p-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-              <button className="menu-item" onClick={onEdit} type="button">
-                <Edit className="h-4 w-4" /> 편집
-              </button>
+            <div
+              className="popover-surface"
+              id={`bookmark-menu-${bookmark.id}`}
+            >
               <button
                 className="menu-item"
-                onClick={() => onMove(null)}
+                onClick={() => runMenuAction(onEdit)}
                 type="button"
               >
-                미분류로 변경
+                <Edit className="h-4 w-4" /> 편집
               </button>
-              {categories.map((item) => (
-                <button
-                  className="menu-item"
-                  key={item.id}
-                  onClick={() => onMove(item.id)}
-                  type="button"
-                >
-                  {item.name}
-                </button>
-              ))}
               {bookmark.aiStatus === "failed" ? (
                 <button
                   className="menu-item"
-                  onClick={onRecategorize}
+                  onClick={() => runMenuAction(onRecategorize)}
                   type="button"
                 >
                   AI 재분류
@@ -436,14 +479,14 @@ function BookmarkCard({
               ) : null}
               <button
                 className="menu-item"
-                onClick={onSetReminder}
+                onClick={() => runMenuAction(onSetReminder)}
                 type="button"
               >
                 <Clock className="h-4 w-4" /> 리마인더
               </button>
               <button
                 className="menu-item text-red-600"
-                onClick={onDelete}
+                onClick={() => runMenuAction(onDelete)}
                 type="button"
               >
                 <Trash2 className="h-4 w-4" /> 삭제

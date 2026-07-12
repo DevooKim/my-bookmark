@@ -33,46 +33,48 @@ function RemindersPage() {
   const reminders = remindersQuery.data?.items ?? [];
 
   return (
-    <main className="space-y-4">
-      <section>
-        <h1 className="text-2xl font-bold">리마인더</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          예정된 북마크 알림을 확인하고 취소합니다.
-        </p>
+    <main className="page-stack">
+      <section className="page-header">
+        <div>
+          <p className="page-eyebrow">Up next</p>
+          <h1 className="page-title">리마인더</h1>
+          <p className="page-subtitle">
+            다시 볼 링크와 시간을 한곳에서 확인하세요.
+          </p>
+        </div>
       </section>
 
       {pushStatusQuery.data && !pushStatusQuery.data.enabled ? (
-        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+        <div className="surface flex gap-3 border-amber-200 bg-amber-50/80 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
           <BellOff className="h-5 w-5 shrink-0" />
-          <p>
+          <p className="leading-5">
             알림이 꺼져 있어요. 설정에서 알림을 켜야 리마인더를 받을 수
             있습니다.
           </p>
         </div>
       ) : null}
 
-      <section className="space-y-3">
+      <section className="space-y-3" aria-label="예정된 리마인더">
         {reminders.map((reminder) => (
-          <article
-            className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-            key={reminder.id}
-          >
+          <article className="bookmark-card" key={reminder.id}>
             <div className="flex items-start gap-3">
-              <Clock className="mt-1 h-5 w-5 text-blue-600" />
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <Clock className="h-5 w-5" />
+              </span>
               <div className="min-w-0 flex-1">
                 <a
-                  className="font-medium hover:text-blue-600"
+                  className="font-semibold tracking-[-0.01em] hover:text-blue-600"
                   href={reminder.bookmark.url}
                   rel="noreferrer"
                   target="_blank"
                 >
                   {reminder.bookmark.title ?? reminder.bookmark.url}
                 </a>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-sm font-medium text-blue-600 dark:text-blue-400">
                   {new Date(reminder.remindAt).toLocaleString()}
                 </p>
                 {reminder.note ? (
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                     {reminder.note}
                   </p>
                 ) : null}
@@ -92,11 +94,15 @@ function RemindersPage() {
           <p className="py-8 text-center text-zinc-500">불러오는 중…</p>
         ) : null}
         {!remindersQuery.isLoading && reminders.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
-            <Clock className="mx-auto h-10 w-10 text-zinc-400" />
-            <p className="mt-4 font-medium">예정된 리마인더가 없습니다</p>
+          <div className="empty-state">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Clock className="h-7 w-7" />
+            </span>
+            <p className="mt-4 text-lg font-semibold">
+              예정된 리마인더가 없어요
+            </p>
             <p className="mt-2 text-sm text-zinc-500">
-              북마크 카드 메뉴에서 리마인더를 설정하세요.
+              라이브러리의 북마크 메뉴에서 시간을 정할 수 있습니다.
             </p>
           </div>
         ) : null}

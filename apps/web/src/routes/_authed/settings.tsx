@@ -8,7 +8,7 @@ import {
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bell, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Bell, Copy, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,7 @@ import {
   testAiProviderConnection,
   updateCategory,
 } from "../../lib/api-client";
+import { performLogout } from "../../lib/logout";
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -41,19 +42,43 @@ const colors = categoryColorSchema.options;
 
 function SettingsPage() {
   return (
-    <main className="space-y-6">
-      <section>
-        <h1 className="text-2xl font-bold">설정</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          카테고리와 테마를 관리합니다.
-        </p>
+    <main className="settings-page page-stack">
+      <section className="settings-header page-header">
+        <div>
+          <p className="page-eyebrow">Preferences</p>
+          <h1 className="page-title">설정</h1>
+          <p className="page-subtitle">
+            알림, 분류, 연결과 화면 표시를 내 방식에 맞춥니다.
+          </p>
+        </div>
       </section>
       <NotificationSection />
       <CategorySection />
       <ApiKeySection />
       <AiSection />
       <ThemeSection />
+      <LogoutSection />
     </main>
+  );
+}
+
+export function LogoutSection() {
+  const queryClient = useQueryClient();
+
+  return (
+    <section className="p-5">
+      <h2 className="font-bold">계정</h2>
+      <p className="mt-1 text-sm text-zinc-500">
+        이 기기에서 계정 연결을 종료합니다.
+      </p>
+      <button
+        className="btn-secondary mt-4 text-red-600 dark:text-red-400"
+        onClick={() => void performLogout(queryClient)}
+        type="button"
+      >
+        <LogOut className="h-4 w-4" /> 로그아웃
+      </button>
+    </section>
   );
 }
 
@@ -737,6 +762,14 @@ function ThemeSection() {
       "dark",
       next === "dark" || (next === "system" && prefersDark),
     );
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        "content",
+        document.documentElement.classList.contains("dark")
+          ? "#000000"
+          : "#f2f2f7",
+      );
   }
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

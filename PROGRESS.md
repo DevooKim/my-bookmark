@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: AI 한국어 요약 제목·태그 기능 자동 검증 및 원격 마이그레이션 완료. 다음: 브라우저 수동 검증 + 배포처 확정
-- **최종 갱신**: 2026-07-12 (AI 요약 제목·태그 Task 8 자동 검증 및 원격 마이그레이션)
+- **현재 Phase**: Apple 스타일 반응형 UI 후속 개편 완료. 다음: 인증된 화면 실계정 시각 회귀 + 배포처 확정
+- **최종 갱신**: 2026-07-12 (데스크톱 햄버거·모달 소재 후속 개편)
 
 ## Phase 체크리스트
 
@@ -61,6 +61,12 @@
 | 2026-07-11 | 패키지 매니저를 Bun 1.3.14 workspaces로 교체하고 `bun.lock`을 단일 잠금 파일로 사용한다. Nitro nightly의 `nitro` npm alias 자기 import를 지원하기 위해 Bun linker는 hoisted로 고정한다. | Bun isolated linker에서는 alias가 앱 위치에만 생겨 Nitro 패키지 내부의 `import "nitro"`가 실패했다. hoisted linker가 pnpm과 동일하게 루트 alias를 제공하며 frozen install과 web build가 통과한다. |
 | 2026-07-11 | Node 기반 경로는 Node.js 24 LTS로 고정하고, Vercel web Functions만 `bunVersion: "1.x"` Beta를 사용한다. Docker web은 `NITRO_PRESET=node-server`, Vercel 빌드는 환경 자동 감지 `preset: vercel`을 사용한다. | 사용자가 Node 24와 Vercel Bun Beta를 선택했다. 패키지 매니저, Docker 런타임, Vercel 함수 런타임을 명시적으로 분리해 각 배포 산출물의 런타임을 일치시킨다. |
 | 2026-07-11 | 루트와 모든 workspace의 TypeScript를 정확히 7.0.2로 고정하고 web의 Node 타입 선언을 24 계열로 맞춘다. | `latest`와 `^6.0.2`가 섞여 workspace별 compiler가 갈릴 수 있었다. 단일 정확 버전으로 재현성을 확보하고 Node 24 런타임과 선언 타입을 일치시킨다. |
+| 2026-07-12 | UI 개편은 새 애니메이션 의존성 없이 CSS semantic class와 기존 Tailwind v4만 사용하고, 반투명 소재는 헤더·탭 바·시트·팝오버에만 제한했다. | 기존 API/query/mutation/virtualization을 보존하면서 Apple식 공간감·즉시 press feedback·safe-area·reduced motion/transparency/contrast 대응을 추가하기 위함. 승인 설계(`docs/superpowers/specs/2026-07-12-apple-ui-redesign-design.md`) 준수. |
+| 2026-07-12 | 모바일 상단 헤더와 라이브러리 hero를 제거해 검색·필터부터 시작하고, 추가 액션은 모바일 하단 바와 데스크톱 우측 하단 원형 floating 버튼으로 분리했다. 태그는 모바일 읽기 전용·데스크톱 검색 버튼 모두 11px로 축소하고 대비를 보정했다. | 작은 화면의 중복 chrome과 카드 밀도를 줄이면서 생성 액션은 각 viewport의 도달하기 쉬운 위치에 유지하라는 사용자 요청 반영. |
+| 2026-07-12 | 북마크 팝오버를 외부 클릭·Escape·액션 선택으로 닫고, 메뉴의 직접 카테고리 변경을 제거해 편집 폼에 통합했다. 추가 모달은 불투명 surface로 바꾸고 설정 최하단에 공용 로그아웃을 추가했다. | 팝오버가 남는 원인을 완전한 dismissal lifecycle 부재로 확인해 수정하고, 편집 진입점을 단일화하며 민감한 폼의 가독성과 모바일 로그아웃 접근성을 높이기 위함. |
+| 2026-07-12 | 데스크톱의 중앙 nav와 독립 로그아웃을 우측 햄버거 팝오버로 통합하고, 추가·편집 모달은 불투명 surface와 3px backdrop-blur scrim 조합으로 통일했다. | 헤더의 시각 요소를 줄이고 계정 액션을 한곳에 모으며, 폼은 선명하게 유지하되 모달 바깥 맥락만 약하게 분리하라는 사용자 요청 반영. |
+| 2026-07-12 | 데스크톱 팝오버를 `role="menu"`가 아니라 `aria-label`이 붙은 `<nav>`(disclosure/group) + `aria-expanded`/`aria-controls` 트리거로 선언하고, 액션 실행·Escape 모두에서 트리거로 focus를 복원했다. | 화살표 키 roving focus를 구현하지 않았으므로 ARIA menu로 선언하면 실제 동작과 어긋난 키보드 계약을 스크린리더에 약속하게 된다. 실제로 구현한 disclosure 동작에 맞춰 정정. |
+| 2026-07-12 | 모달 scrim을 focus trap 밖의 가짜 버튼 대신 `onPointerDown` target-check로 닫는 pointer 전용 배경 경계로 두고, 닫기는 Escape·명시적 닫기 버튼이 담당하게 했다. 또한 `prefers-reduced-transparency: reduce`에서 `.dialog-scrim-blur`를 포함해 backdrop blur를 확실히 끄도록 했다. | 배경 버튼은 tab 순서에 잡히지 않는 조작 불가 요소가 되어 스크린리더 사용자를 혼란시킨다. 닫기는 키보드로 도달 가능한 경로(Escape·버튼)로만 노출하고, 투명도 축소 사용자에게 새 scrim blur가 남지 않게 한다. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -113,6 +119,10 @@
 - AI 한국어 요약 제목·태그 Task 8 자동 검증 완료: 전체 검증 루프가 통과했다. 실제 Gemini가 `category.confidence`를 생략해 분류가 실패한 사례를 확인한 뒤, 사용되지 않는 confidence를 0으로 기본 처리하는 회귀 테스트를 추가했다. Anthropic/OpenAI의 새 응답 E2E는 아직 확인하지 않았다. Biome은 API seed script의 기존 info 1건과 web build의 기존 dynamic import 경고를 출력하지만 모두 exit 0이다.
 - Supabase `0004_bookmark_tags.sql` 적용 완료: dry-run에서 해당 migration 1개만 확인 후 원격 push했다. CLI가 적용 뒤 pg-delta migration catalog cache의 인증서 파일 누락 경고를 출력했지만 push는 완료됐고, MCP에서 migration `0004 bookmark_tags`, `bookmarks.tags` ARRAY/NOT NULL/`'{}'::text[]`, `public.search_bookmarks` 7-인자 함수를 확인했다. `information_schema.routines`에서는 set-returning SQL 함수가 조회되지 않아 `pg_proc`로 존재와 시그니처를 재확인했다.
 - AI 요약 제목·태그 브라우저/수동 UI 검증은 coordinator가 수행 예정이며 이번 작업에서는 실행하거나 완료로 주장하지 않는다. 남은 확인: 실제 AI 생성의 40자 이하 한국어 제목·3~5개 태그, 태그 클릭 검색, 편집 후 유지, 카테고리+태그 복합 필터.
+- Apple 스타일 UI 개편 자동 검증 완료: 시스템 폰트/크기별 tracking, glass header와 모바일 safe-area tab bar, semantic surface/button/input/chip, 모바일 sheet·데스크톱 dialog, 즉시 press feedback, light/dark token, `prefers-reduced-motion`/`prefers-reduced-transparency`/`prefers-contrast` 대응을 적용했다. 라이브러리 도구의 접근 가능한 이름, 카드 정보 순서, dialog 이름·필드 label·Escape/focus trap을 RED→GREEN 테스트로 추가했다. `bun run typecheck`, `bun run lint`, 전체 148 테스트, `bun run build`가 통과했다.
+- Apple 스타일 UI 프로덕션 브라우저 검증: `/login`을 375×812와 1280×900에서 캡처했고 가로 overflow 없음, 모바일 form 335px/heading 293px, 데스크톱 form 432px를 확인했다. 콘솔 error/warning은 0건이다. 인증 자격 증명을 도구에 제공하지 않아 라이브러리·리마인더·설정의 실데이터 화면은 이번 작업에서 자동 캡처하지 않았으며, 해당 구조와 동작은 51개 web 테스트 및 프로덕션 빌드로 검증했다.
+- 반응형 UI 후속 수정 자동 검증 완료: 모바일 상단 헤더/라이브러리 hero 제거, 검색 중심 배치, 데스크톱 floating 추가 버튼과 햄버거 메뉴, 설정 최하단 로그아웃, 추가·편집 모달 불투명화·약한 scrim blur·바깥 클릭 닫힘, 팝오버 외부 클릭·Escape·액션 종료와 포커스 복원, 편집 폼 카테고리 변경, 양 breakpoint 11px 태그를 적용했다. RED→GREEN 회귀 테스트를 추가해 web 59개·전체 156개 테스트와 typecheck, lint, 전체 프로덕션 build가 통과했다. API seed script의 기존 info 1건과 web build의 기존 dynamic import 경고는 exit 0이다.
+- 접근성 후속 정정 자동 검증 완료: 데스크톱 팝오버를 ARIA menu가 아닌 disclosure/group(`<nav aria-label>` + `aria-expanded`/`aria-controls`)으로 정정하고 액션·Escape 모두에서 트리거 focus를 복원했으며(`aria-haspopup` 부재를 `-route.test.tsx`·`-index.test.tsx`가 단언), 모달 scrim은 focus trap 밖 가짜 버튼 대신 `onPointerDown` target-check pointer 경계로 두고 Escape·닫기 버튼으로만 닫으며, `prefers-reduced-transparency: reduce`에 `.dialog-scrim-blur`를 포함해 새 scrim blur를 껐다. `bun run typecheck`, `bun run lint`, 전체 156개 테스트(web 59), `bun run build`가 재통과했다. API seed script info 1건·web build dynamic import 경고는 기존 항목으로 exit 0이다.
 
 ## 배포 후 TODO
 

@@ -4,7 +4,7 @@ import type {
   CreateBookmarkRequest,
 } from "@my-bookmark/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { cloneElement, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ApiClientError,
@@ -70,7 +70,7 @@ export function BookmarkDialog({
   }
 
   return (
-    <Dialog title="북마크 추가" onClose={onClose}>
+    <Dialog opaque title="북마크 추가" onClose={onClose}>
       <form className="space-y-4" onSubmit={submit}>
         <Field label="URL">
           <input
@@ -169,31 +169,36 @@ export function BookmarkDialog({
 
 export function EditBookmarkDialog({
   bookmark,
+  categories,
   onClose,
 }: {
   bookmark: Bookmark;
+  categories: CategoryWithCount[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(bookmark.title ?? "");
   const [description, setDescription] = useState(bookmark.description ?? "");
   const [tags, setTags] = useState(bookmark.tags);
+  const [categoryId, setCategoryId] = useState(bookmark.categoryId ?? "");
   const mutation = useMutation({
     mutationFn: () =>
       updateBookmark(bookmark.id, {
         title: title || null,
         description: description || null,
         tags,
+        categoryId: categoryId || null,
       }),
     onSuccess: () => {
       toast.success("수정했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
       onClose();
     },
     onError: () => toast.error("수정하지 못했어요"),
   });
   return (
-    <Dialog title="북마크 편집" onClose={onClose}>
+    <Dialog opaque title="북마크 편집" onClose={onClose}>
       <form
         className="space-y-4"
         onSubmit={(event) => {
@@ -214,6 +219,20 @@ export function EditBookmarkDialog({
             onChange={(e) => setDescription(e.target.value)}
             value={description}
           />
+        </Field>
+        <Field label="카테고리">
+          <select
+            className="input"
+            onChange={(event) => setCategoryId(event.target.value)}
+            value={categoryId}
+          >
+            <option value="">미분류</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
         </Field>
         <TagInput value={tags} onChange={setTags} />
         <button
@@ -306,18 +325,87 @@ function Dialog({
   title,
   children,
   onClose,
+  opaque = false,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  opaque?: boolean;
 }) {
+  const titleId = `dialog-${title.replaceAll(" ", "-")}`;
+  const surfaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const initialFocus =
+      surfaceRef.current?.querySelector<HTMLElement>(
+        "input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
+      ) ??
+      surfaceRef.current?.querySelector<HTMLElement>("button:not([disabled])");
+    initialFocus?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, []);
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusable = Array.from(
+      surfaceRef.current?.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]",
+      ) ?? [],
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-4">
-      <div className="w-full rounded-t-3xl bg-white p-5 shadow-xl dark:bg-zinc-900 sm:max-w-md sm:rounded-3xl">
+    <div
+      className="dialog-scrim dialog-scrim-blur"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className={`dialog-surface relative z-10${opaque ? " dialog-surface-opaque" : ""}`}
+        onKeyDown={handleKeyDown}
+        ref={surfaceRef}
+        role="dialog"
+        tabIndex={-1}
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 className="text-xl font-bold tracking-tight" id={titleId}>
+            {title}
+          </h2>
           <button
-            className="text-sm text-zinc-500"
+            className="min-h-11 rounded-xl px-2 text-sm font-medium text-blue-600"
             onClick={onClose}
             type="button"
           >
@@ -335,12 +423,14 @@ function Field({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: React.ReactElement<{ id?: string }>;
 }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? generatedId;
   return (
-    <div className="block space-y-1 text-sm font-medium">
+    <label className="block space-y-1 text-sm font-medium" htmlFor={controlId}>
       <span>{label}</span>
-      {children}
-    </div>
+      {cloneElement(children, { id: controlId })}
+    </label>
   );
 }

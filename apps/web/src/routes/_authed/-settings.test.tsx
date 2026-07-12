@@ -24,6 +24,7 @@ vi.mock("../../lib/api-client", () => ({
   testAiProviderConnection: vi.fn(),
   updateCategory: vi.fn(),
 }));
+vi.mock("../../lib/logout", () => ({ performLogout: vi.fn() }));
 
 import {
   deleteAiProviderKey,
@@ -32,7 +33,8 @@ import {
   selectAiModel,
   testAiProviderConnection,
 } from "../../lib/api-client";
-import { AiSection, copyApiKeyToClipboard } from "./settings";
+import { performLogout } from "../../lib/logout";
+import { AiSection, copyApiKeyToClipboard, LogoutSection } from "./settings";
 
 afterEach(() => {
   cleanup();
@@ -60,6 +62,19 @@ function renderAiSection() {
     </QueryClientProvider>,
   );
 }
+
+it("logs out from the bottom of settings", () => {
+  const queryClient = new QueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <LogoutSection />
+    </QueryClientProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "로그아웃" }));
+
+  expect(performLogout).toHaveBeenCalledWith(queryClient);
+});
 
 describe("AI settings", () => {
   it("shows the model selector first inside a rounded card", async () => {
