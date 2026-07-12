@@ -1,16 +1,22 @@
 import {
+  API_ERROR_CODES,
   aiConnectionTestResponseSchema,
   aiProviderNameSchema,
   aiStatusResponseSchema,
+  aiUsageQuerySchema,
+  aiUsageResponseSchema,
   saveAiProviderKeyRequestSchema,
   selectAiModelRequestSchema,
 } from "@my-bookmark/shared";
 import { type RequestHandler, Router } from "express";
+import { supabaseAdmin } from "../lib/supabase";
 import { getUserId, requireAuth } from "../middleware/auth";
+import { HttpError } from "../middleware/error";
 import {
   type AiSettingsService,
   aiSettingsService,
 } from "../services/ai-provider";
+import { listAiUsageEvents } from "../services/ai-usage";
 
 export function createAiRouter(
   service: AiSettingsService,
@@ -53,7 +59,28 @@ export function createAiRouter(
     response.json(aiStatusResponseSchema.parse(status));
   });
 
+  router.get("/ai/usage", async (request, response) => {
+    const query = aiUsageQuerySchema.parse(request.query);
+    const items = await listAiUsageEvents(
+      getUsageDb(),
+      getUserId(request),
+      query.days,
+    );
+    response.json(aiUsageResponseSchema.parse({ days: query.days, items }));
+  });
+
   return router;
+}
+
+function getUsageDb() {
+  if (!supabaseAdmin) {
+    throw new HttpError(
+      500,
+      API_ERROR_CODES.INTERNAL,
+      "Database is not configured",
+    );
+  }
+  return supabaseAdmin;
 }
 
 export const aiRouter = createAiRouter(aiSettingsService);

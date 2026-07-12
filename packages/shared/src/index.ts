@@ -256,6 +256,27 @@ export const aiConnectionTestResponseSchema = z.object({
   ok: z.boolean(),
 });
 
+export const aiUsageStatusSchema = z.enum(["success", "failed"]);
+export const aiUsageEventSchema = z.object({
+  id: uuidSchema,
+  provider: aiProviderNameSchema,
+  model: z.string(),
+  bookmarkId: uuidSchema.nullable(),
+  status: aiUsageStatusSchema,
+  errorCode: z.string().nullable(),
+  durationMs: z.number().int().nullable(),
+  createdAt: isoDateTimeSchema,
+});
+export const aiUsageQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(30),
+});
+export const aiUsageResponseSchema = z.object({
+  days: z.number().int(),
+  items: z.array(aiUsageEventSchema),
+});
+export type AiUsageEvent = z.infer<typeof aiUsageEventSchema>;
+export type AiUsageResponse = z.infer<typeof aiUsageResponseSchema>;
+
 export const createApiKeyRequestSchema = z.object({
   name: z.string().trim().min(1).max(80),
 });

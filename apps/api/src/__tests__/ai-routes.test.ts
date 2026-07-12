@@ -6,6 +6,16 @@ import { errorMiddleware } from "../middleware/error";
 import { createAiRouter } from "../routes/ai";
 import type { AiSettingsService } from "../services/ai-provider";
 
+const usageMocks = vi.hoisted(() => ({
+  select: vi.fn(),
+}));
+
+vi.mock("../lib/supabase", () => ({
+  supabaseAdmin: {
+    from: vi.fn(() => ({ select: usageMocks.select })),
+  },
+}));
+
 const userId = "11111111-1111-4111-8111-111111111111";
 const status = {
   provider: "gemini" as const,
@@ -144,5 +154,41 @@ describe("AI settings routes", () => {
   it("requires Bearer authentication", async () => {
     const { app } = setup();
     expect((await request(app).get("/api/ai")).status).toBe(401);
+  });
+
+  it("returns usage events for the requested window", async () => {
+    const rows = [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        user_id: userId,
+        provider: "gemini",
+        model: "gemini-flash-lite-latest",
+        bookmark_id: null,
+        status: "success",
+        error_code: null,
+        duration_ms: 700,
+        created_at: "2026-07-12T10:00:00.000Z",
+      },
+    ];
+    const limit = vi.fn().mockResolvedValue({ data: rows, error: null });
+    const order = vi.fn(() => ({ limit }));
+    const gte = vi.fn(() => ({ order }));
+    const eq = vi.fn(() => ({ gte }));
+    usageMocks.select.mockReturnValue({ eq });
+
+    const { app } = setup();
+    const response = await request(app)
+      .get("/api/ai/usage?days=7")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.days).toBe(7);
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0]).toMatchObject({
+      model: "gemini-flash-lite-latest",
+      status: "success",
+      durationMs: 700,
+    });
+    expect(limit).toHaveBeenCalledWith(1000);
   });
 });

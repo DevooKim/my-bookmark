@@ -12,6 +12,7 @@ import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
 import { getAiProviderChain } from "../services/ai-provider";
+import { createAiUsageRecorder } from "../services/ai-usage";
 import {
   type AiProviderCandidate,
   categorizeBookmark,
@@ -306,7 +307,13 @@ export async function categorizeBookmarkForUser({
   } catch (error) {
     console.warn("AI provider credentials could not be loaded", error);
   }
-  await categorize({ db, userId, bookmarkId, candidates });
+  await categorize({
+    db,
+    userId,
+    bookmarkId,
+    candidates,
+    recordUsage: createAiUsageRecorder(db, userId),
+  });
 }
 
 export async function assertCategoryBelongsToUser(

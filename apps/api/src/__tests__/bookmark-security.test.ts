@@ -80,6 +80,7 @@ describe("bookmark route security helpers", () => {
       userId,
       bookmarkId,
       candidates,
+      recordUsage: expect.any(Function),
     });
   });
 
@@ -103,6 +104,7 @@ describe("bookmark route security helpers", () => {
       userId,
       bookmarkId,
       candidates: [],
+      recordUsage: expect.any(Function),
     });
   });
 
