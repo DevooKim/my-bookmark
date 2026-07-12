@@ -403,7 +403,7 @@ function BookmarkCard({
             {title}
           </a>
           {bookmark.description ? (
-            <p className="mt-2 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
               {bookmark.description}
             </p>
           ) : null}

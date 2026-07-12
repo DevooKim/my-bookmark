@@ -171,6 +171,7 @@ async function markDone(
     .update({
       category_id: categoryId,
       title: result.summaryTitle,
+      ...(result.summary ? { description: result.summary } : {}),
       tags: result.tags,
       ai_status: "done",
     })

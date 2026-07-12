@@ -27,6 +27,7 @@ export function parseCategorizeResponse(value: unknown): CategorizeResult {
 export const analyzeResponseSchema = z.object({
   category: categorizeResponseSchema,
   summaryTitle: z.string().trim().min(1).max(40),
+  summary: z.string().trim().min(1).max(300).nullish(),
   tags: z
     .array(z.string().trim().min(1).max(20))
     .min(3)
@@ -60,6 +61,7 @@ export const jsonSchema = {
   properties: {
     category: categoryJsonSchema,
     summaryTitle: { type: "string" as const, minLength: 1, maxLength: 40 },
+    summary: { type: "string" as const, minLength: 1, maxLength: 300 },
     tags: {
       type: "array" as const,
       items: { type: "string" as const, minLength: 1, maxLength: 20 },
@@ -68,7 +70,7 @@ export const jsonSchema = {
       uniqueItems: true,
     },
   },
-  required: ["category", "summaryTitle", "tags"],
+  required: ["category", "summaryTitle", "summary", "tags"],
   additionalProperties: false,
 };
 
@@ -83,6 +85,7 @@ export function systemPrompt(): string {
     "5. confidence는 0~1이다.",
     "6. summaryTitle은 원문을 핵심만 요약한 한국어 제목 스타일로 작성하며 최대 40자다.",
     "7. tags는 중복 없는 한국어 태그 3~5개로 작성하며 각 태그는 최대 20자다. 고유 기술명은 원문을 허용한다.",
+    "8. summary는 원문의 핵심을 한국어 1~3문장으로 요약한다. 불필요한 수식 없이 정보만 담고, 전체 300자 이내로 한다.",
   ].join("\n");
 }
 

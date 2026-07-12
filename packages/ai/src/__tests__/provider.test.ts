@@ -58,6 +58,8 @@ const expected = {
     confidence: 0.91,
   },
   summaryTitle: "React 19 핵심 변경 사항",
+  summary:
+    "React 19에서 달라진 핵심 API를 정리한다. Actions와 use 훅 중심으로 마이그레이션 포인트를 짚는다.",
   tags: ["React", "프론트엔드", "자바스크립트"],
 };
 
@@ -96,6 +98,9 @@ describe("AI provider contract", () => {
       ...expected,
       category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
     });
+    expect(
+      parseAnalyzeResponse({ ...expected, summary: "가".repeat(301) }),
+    ).toBeNull();
     warn.mockRestore();
   });
 

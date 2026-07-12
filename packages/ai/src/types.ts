@@ -14,6 +14,7 @@ export type CategorizeResult =
 export interface AnalyzeResult {
   category: CategorizeResult;
   summaryTitle: string;
+  summary?: string | null | undefined;
   tags: string[];
 }
 

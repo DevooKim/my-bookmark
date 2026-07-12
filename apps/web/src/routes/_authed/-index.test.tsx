@@ -250,6 +250,26 @@ describe("HomePage", () => {
       metadata.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
   });
+
+  it("renders the AI summary clamped to three lines", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [
+        {
+          ...bookmark,
+          description: "요약 첫 문장. 요약 둘째 문장. 요약 셋째 문장.",
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderHome();
+
+    const summary = await screen.findByText(
+      "요약 첫 문장. 요약 둘째 문장. 요약 셋째 문장.",
+    );
+    expect(summary.className).toContain("line-clamp-3");
+  });
 });
 
 describe("BookmarkDialog", () => {

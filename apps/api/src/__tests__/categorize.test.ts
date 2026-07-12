@@ -74,6 +74,8 @@ class FakeDb {
 const analysis = (category: AnalyzeResult["category"]): AnalyzeResult => ({
   category,
   summaryTitle: "웹 접근성 실전 안내",
+  summary:
+    "웹 접근성의 핵심 원칙을 실무 예제로 설명한다. 폼 라벨과 키보드 내비게이션 개선 방법을 다룬다.",
   tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
 });
 
@@ -87,6 +89,26 @@ describe("applyCategorizeResult", () => {
       db.categories,
       analysis({ type: "none" }),
     );
+
+    expect(db.bookmarkUpdates).toEqual([
+      {
+        category_id: null,
+        title: "웹 접근성 실전 안내",
+        description:
+          "웹 접근성의 핵심 원칙을 실무 예제로 설명한다. 폼 라벨과 키보드 내비게이션 개선 방법을 다룬다.",
+        tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
+        ai_status: "done",
+      },
+    ]);
+  });
+
+  it("keeps the existing description when the AI omits summary", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(db, "user", "bookmark", db.categories, {
+      category: { type: "none" },
+      summaryTitle: "웹 접근성 실전 안내",
+      tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
+    });
 
     expect(db.bookmarkUpdates).toEqual([
       {
