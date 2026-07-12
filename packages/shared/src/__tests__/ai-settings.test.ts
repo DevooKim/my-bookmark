@@ -55,6 +55,7 @@ describe("AI settings schemas", () => {
         provider: "openai",
         model: "gpt-4o-mini",
         enabled: true,
+        modelOrder: ["gpt-4o-mini"],
         providers: {
           gemini: { configured: false },
           anthropic: { configured: false },

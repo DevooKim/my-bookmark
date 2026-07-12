@@ -28,11 +28,27 @@ interface BookmarkCategorizeDb {
   from(table: string): unknown;
 }
 
+export interface AiProviderCandidate {
+  provider: "gemini" | "anthropic" | "openai";
+  model: string;
+  instance: AiProvider;
+}
+
+export interface AiUsageEventInput {
+  provider: AiProviderCandidate["provider"];
+  model: string;
+  bookmarkId: string | null;
+  status: "success" | "failed";
+  errorCode: string | null;
+  durationMs: number;
+}
+
 interface CategorizeOptions {
   db: BookmarkCategorizeDb;
   userId: string;
   bookmarkId: string;
-  provider: AiProvider | null;
+  candidates: AiProviderCandidate[];
+  recordUsage?: (event: AiUsageEventInput) => Promise<void>;
   metadataFetcher?: (url: string) => Promise<PageMetadata>;
 }
 
@@ -40,7 +56,8 @@ export async function categorizeBookmark({
   db,
   userId,
   bookmarkId,
-  provider,
+  candidates,
+  recordUsage,
   metadataFetcher = fetchMetadata,
 }: CategorizeOptions): Promise<void> {
   try {
@@ -62,20 +79,59 @@ export async function categorizeBookmark({
       og_image_url: metadata.ogImageUrl,
     });
 
-    if (!provider) {
+    if (candidates.length === 0) {
       await markFailed(db, userId, bookmarkId);
       return;
     }
 
     const categories = await loadCategories(db, userId);
-    const result = await provider.categorize({
+    const input = {
       url: bookmark.url,
       title,
       ...(description ? { description } : {}),
       ...(siteName ? { siteName } : {}),
       existingCategories: categories,
-    });
-    await applyCategorizeResult(db, userId, bookmarkId, categories, result);
+    };
+
+    for (const candidate of candidates) {
+      const startedAt = Date.now();
+      let result: AnalyzeResult;
+      try {
+        result = await candidate.instance.categorize(input);
+      } catch (error) {
+        console.warn(
+          `AI model ${candidate.model} failed, trying next candidate`,
+          error,
+        );
+        await recordUsage?.({
+          provider: candidate.provider,
+          model: candidate.model,
+          bookmarkId,
+          status: "failed",
+          errorCode: extractErrorCode(error),
+          durationMs: Date.now() - startedAt,
+        });
+        continue;
+      }
+      await recordUsage?.({
+        provider: candidate.provider,
+        model: candidate.model,
+        bookmarkId,
+        status: "success",
+        errorCode: null,
+        durationMs: Date.now() - startedAt,
+      });
+      await applyCategorizeResult(
+        db,
+        userId,
+        bookmarkId,
+        categories,
+        result,
+        candidate.model,
+      );
+      return;
+    }
+    await markFailed(db, userId, bookmarkId);
   } catch (error) {
     console.warn("AI categorization failed", error);
     await markFailed(db, userId, bookmarkId).catch((markError) =>
@@ -84,12 +140,26 @@ export async function categorizeBookmark({
   }
 }
 
+function extractErrorCode(error: unknown): string {
+  if (error && typeof error === "object") {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      return String(status);
+    }
+    if (error instanceof Error && error.name !== "Error") {
+      return error.name.slice(0, 40);
+    }
+  }
+  return "unknown";
+}
+
 export async function applyCategorizeResult(
   db: BookmarkCategorizeDb,
   userId: string,
   bookmarkId: string,
   categories: CategoryRow[],
   result: AnalyzeResult,
+  aiModel: string,
 ): Promise<void> {
   let categoryId: string | null = null;
 
@@ -106,7 +176,7 @@ export async function applyCategorizeResult(
     categoryId = current?.id ?? (await createCategory(db, userId, name));
   }
 
-  await markDone(db, userId, bookmarkId, categoryId, result);
+  await markDone(db, userId, bookmarkId, categoryId, result, aiModel);
 }
 
 async function loadBookmark(
@@ -166,6 +236,7 @@ async function markDone(
   bookmarkId: string,
   categoryId: string | null,
   result: AnalyzeResult,
+  aiModel: string,
 ): Promise<void> {
   const { error } = await (db.from("bookmarks") as BookmarkUpdateTable)
     .update({
@@ -174,6 +245,7 @@ async function markDone(
       ...(result.summary ? { description: result.summary } : {}),
       tags: result.tags,
       ai_status: "done",
+      ai_model: aiModel,
     })
     .eq("user_id", userId)
     .eq("id", bookmarkId)

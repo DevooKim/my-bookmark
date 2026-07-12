@@ -20,6 +20,7 @@ export interface AnalyzeResult {
 
 export interface AiProvider {
   readonly name: string;
+  readonly model: string;
   categorize(input: CategorizeInput): Promise<AnalyzeResult>;
   validateConnection(): Promise<void>;
 }

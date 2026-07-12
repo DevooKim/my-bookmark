@@ -67,6 +67,7 @@ describe("AI provider contract", () => {
   it("describes a categorize interface", async () => {
     const provider: AiProvider = {
       name: "fake",
+      model: "fake-model",
       categorize: async () => expected,
       validateConnection: async () => undefined,
     };

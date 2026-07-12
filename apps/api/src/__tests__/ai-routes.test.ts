@@ -11,6 +11,7 @@ const status = {
   provider: "gemini" as const,
   model: "gemini-flash-lite-latest" as const,
   enabled: false,
+  modelOrder: [],
   providers: {
     gemini: { configured: false },
     anthropic: { configured: true },
@@ -25,6 +26,8 @@ function setup() {
     selectModel: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     deleteKey: vi.fn().mockResolvedValue(status),
     getProvider: vi.fn(),
+    getProviderChain: vi.fn().mockResolvedValue([]),
+    reorderModels: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     testConnection: vi.fn().mockResolvedValue(true),
     invalidate: vi.fn(),
   };

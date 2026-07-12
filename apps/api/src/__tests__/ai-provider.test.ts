@@ -51,6 +51,7 @@ describe("AI settings service", () => {
       provider: "gemini",
       model: "gemini-flash-lite-latest",
       enabled: false,
+      modelOrder: [],
       providers: {
         gemini: { configured: false },
         anthropic: { configured: false },
@@ -104,17 +105,16 @@ describe("AI settings service", () => {
     expect(status.enabled).toBe(false);
   });
 
-  it("caches providers and invalidates the cache after settings changes", async () => {
+  it("caches provider chains and invalidates the cache after settings changes", async () => {
     const { provider, providerFactory, service } = setup();
     await service.saveKey(userId, "anthropic", "key-one");
-    await service.selectModel(userId, {
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
+    await service.reorderModels(userId, {
+      models: ["claude-haiku-4-5", "claude-sonnet-4-6"],
     });
 
     await expect(service.getProvider(userId)).resolves.toBe(provider);
     await expect(service.getProvider(userId)).resolves.toBe(provider);
-    expect(providerFactory).toHaveBeenCalledTimes(1);
+    expect(providerFactory).toHaveBeenCalledTimes(2);
     expect(providerFactory).toHaveBeenCalledWith({
       provider: "anthropic",
       apiKey: "key-one",
@@ -122,16 +122,12 @@ describe("AI settings service", () => {
     });
 
     await service.saveKey(userId, "anthropic", "key-two");
-    await service.selectModel(userId, {
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-    });
     await service.getProvider(userId);
-    expect(providerFactory).toHaveBeenCalledTimes(2);
-    expect(providerFactory).toHaveBeenLastCalledWith({
+    expect(providerFactory).toHaveBeenCalledTimes(4);
+    expect(providerFactory).toHaveBeenCalledWith({
       provider: "anthropic",
       apiKey: "key-two",
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5",
     });
   });
 
@@ -162,5 +158,81 @@ describe("AI settings service", () => {
       new Error("invalid key"),
     );
     await expect(service.testConnection(userId, "openai")).resolves.toBe(false);
+  });
+
+  it("builds the provider chain in the stored model_order across multiple providers", async () => {
+    const { service } = setup();
+    await service.saveKey(userId, "gemini", "gemini-key");
+    await service.saveKey(userId, "anthropic", "anthropic-key");
+    await service.reorderModels(userId, {
+      models: [
+        "claude-haiku-4-5",
+        "claude-sonnet-4-6",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+      ],
+    });
+
+    const chain = await service.getProviderChain(userId);
+
+    expect(chain.map((candidate) => candidate.model)).toEqual([
+      "claude-haiku-4-5",
+      "claude-sonnet-4-6",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ]);
+  });
+
+  it("excludes models whose provider has no configured key from the chain", async () => {
+    const { service } = setup();
+    await service.saveKey(userId, "gemini", "gemini-key");
+
+    const chain = await service.getProviderChain(userId);
+
+    expect(chain.map((candidate) => candidate.provider)).toEqual([
+      "gemini",
+      "gemini",
+    ]);
+    expect(chain.some((candidate) => candidate.provider === "anthropic")).toBe(
+      false,
+    );
+  });
+
+  it("rejects reordering unless the submitted models are exactly the usable set", async () => {
+    const { service } = setup();
+    await service.saveKey(userId, "gemini", "gemini-key");
+    await service.saveKey(userId, "anthropic", "anthropic-key");
+
+    await expect(
+      service.reorderModels(userId, {
+        models: ["gemini-flash-lite-latest"],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("syncs the provider and model columns to the first item on reorder success", async () => {
+    const { repository, service } = setup();
+    await service.saveKey(userId, "gemini", "gemini-key");
+    await service.saveKey(userId, "anthropic", "anthropic-key");
+
+    const status = await service.reorderModels(userId, {
+      models: [
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+      ],
+    });
+
+    expect(status.provider).toBe("anthropic");
+    expect(status.model).toBe("claude-sonnet-4-6");
+    expect(status.modelOrder).toEqual([
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ]);
+    expect(repository.rows.get(userId)?.provider).toBe("anthropic");
+    expect(repository.rows.get(userId)?.model).toBe("claude-sonnet-4-6");
   });
 });

@@ -23,6 +23,7 @@ interface BookmarkDbRow {
   category_id: string | null;
   tags: string[];
   ai_status: "idle" | "pending" | "done" | "failed";
+  ai_model: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +62,7 @@ export function mapBookmark(row: BookmarkDbRow): Bookmark {
     categoryId: row.category_id,
     tags: row.tags,
     aiStatus: row.ai_status,
+    aiModel: row.ai_model,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });

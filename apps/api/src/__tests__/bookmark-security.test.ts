@@ -54,9 +54,15 @@ describe("bookmark route security helpers", () => {
     ]);
   });
 
-  it("resolves the AI provider for the authenticated user", async () => {
-    const provider = { name: "fake", categorize: vi.fn() };
-    const providerResolver = vi.fn().mockResolvedValue(provider);
+  it("resolves the AI provider chain for the authenticated user", async () => {
+    const candidates = [
+      {
+        provider: "gemini" as const,
+        model: "gemini-flash-lite-latest",
+        instance: { name: "fake", categorize: vi.fn() },
+      },
+    ];
+    const chainResolver = vi.fn().mockResolvedValue(candidates);
     const categorize = vi.fn().mockResolvedValue(undefined);
     const db = { from: vi.fn() };
 
@@ -64,21 +70,21 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      providerResolver,
+      chainResolver,
       categorize,
     });
 
-    expect(providerResolver).toHaveBeenCalledWith(userId);
+    expect(chainResolver).toHaveBeenCalledWith(userId);
     expect(categorize).toHaveBeenCalledWith({
       db,
       userId,
       bookmarkId,
-      provider,
+      candidates,
     });
   });
 
-  it("continues categorization without a provider when credentials cannot be decrypted", async () => {
-    const providerResolver = vi
+  it("continues categorization with an empty chain when credentials cannot be decrypted", async () => {
+    const chainResolver = vi
       .fn()
       .mockRejectedValue(new Error("decrypt failed"));
     const categorize = vi.fn().mockResolvedValue(undefined);
@@ -88,7 +94,7 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      providerResolver,
+      chainResolver,
       categorize,
     });
 
@@ -96,7 +102,7 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      provider: null,
+      candidates: [],
     });
   });
 

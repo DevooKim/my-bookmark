@@ -58,6 +58,7 @@ export const bookmarkSchema = z.object({
   categoryId: uuidSchema.nullable(),
   tags: bookmarkTagsSchema,
   aiStatus: aiStatusSchema,
+  aiModel: z.string().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -216,6 +217,7 @@ export const aiStatusResponseSchema = z.object({
   provider: aiProviderNameSchema,
   model: aiModelIdSchema,
   enabled: z.boolean(),
+  modelOrder: z.array(aiModelIdSchema),
   providers: z.object({
     gemini: aiProviderStatusSchema,
     anthropic: aiProviderStatusSchema,
@@ -238,6 +240,17 @@ export const selectAiModelRequestSchema = z
       ),
     { message: "Model does not belong to provider", path: ["model"] },
   );
+export const reorderAiModelsRequestSchema = z
+  .object({
+    models: z.array(aiModelIdSchema).min(1).max(AI_MODEL_CATALOG.length),
+  })
+  .refine((value) => new Set(value.models).size === value.models.length, {
+    message: "models must be unique",
+    path: ["models"],
+  });
+export type ReorderAiModelsRequest = z.infer<
+  typeof reorderAiModelsRequestSchema
+>;
 export const aiConnectionTestResponseSchema = z.object({
   provider: aiProviderNameSchema,
   ok: z.boolean(),

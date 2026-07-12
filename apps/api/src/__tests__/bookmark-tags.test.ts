@@ -52,6 +52,7 @@ function bookmarkRow(overrides: Record<string, unknown> = {}) {
     category_id: null,
     tags: ["React", "개발"],
     ai_status: "idle",
+    ai_model: null,
     created_at: createdAt,
     updated_at: createdAt,
     ...overrides,

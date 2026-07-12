@@ -4,12 +4,14 @@ import {
   createAiProvider,
 } from "@my-bookmark/ai";
 import {
+  AI_MODEL_CATALOG,
   type AiModelId,
   type AiProviderName,
   type AiStatusResponse,
   API_ERROR_CODES,
   aiModelIdSchema,
   aiProviderNameSchema,
+  type ReorderAiModelsRequest,
   type SelectAiModelRequest,
 } from "@my-bookmark/shared";
 import { z } from "zod";
@@ -21,11 +23,13 @@ import {
 } from "../lib/secret-crypto";
 import { supabaseAdmin } from "../lib/supabase";
 import { HttpError } from "../middleware/error";
+import type { AiProviderCandidate } from "./categorize";
 
 const aiSettingsRowSchema = z.object({
   user_id: z.string().uuid(),
   provider: aiProviderNameSchema,
   model: aiModelIdSchema,
+  model_order: z.array(z.string()).default([]),
   gemini_api_key_encrypted: z.string().nullable(),
   anthropic_api_key_encrypted: z.string().nullable(),
   openai_api_key_encrypted: z.string().nullable(),
@@ -55,6 +59,11 @@ export interface AiSettingsService {
     provider: AiProviderName,
   ): Promise<AiStatusResponse>;
   getProvider(userId: string): Promise<AiProvider | null>;
+  getProviderChain(userId: string): Promise<AiProviderCandidate[]>;
+  reorderModels(
+    userId: string,
+    input: ReorderAiModelsRequest,
+  ): Promise<AiStatusResponse>;
   testConnection(userId: string, provider: AiProviderName): Promise<boolean>;
   invalidate(userId: string): void;
 }
@@ -68,6 +77,7 @@ interface AiSettingsServiceOptions {
 const emptyValues: AiSettingsValues = {
   provider: "gemini",
   model: "gemini-flash-lite-latest",
+  model_order: [],
   gemini_api_key_encrypted: null,
   anthropic_api_key_encrypted: null,
   openai_api_key_encrypted: null,
@@ -85,12 +95,23 @@ const keyColumns = {
   openai: "openai_api_key_encrypted",
 } as const satisfies Record<AiProviderName, keyof AiSettingsValues>;
 
+function effectiveModelOrder(values: AiSettingsValues): AiModelId[] {
+  const usable = AI_MODEL_CATALOG.filter(
+    (item) => values[keyColumns[item.provider]] !== null,
+  ).map((item) => item.model as AiModelId);
+  const stored = values.model_order.filter((model): model is AiModelId =>
+    usable.some((usableModel) => usableModel === model),
+  );
+  const missing = usable.filter((model) => !stored.includes(model));
+  return [...stored, ...missing];
+}
+
 export function createAiSettingsService({
   repository,
   cipher,
   providerFactory = createAiProvider,
 }: AiSettingsServiceOptions): AiSettingsService {
-  const providerCache = new Map<string, AiProvider | null>();
+  const providerCache = new Map<string, AiProviderCandidate[]>();
 
   async function loadValues(userId: string): Promise<AiSettingsValues> {
     const row = await repository.get(userId);
@@ -110,7 +131,8 @@ export function createAiSettingsService({
     return {
       provider: values.provider,
       model: values.model,
-      enabled: configured[values.provider],
+      enabled: effectiveModelOrder(values).length > 0,
+      modelOrder: effectiveModelOrder(values),
       providers: {
         gemini: { configured: configured.gemini },
         anthropic: { configured: configured.anthropic },
@@ -156,20 +178,65 @@ export function createAiSettingsService({
       return toStatus(savedValues);
     },
     async getProvider(userId) {
-      if (providerCache.has(userId)) {
-        return providerCache.get(userId) ?? null;
+      return (await this.getProviderChain(userId))[0]?.instance ?? null;
+    },
+    async getProviderChain(userId) {
+      const cached = providerCache.get(userId);
+      if (cached) {
+        return cached;
       }
       const values = await loadValues(userId);
-      const encryptedKey = values[keyColumns[values.provider]];
-      const provider = encryptedKey
-        ? providerFactory({
-            provider: values.provider,
-            model: values.model,
-            apiKey: cipher.decrypt(encryptedKey),
-          })
-        : null;
-      providerCache.set(userId, provider);
-      return provider;
+      const chain = effectiveModelOrder(values).flatMap((model) => {
+        const item = AI_MODEL_CATALOG.find((entry) => entry.model === model);
+        const encryptedKey = item ? values[keyColumns[item.provider]] : null;
+        if (!item || !encryptedKey) {
+          return [];
+        }
+        return [
+          {
+            provider: item.provider,
+            model,
+            instance: providerFactory({
+              provider: item.provider,
+              model,
+              apiKey: cipher.decrypt(encryptedKey),
+            }),
+          },
+        ];
+      });
+      providerCache.set(userId, chain);
+      return chain;
+    },
+    async reorderModels(userId, input) {
+      const values = await loadValues(userId);
+      const usable = effectiveModelOrder(values);
+      const sameSet =
+        input.models.length === usable.length &&
+        input.models.every((model) => usable.includes(model));
+      if (!sameSet) {
+        throw new HttpError(
+          400,
+          API_ERROR_CODES.VALIDATION_ERROR,
+          "models must contain every usable model exactly once",
+        );
+      }
+      const first = AI_MODEL_CATALOG.find(
+        (item) => item.model === input.models[0],
+      );
+      if (!first) {
+        throw new HttpError(
+          400,
+          API_ERROR_CODES.VALIDATION_ERROR,
+          "Unknown model",
+        );
+      }
+      values.model_order = [...input.models];
+      values.provider = first.provider;
+      values.model = first.model;
+      const saved = await repository.save(userId, values);
+      providerCache.delete(userId);
+      const { user_id: _userId, ...savedValues } = saved;
+      return toStatus(savedValues);
     },
     async testConnection(userId, provider) {
       const values = await loadValues(userId);
@@ -249,4 +316,10 @@ export const aiSettingsService = createAiSettingsService({
 
 export function getAiProvider(userId: string): Promise<AiProvider | null> {
   return aiSettingsService.getProvider(userId);
+}
+
+export function getAiProviderChain(
+  userId: string,
+): Promise<AiProviderCandidate[]> {
+  return aiSettingsService.getProviderChain(userId);
 }

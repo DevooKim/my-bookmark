@@ -101,6 +101,7 @@ describe("EditBookmarkDialog", () => {
       categoryId: null,
       tags: ["개발"],
       aiStatus: "done",
+      aiModel: null,
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:00:00.000Z",
     };

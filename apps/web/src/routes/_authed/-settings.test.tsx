@@ -53,6 +53,7 @@ const aiStatus = {
   provider: "gemini" as const,
   model: "gemini-flash-lite-latest" as const,
   enabled: true,
+  modelOrder: ["gemini-flash-lite-latest" as const],
   providers: {
     gemini: { configured: true },
     anthropic: { configured: false },

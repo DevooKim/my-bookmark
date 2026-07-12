@@ -51,7 +51,7 @@ class GeminiProvider implements AiProvider {
 
   constructor(
     apiKey: string,
-    private readonly model: string,
+    readonly model: string,
   ) {
     this.client = new GoogleGenAI({ apiKey });
   }
@@ -110,7 +110,7 @@ class AnthropicProvider implements AiProvider {
 
   constructor(
     apiKey: string,
-    private readonly model: string,
+    readonly model: string,
   ) {
     this.client = new Anthropic({ apiKey });
   }
@@ -154,7 +154,7 @@ class OpenAiProvider implements AiProvider {
 
   constructor(
     apiKey: string,
-    private readonly model: string,
+    readonly model: string,
   ) {
     this.client = new OpenAI({ apiKey });
   }

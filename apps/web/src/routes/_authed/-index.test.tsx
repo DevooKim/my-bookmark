@@ -69,6 +69,7 @@ const bookmark: Bookmark = {
   categoryId: null,
   tags: ["React", "프론트엔드", "웹 개발"],
   aiStatus: "done",
+  aiModel: null,
   createdAt: "2026-07-12T00:00:00.000Z",
   updatedAt: "2026-07-12T00:00:00.000Z",
 };
@@ -395,6 +396,20 @@ describe("EditBookmarkDialog", () => {
         categoryId: category.id,
       }),
     );
+  });
+
+  it("shows which AI model classified the bookmark in the edit dialog", () => {
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EditBookmarkDialog
+          bookmark={{ ...bookmark, aiModel: "claude-haiku-4-5" }}
+          categories={[]}
+          onClose={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(/Claude Haiku 4.5/)).toBeTruthy();
   });
 
   it("recategorizes a done bookmark after user confirmation", async () => {

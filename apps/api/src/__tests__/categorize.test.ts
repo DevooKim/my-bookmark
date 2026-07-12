@@ -1,6 +1,7 @@
 import type { AiProvider } from "@my-bookmark/ai";
 import { describe, expect, it, vi } from "vitest";
 import {
+  type AiProviderCandidate,
   applyCategorizeResult,
   categorizeBookmark,
 } from "../services/categorize";
@@ -19,6 +20,7 @@ class FakeDb {
     category_id: null as string | null,
     tags: ["기존 태그"],
     ai_status: "pending" as "idle" | "pending" | "done" | "failed",
+    ai_model: null as string | null,
   };
   bookmarkUpdates: Record<string, unknown>[] = [];
 
@@ -79,6 +81,13 @@ const analysis = (category: AnalyzeResult["category"]): AnalyzeResult => ({
   tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
 });
 
+const successResult: AnalyzeResult = {
+  category: { type: "existing", categoryId: "cat-dev", confidence: 0.9 },
+  summaryTitle: "웹 접근성 실전 안내",
+  summary: "핵심 요약.",
+  tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
+};
+
 describe("applyCategorizeResult", () => {
   it("applies category, summary title, and tags in one pending-guarded update", async () => {
     const db = new FakeDb();
@@ -88,6 +97,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       db.categories,
       analysis({ type: "none" }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.bookmarkUpdates).toEqual([
@@ -98,17 +108,25 @@ describe("applyCategorizeResult", () => {
           "웹 접근성의 핵심 원칙을 실무 예제로 설명한다. 폼 라벨과 키보드 내비게이션 개선 방법을 다룬다.",
         tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
         ai_status: "done",
+        ai_model: "gemini-flash-lite-latest",
       },
     ]);
   });
 
   it("keeps the existing description when the AI omits summary", async () => {
     const db = new FakeDb();
-    await applyCategorizeResult(db, "user", "bookmark", db.categories, {
-      category: { type: "none" },
-      summaryTitle: "웹 접근성 실전 안내",
-      tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
-    });
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        category: { type: "none" },
+        summaryTitle: "웹 접근성 실전 안내",
+        tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
+      },
+      "gemini-flash-lite-latest",
+    );
 
     expect(db.bookmarkUpdates).toEqual([
       {
@@ -116,6 +134,7 @@ describe("applyCategorizeResult", () => {
         title: "웹 접근성 실전 안내",
         tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
         ai_status: "done",
+        ai_model: "gemini-flash-lite-latest",
       },
     ]);
   });
@@ -132,6 +151,7 @@ describe("applyCategorizeResult", () => {
         categoryId: "cat-dev",
         confidence: 0.9,
       }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.bookmark).toMatchObject({
@@ -158,6 +178,7 @@ describe("applyCategorizeResult", () => {
         categoryId: "cat-dev",
         confidence: 0.9,
       }),
+      "gemini-flash-lite-latest",
     );
     expect(db.bookmark).toMatchObject({
       category_id: "manual",
@@ -175,6 +196,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       db.categories,
       analysis({ type: "new", name: " 개발 ", confidence: 0.8 }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.categories).toHaveLength(1);
@@ -189,6 +211,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       [],
       analysis({ type: "new", name: " 개발 ", confidence: 0.8 }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.categories).toHaveLength(1);
@@ -203,6 +226,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       db.categories,
       analysis({ type: "new", name: "디자인", confidence: 0.8 }),
+      "gemini-flash-lite-latest",
     );
     expect(db.categories.at(-1)).toEqual({ id: "cat-2", name: "디자인" });
     expect(db.bookmark.category_id).toBe("cat-2");
@@ -216,6 +240,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       db.categories,
       analysis({ type: "new", name: "💻 개발", confidence: 0.8 }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.categories).toHaveLength(1);
@@ -231,6 +256,7 @@ describe("applyCategorizeResult", () => {
       "bookmark",
       db.categories,
       analysis({ type: "new", name: "뉴스", confidence: 0.8 }),
+      "gemini-flash-lite-latest",
     );
 
     expect(db.categories).toHaveLength(1);
@@ -238,21 +264,33 @@ describe("applyCategorizeResult", () => {
   });
 });
 
+function candidate(
+  name: "gemini" | "anthropic" | "openai",
+  model: string,
+  categorize: AiProvider["categorize"],
+): AiProviderCandidate {
+  return {
+    provider: name,
+    model,
+    instance: { name, model, categorize, validateConnection: vi.fn() },
+  };
+}
+
 describe("categorizeBookmark", () => {
-  it("preserves prior title, tags, and category when the provider fails", async () => {
+  it("preserves prior title, tags, and category when every candidate fails", async () => {
     const db = new FakeDb();
     db.bookmark.category_id = "cat-dev";
-    const provider: AiProvider = {
-      name: "failing",
-      categorize: vi.fn().mockRejectedValue(new Error("provider failed")),
-      validateConnection: vi.fn(),
-    };
+    const failingCandidate = candidate(
+      "gemini",
+      "gemini-flash-lite-latest",
+      vi.fn().mockRejectedValue(new Error("provider failed")),
+    );
 
     await categorizeBookmark({
       db,
       userId: "user",
       bookmarkId: "bookmark",
-      provider,
+      candidates: [failingCandidate],
       metadataFetcher: vi.fn().mockResolvedValue({
         title: null,
         description: null,
@@ -274,5 +312,74 @@ describe("categorizeBookmark", () => {
         title: "웹 접근성 실전 안내",
       }),
     );
+  });
+
+  it("falls back to the next model when the first attempt throws", async () => {
+    const db = new FakeDb();
+    const events: { model: string; status: string }[] = [];
+    const first = candidate(
+      "gemini",
+      "gemini-flash-lite-latest",
+      vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error("rate limited"), { status: 429 }),
+        ),
+    );
+    const second = candidate(
+      "anthropic",
+      "claude-haiku-4-5",
+      vi.fn().mockResolvedValue(successResult),
+    );
+
+    await categorizeBookmark({
+      db,
+      userId: "user",
+      bookmarkId: "bookmark",
+      candidates: [first, second],
+      recordUsage: async (event) => {
+        events.push({ model: event.model, status: event.status });
+      },
+      metadataFetcher: vi.fn().mockResolvedValue({
+        title: null,
+        description: null,
+        siteName: null,
+        faviconUrl: null,
+        ogImageUrl: null,
+      }),
+    });
+
+    expect(db.bookmark).toMatchObject({
+      ai_status: "done",
+      ai_model: "claude-haiku-4-5",
+      category_id: "cat-dev",
+    });
+    expect(events).toEqual([
+      { model: "gemini-flash-lite-latest", status: "failed" },
+      { model: "claude-haiku-4-5", status: "success" },
+    ]);
+  });
+
+  it("marks failed only after every candidate throws", async () => {
+    const db = new FakeDb();
+    const failing = vi.fn().mockRejectedValue(new Error("boom"));
+    await categorizeBookmark({
+      db,
+      userId: "user",
+      bookmarkId: "bookmark",
+      candidates: [
+        candidate("gemini", "gemini-flash-lite-latest", failing),
+        candidate("openai", "gpt-4o-mini", failing),
+      ],
+      metadataFetcher: vi.fn().mockResolvedValue({
+        title: null,
+        description: null,
+        siteName: null,
+        faviconUrl: null,
+        ogImageUrl: null,
+      }),
+    });
+    expect(db.bookmark.ai_status).toBe("failed");
+    expect(failing).toHaveBeenCalledTimes(2);
   });
 });
