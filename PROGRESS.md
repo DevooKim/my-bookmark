@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: OpenRouter preset 전환 완료. AI 분류는 서버 env `OPEN_ROUTER_API_KEY` + preset `@preset/my-bookmark` 단일 호출로 동작하며, 자체 provider 카탈로그·모델 우선순위 DND·폴백 체인·`ai_settings` 테이블·provider별 키 관리는 전부 제거됐다. `GET /api/ai`, `POST /api/ai/test`, `GET /api/ai/usage`, `GET /api/ai/account` 4개 라우트와 대시보드(로컬 이벤트 집계 + OpenRouter 계정 사용액 카드)가 최종 형태다. 카테고리 색상 제거·이모지 카테고리 이름·순서 변경 API/UI(DND)·AI 재분류 상시 노출·1~3문장 요약도 함께 반영됐다. 마이그레이션 0005~0008은 파일만 생성된 상태로 **원격 미적용(push 대기)**.
-- **최종 갱신**: 2026-07-12 (문서 동기화 — docs/02·03·05·01-architecture.md·deploy.md·.env.example을 OpenRouter preset 최종 상태에 맞춤)
+- **현재 Phase**: OpenRouter preset 전환 완료 + 후속(카테고리 위/아래 버튼 제거로 DND 일원화, 사용 이벤트 BYOK 기록). AI 분류는 서버 env `OPEN_ROUTER_API_KEY` + preset `@preset/my-bookmark` 단일 호출로 동작하며, 자체 provider 카탈로그·모델 우선순위 DND·폴백 체인·`ai_settings` 테이블·provider별 키 관리는 전부 제거됐다. `GET /api/ai`, `POST /api/ai/test`, `GET /api/ai/usage`, `GET /api/ai/account` 4개 라우트와 대시보드(로컬 이벤트 집계 + OpenRouter 계정 사용액 카드 + BYOK/크레딧 배지)가 최종 형태다. 마이그레이션 0005~0008은 원격 적용 완료(2026-07-12 사용자 push, dev E2E·브라우저 검증 통과), **0009(is_byok)는 파일만 생성된 push 대기 상태**.
+- **최종 갱신**: 2026-07-13 (카테고리 순서 UI를 드래그 핸들로 일원화, ai_usage_events.is_byok 기록·대시보드 표시)
 
 ## Phase 체크리스트
 
@@ -80,6 +80,8 @@
 | 2026-07-12 | 토큰·비용은 로컬에 저장하지 않는다. `ai_usage_events`는 현행 스키마(모델/상태/duration, 컬럼 추가 없음)를 유지하고, 계정 사용액은 `GET /api/ai/account`(OpenRouter `GET /key` 프록시)로, 모델별·일별 비용 상세는 openrouter.ai activity 외부 링크로 안내한다. | 공식 수치는 OpenRouter이며(BYOK·캐시 할인으로 로컬 사본은 오차 가능) `/activity`·`/analytics/query`는 management key 전용(403)이라 API로 집계 불가함을 실측 확인. 로컬 이벤트의 고유 가치는 북마크와 연결된 호출/실패 이력(OpenRouter 전환 플랜 결정). |
 | 2026-07-12 | 실패 이벤트의 model은 `"@preset/my-bookmark"`, 성공 이벤트는 응답의 실사용 모델을 기록한다. `ai_usage_events.provider`는 모델 id의 vendor prefix(예: `"google"`, 실패 시 `"openrouter"`)로 채운다. `bookmarks.ai_model`은 free text로 과거(직결 시절) 값도 그대로 보존하고 raw id로 표시한다(카탈로그 라벨 매핑 없음). | 실패 시엔 어떤 모델이 시도됐는지 OpenRouter가 알려주지 않는다. 카탈로그가 사라졌으므로 과거 값에 억지로 라벨을 매핑하지 않는다(OpenRouter 전환 플랜 결정). |
 | 2026-07-12 | `AI_SETTINGS_ENCRYPTION_KEY`·`secret-crypto.ts`·`ai_settings` 관련 코드를 전부 제거했다(제거 전 grep으로 다른 사용처 없음 확인). 마이그레이션 0008은 파일 생성만 하고 push하지 않았다(0005~0008 일괄 push는 사용자 검토 사항). | 암호화 저장할 대상(provider별 키)이 사라졌다. 원격 DB 변경은 항상 사용자가 직접 검토 후 실행(OpenRouter 전환 플랜 결정). |
+| 2026-07-13 | 카테고리 순서 변경의 위/아래 버튼을 제거하고 드래그 핸들(DND)로 일원화했다. 키보드 접근성은 dnd-kit KeyboardSensor(핸들 포커스 후 Space→화살표→Space)가 담당한다. | 사용자 요청. DND 도입 후 두 경로가 중복 UI였다. |
+| 2026-07-13 | OpenRouter 응답 `usage.is_byok`를 `ai_usage_events.is_byok`(nullable boolean, 마이그레이션 0009)에 기록하고 대시보드 최근 이벤트에 BYOK/크레딧 배지로 표시한다. 실패 이벤트는 null. | 사용자 요청("이벤트별로 byok인지 credit인지 확인"). 토큰·비용 미저장 결정과 달리 boolean 플래그는 응답에서만 알 수 있고 사후 조회 불가라 저장이 유일한 방법. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -143,8 +145,8 @@
 
 ## 사용자 확인 필요
 
-- **마이그레이션 0005~0008 원격 미적용**: `bun x supabase db push --dry-run`으로 0005(카테고리 color drop)·0006(`ai_settings.model_order` 추가 + `bookmarks.ai_model` 추가 — model_order는 0008이 `ai_settings` 테이블째 drop하므로 결과적으로 사라짐)·0007(ai_usage_events 테이블 생성)·0008(ai_settings drop, ai_usage_events의 provider check 제약 제거) 4개만 적용 대상인지 확인 후 `bun x supabase db push`로 일괄 적용해야 한다. 코드는 이미 push 후 상태를 가정하고 동작하므로(ai_settings 컬럼 참조 없음, ai_usage_events·bookmarks.ai_model 필수) **push 전에는 `GET /api/ai/usage`와 AI 분류 완료 후 `ai_model` 기록이 실패한다**.
-- **push 후 dev 스택 동작 확인**: `mode=ai` 북마크 등록 → 분류 성공(실사용 모델이 `bookmarks.ai_model`에 기록되는지), 편집 모달에 실사용 모델(raw id) 표시, AI 사용량 대시보드(로컬 이벤트 집계 + `GET /api/ai/account` 계정 카드)가 실제 데이터로 렌더되는지 브라우저에서 확인 필요.
+- (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
+- **마이그레이션 0009 원격 미적용**: `0009_usage_byok.sql`(`ai_usage_events.is_byok boolean` 추가)이 push 대기 상태다. push 전에는 이벤트 insert가 존재하지 않는 컬럼 때문에 실패하지만 recorder가 삼키므로(warn 로그) **분류는 정상 동작하되 새 이벤트가 기록되지 않는다**. `bun x supabase db push --dry-run`으로 0009 하나만 확인 후 push할 것. push 후 새 분류 1건으로 최근 이벤트의 BYOK/크레딧 배지 표시를 확인.
 - **카테고리 순서 변경 DND의 iOS 터치 동작**: `@dnd-kit` PointerSensor의 실기기 터치 드래그는 자동화 도구로 검증하지 못했다. iOS Safari/PWA에서 직접 확인 필요.
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
 

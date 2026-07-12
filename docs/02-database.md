@@ -76,6 +76,7 @@ create table public.ai_usage_events (
   status      text not null check (status in ('success', 'failed')),
   error_code  text,
   duration_ms int,
+  is_byok     boolean,                     -- OpenRouter 응답 usage.is_byok (실패 시 null)
   created_at  timestamptz not null default now()
 );
 create index ai_usage_events_user_created_idx
