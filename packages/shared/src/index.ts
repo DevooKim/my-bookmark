@@ -185,6 +185,21 @@ export type AiAccountUsageResponse = z.infer<
   typeof aiAccountUsageResponseSchema
 >;
 
+export const aiAnalyticsRowSchema = z.object({
+  date: z.string(),
+  model: z.string(),
+  usage: z.number(),
+  tokens: z.number(),
+  requests: z.number(),
+});
+export const aiAnalyticsResponseSchema = z.object({
+  days: z.number().int(),
+  configured: z.boolean(),
+  rows: z.array(aiAnalyticsRowSchema),
+});
+export type AiAnalyticsRow = z.infer<typeof aiAnalyticsRowSchema>;
+export type AiAnalyticsResponse = z.infer<typeof aiAnalyticsResponseSchema>;
+
 export const aiUsageStatusSchema = z.enum(["success", "failed"]);
 export const aiUsageEventSchema = z.object({
   id: uuidSchema,

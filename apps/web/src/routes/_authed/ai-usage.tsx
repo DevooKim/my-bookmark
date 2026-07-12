@@ -1,8 +1,12 @@
-import type { AiUsageEvent } from "@my-bookmark/shared";
+import type { AiAnalyticsRow, AiUsageEvent } from "@my-bookmark/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { getAiAccountUsage, getAiUsage } from "../../lib/api-client";
+import {
+  getAiAccountUsage,
+  getAiAnalytics,
+  getAiUsage,
+} from "../../lib/api-client";
 
 export const Route = createFileRoute("/_authed/ai-usage")({
   component: AiUsagePage,
@@ -55,6 +59,36 @@ export function modelLabel(model: string): string {
   return model;
 }
 
+export function aggregateAnalytics(rows: AiAnalyticsRow[]): {
+  models: { model: string; usage: number; tokens: number; requests: number }[];
+  dailyCost: { date: string; usage: number }[];
+} {
+  const byModel = new Map<
+    string,
+    { model: string; usage: number; tokens: number; requests: number }
+  >();
+  const costByDate = new Map<string, number>();
+  for (const row of rows) {
+    const model = byModel.get(row.model) ?? {
+      model: row.model,
+      usage: 0,
+      tokens: 0,
+      requests: 0,
+    };
+    model.usage += row.usage;
+    model.tokens += row.tokens;
+    model.requests += row.requests;
+    byModel.set(row.model, model);
+    costByDate.set(row.date, (costByDate.get(row.date) ?? 0) + row.usage);
+  }
+  return {
+    models: [...byModel.values()].sort((a, b) => b.usage - a.usage),
+    dailyCost: [...costByDate.entries()]
+      .map(([date, usage]) => ({ date, usage }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)),
+  };
+}
+
 export function formatUsd(value: number): string {
   return `$${value.toFixed(4)}`;
 }
@@ -70,11 +104,24 @@ export function AiUsagePage() {
     queryFn: getAiAccountUsage,
     retry: false,
   });
+  const analyticsQuery = useQuery({
+    queryKey: ["aiAnalytics", days],
+    queryFn: () => getAiAnalytics(days),
+    retry: false,
+  });
   const account = accountQuery.data;
   const events = usageQuery.data?.items ?? [];
   const { totals, daily } = aggregateUsage(events);
   const maxTotal = Math.max(1, ...totals.map((t) => t.success + t.failed));
   const maxDaily = Math.max(1, ...daily.map((d) => d.count));
+  const analytics = aggregateAnalytics(
+    analyticsQuery.data?.configured ? analyticsQuery.data.rows : [],
+  );
+  const maxModelCost = Math.max(1e-9, ...analytics.models.map((m) => m.usage));
+  const maxDailyCost = Math.max(
+    1e-9,
+    ...analytics.dailyCost.map((d) => d.usage),
+  );
 
   return (
     <main className="page-stack">
@@ -150,6 +197,54 @@ export function AiUsagePage() {
           </button>
         ))}
       </div>
+
+      {analytics.models.length > 0 ? (
+        <section
+          aria-label="모델별 비용"
+          className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <h2 className="font-bold">모델별 비용·토큰 (OpenRouter)</h2>
+          <ul className="mt-3 space-y-3">
+            {analytics.models.map((model) => (
+              <li key={model.model}>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate font-medium">
+                    {modelLabel(model.model)}
+                  </span>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {formatUsd(model.usage)} · {model.tokens.toLocaleString()}{" "}
+                    tokens · {model.requests.toLocaleString()}회
+                  </span>
+                </div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-violet-500"
+                    style={{ width: `${(model.usage / maxModelCost) * 100}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+          <ul className="mt-4 space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+            {analytics.dailyCost.map((day) => (
+              <li className="flex items-center gap-3 text-sm" key={day.date}>
+                <span className="w-24 shrink-0 text-zinc-500">{day.date}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-violet-500"
+                    style={{
+                      width: `${(day.usage / maxDailyCost) * 100}%`,
+                    }}
+                  />
+                </div>
+                <span className="w-20 shrink-0 text-right text-xs text-zinc-500">
+                  {formatUsd(day.usage)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section
         aria-label="모델별 사용량"

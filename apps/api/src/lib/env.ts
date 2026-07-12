@@ -10,6 +10,7 @@ const envSchema = z
     SUPABASE_URL: z.url().optional(),
     SUPABASE_SECRET_KEY: z.string().min(1).optional(),
     OPEN_ROUTER_API_KEY: z.string().min(1).optional(),
+    OPEN_ROUTER_MANAGEMENT_KEY: z.string().min(1).optional(),
     VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),

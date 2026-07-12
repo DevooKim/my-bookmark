@@ -1,10 +1,12 @@
 import {
   type AiAccountUsageResponse,
+  type AiAnalyticsResponse,
   type AiConnectionTestResponse,
   type AiStatusResponse,
   type AiUsageResponse,
   type ApiKeysResponse,
   aiAccountUsageResponseSchema,
+  aiAnalyticsResponseSchema,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
   aiUsageResponseSchema,
@@ -134,6 +136,15 @@ export async function testAiConnection(): Promise<AiConnectionTestResponse> {
   const response = await apiFetch("/api/ai/test", { method: "POST" });
   return parseJsonResponse(response, (json) =>
     aiConnectionTestResponseSchema.parse(json),
+  );
+}
+
+export async function getAiAnalytics(
+  days: number,
+): Promise<AiAnalyticsResponse> {
+  const response = await apiFetch(`/api/ai/analytics?days=${days}`);
+  return parseJsonResponse(response, (json) =>
+    aiAnalyticsResponseSchema.parse(json),
   );
 }
 

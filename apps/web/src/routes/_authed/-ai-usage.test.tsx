@@ -5,12 +5,17 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/api-client", () => ({
+  getAiAnalytics: vi.fn(),
   getAiUsage: vi.fn(),
   getAiAccountUsage: vi.fn(),
 }));
 
-import { getAiAccountUsage, getAiUsage } from "../../lib/api-client";
-import { AiUsagePage, aggregateUsage } from "./ai-usage";
+import {
+  getAiAccountUsage,
+  getAiAnalytics,
+  getAiUsage,
+} from "../../lib/api-client";
+import { AiUsagePage, aggregateAnalytics, aggregateUsage } from "./ai-usage";
 
 afterEach(() => {
   cleanup();
@@ -154,5 +159,88 @@ describe("AiUsagePage", () => {
       await totalsSection.findByText("gemini-flash-lite-latest"),
     ).toBeTruthy();
     expect(screen.queryByRole("region", { name: "계정 사용액" })).toBeNull();
+  });
+});
+
+describe("OpenRouter analytics", () => {
+  const analyticsRows = [
+    {
+      date: "2026-07-12",
+      model: "google/gemini-3.1-flash-lite-20260507",
+      usage: 0.019993,
+      tokens: 38437,
+      requests: 45,
+    },
+    {
+      date: "2026-07-12",
+      model: "openai/gpt-4o-mini",
+      usage: 0.000207,
+      tokens: 900,
+      requests: 1,
+    },
+    {
+      date: "2026-07-13",
+      model: "google/gemini-3.1-flash-lite-20260507",
+      usage: 0.002,
+      tokens: 4000,
+      requests: 4,
+    },
+  ];
+
+  it("aggregates analytics rows per model and per day", () => {
+    const { models, dailyCost } = aggregateAnalytics(analyticsRows);
+    expect(models[0]).toEqual({
+      model: "google/gemini-3.1-flash-lite-20260507",
+      usage: 0.021993,
+      tokens: 42437,
+      requests: 49,
+    });
+    expect(dailyCost[0]?.date).toBe("2026-07-13");
+    expect(dailyCost).toHaveLength(2);
+  });
+
+  it("renders the OpenRouter cost section when analytics are configured", async () => {
+    vi.mocked(getAiUsage).mockResolvedValue({ days: 30, items: [] });
+    vi.mocked(getAiAccountUsage).mockRejectedValue(new Error("skip"));
+    vi.mocked(getAiAnalytics).mockResolvedValue({
+      days: 30,
+      configured: true,
+      rows: analyticsRows,
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AiUsagePage />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText("모델별 비용·토큰 (OpenRouter)"),
+    ).toBeTruthy();
+    expect(screen.getByText(/42,437/)).toBeTruthy();
+    expect(screen.getByText(/\$0\.0220/)).toBeTruthy();
+  });
+
+  it("hides the OpenRouter cost section without a management key", async () => {
+    vi.mocked(getAiUsage).mockResolvedValue({ days: 30, items: [] });
+    vi.mocked(getAiAccountUsage).mockRejectedValue(new Error("skip"));
+    vi.mocked(getAiAnalytics).mockResolvedValue({
+      days: 30,
+      configured: false,
+      rows: [],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AiUsagePage />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "AI 사용량" });
+    expect(screen.queryByText("모델별 비용·토큰 (OpenRouter)")).toBeNull();
   });
 });

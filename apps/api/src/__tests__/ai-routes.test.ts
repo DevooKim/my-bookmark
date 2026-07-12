@@ -9,7 +9,10 @@ const usageMocks = vi.hoisted(() => ({
 }));
 
 const envMocks = vi.hoisted(() => ({
-  appEnv: { OPEN_ROUTER_API_KEY: undefined as string | undefined },
+  appEnv: {
+    OPEN_ROUTER_API_KEY: undefined as string | undefined,
+    OPEN_ROUTER_MANAGEMENT_KEY: undefined as string | undefined,
+  },
 }));
 
 const providerMocks = vi.hoisted(() => ({
@@ -35,6 +38,7 @@ const userId = "11111111-1111-4111-8111-111111111111";
 afterEach(() => {
   vi.clearAllMocks();
   envMocks.appEnv.OPEN_ROUTER_API_KEY = undefined;
+  envMocks.appEnv.OPEN_ROUTER_MANAGEMENT_KEY = undefined;
 });
 
 async function setup() {
@@ -112,6 +116,69 @@ describe("AI routes", () => {
       durationMs: 700,
     });
     expect(limit).toHaveBeenCalledWith(1000);
+  });
+
+  it("reports analytics as unconfigured without a management key", async () => {
+    const app = await setup();
+    const response = await request(app)
+      .get("/api/ai/analytics?days=7")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ days: 7, configured: false, rows: [] });
+  });
+
+  it("proxies the OpenRouter analytics query with a management key", async () => {
+    envMocks.appEnv.OPEN_ROUTER_MANAGEMENT_KEY = "or-mgmt-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            data: [
+              {
+                date__day: "2026-07-12",
+                model: "google/gemini-3.1-flash-lite-20260507",
+                total_usage: 0.019993,
+                tokens_total: "38437",
+                request_count: "45",
+              },
+            ],
+            metadata: { row_count: 1, truncated: false },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const app = await setup();
+    const response = await request(app)
+      .get("/api/ai/analytics?days=30")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      days: 30,
+      configured: true,
+      rows: [
+        {
+          date: "2026-07-12",
+          model: "google/gemini-3.1-flash-lite-20260507",
+          usage: 0.019993,
+          tokens: 38437,
+          requests: 45,
+        },
+      ],
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://openrouter.ai/api/v1/analytics/query");
+    const body = JSON.parse(String(init.body));
+    expect(body.dimensions).toEqual(["model"]);
+    expect(body.granularity).toBe("day");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer or-mgmt-key",
+    );
+    vi.unstubAllGlobals();
   });
 
   it("returns account usage from the OpenRouter key endpoint", async () => {

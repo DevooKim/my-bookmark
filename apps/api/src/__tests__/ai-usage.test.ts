@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAiUsageRecorder,
   fetchAccountUsage,
+  fetchAnalytics,
   listAiUsageEvents,
 } from "../services/ai-usage";
 
@@ -136,5 +137,19 @@ describe("fetchAccountUsage", () => {
     await expect(fetchAccountUsage("bad-key")).rejects.toMatchObject({
       status: 502,
     });
+  });
+});
+
+describe("fetchAnalytics", () => {
+  it("throws a 502 when the analytics query fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 403 })),
+    );
+
+    await expect(fetchAnalytics("or-mgmt-key", 7)).rejects.toMatchObject({
+      status: 502,
+    });
+    vi.unstubAllGlobals();
   });
 });

@@ -1,5 +1,6 @@
 import {
   type AiAccountUsageResponse,
+  type AiAnalyticsRow,
   type AiUsageEvent,
   API_ERROR_CODES,
   aiAccountUsageResponseSchema,
@@ -146,4 +147,56 @@ export async function fetchAccountUsage(
     limitRemaining: parsed.data.limit_remaining,
     isFreeTier: parsed.data.is_free_tier,
   });
+}
+
+// OpenRouter Analytics API(management key 전용). 응답의 수치 일부(tokens_total,
+// request_count)는 문자열로 오므로 coerce로 정규화한다(실측 2026-07-13).
+const openRouterAnalyticsResponseSchema = z.object({
+  data: z.object({
+    data: z.array(
+      z.object({
+        date__day: z.string(),
+        model: z.string(),
+        total_usage: z.coerce.number(),
+        tokens_total: z.coerce.number(),
+        request_count: z.coerce.number(),
+      }),
+    ),
+  }),
+});
+
+export async function fetchAnalytics(
+  managementKey: string,
+  days: number,
+): Promise<AiAnalyticsRow[]> {
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  const response = await fetch("https://openrouter.ai/api/v1/analytics/query", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${managementKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      metrics: ["total_usage", "tokens_total", "request_count"],
+      dimensions: ["model"],
+      granularity: "day",
+      time_range: { start: start.toISOString(), end: end.toISOString() },
+    }),
+  });
+  if (!response.ok) {
+    throw new HttpError(
+      502,
+      API_ERROR_CODES.INTERNAL,
+      "OpenRouter analytics query failed",
+    );
+  }
+  const parsed = openRouterAnalyticsResponseSchema.parse(await response.json());
+  return parsed.data.data.map((row) => ({
+    date: row.date__day,
+    model: row.model,
+    usage: row.total_usage,
+    tokens: row.tokens_total,
+    requests: row.request_count,
+  }));
 }
