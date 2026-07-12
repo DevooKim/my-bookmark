@@ -2,7 +2,7 @@ import type { AiUsageEvent } from "@my-bookmark/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { getAiUsage } from "../../lib/api-client";
+import { getAiAccountUsage, getAiUsage } from "../../lib/api-client";
 
 export const Route = createFileRoute("/_authed/ai-usage")({
   component: AiUsagePage,
@@ -55,12 +55,22 @@ export function modelLabel(model: string): string {
   return model;
 }
 
+export function formatUsd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
 export function AiUsagePage() {
   const [days, setDays] = useState<number>(30);
   const usageQuery = useQuery({
     queryKey: ["aiUsage", days],
     queryFn: () => getAiUsage(days),
   });
+  const accountQuery = useQuery({
+    queryKey: ["aiAccount"],
+    queryFn: getAiAccountUsage,
+    retry: false,
+  });
+  const account = accountQuery.data;
   const events = usageQuery.data?.items ?? [];
   const { totals, daily } = aggregateUsage(events);
   const maxTotal = Math.max(1, ...totals.map((t) => t.success + t.failed));
@@ -77,6 +87,56 @@ export function AiUsagePage() {
           </p>
         </div>
       </section>
+
+      {account ? (
+        <section
+          aria-label="계정 사용액"
+          className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-bold">OpenRouter 계정 사용액</h2>
+            {account.isFreeTier ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                Free tier
+              </span>
+            ) : null}
+          </div>
+          <dl className="mt-3 grid grid-cols-3 gap-3 text-center">
+            <div>
+              <dt className="text-xs text-zinc-500">오늘</dt>
+              <dd className="mt-1 font-semibold">
+                {formatUsd(account.usageDaily)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">이번 주</dt>
+              <dd className="mt-1 font-semibold">
+                {formatUsd(account.usageWeekly)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">이번 달</dt>
+              <dd className="mt-1 font-semibold">
+                {formatUsd(account.usageMonthly)}
+              </dd>
+            </div>
+          </dl>
+          {account.limit !== null ? (
+            <p className="mt-3 text-xs text-zinc-500">
+              한도 {formatUsd(account.limit)} 중 잔여{" "}
+              {formatUsd(account.limitRemaining ?? 0)}
+            </p>
+          ) : null}
+          <a
+            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600"
+            href="https://openrouter.ai/activity"
+            rel="noreferrer"
+            target="_blank"
+          >
+            모델별 비용 상세는 OpenRouter Activity에서 →
+          </a>
+        </section>
+      ) : null}
 
       <div className="flex gap-2">
         {dayOptions.map((option) => (
