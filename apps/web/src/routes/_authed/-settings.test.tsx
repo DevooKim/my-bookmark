@@ -307,4 +307,16 @@ describe("category ordering", () => {
     expect(firstUp.disabled).toBe(true);
     expect(lastDown.disabled).toBe(true);
   });
+
+  it("renders a drag handle for each category row", async () => {
+    vi.mocked(listCategories).mockResolvedValue(categories);
+    renderCategorySection();
+
+    expect(
+      await screen.findByRole("button", { name: "💻 개발 순서 변경" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "📰 뉴스 순서 변경" }),
+    ).toBeTruthy();
+  });
 });

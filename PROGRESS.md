@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Apple 스타일 반응형 UI 후속 개편 완료. AI 모델 순서(DND)+사용량 대시보드 플랜의 Task 1(모델 체인 폴백 + 분류 모델 기록), Task 2(사용량 이벤트 로깅/조회 API), Task 3(설정 UI 모델 우선순위 DND 리스트 + `PUT /ai/model` 제거) 완료. 다음: 같은 플랜의 Task 4(카테고리 순서 DND) 이후.
-- **최종 갱신**: 2026-07-12 (설정 화면 AI 모델 우선순위를 DND로 관리, Task 3)
+- **현재 Phase**: Apple 스타일 반응형 UI 후속 개편 완료. AI 모델 순서(DND)+사용량 대시보드 플랜의 Task 1(모델 체인 폴백 + 분류 모델 기록), Task 2(사용량 이벤트 로깅/조회 API), Task 3(설정 UI 모델 우선순위 DND 리스트 + `PUT /ai/model` 제거), Task 4(카테고리 순서 DND) 완료. 다음: 같은 플랜의 Task 5(AI 사용량 대시보드 페이지) 이후.
+- **최종 갱신**: 2026-07-12 (카테고리 순서를 드래그로 변경, Task 4)
 
 ## Phase 체크리스트
 
@@ -126,6 +126,7 @@
 - 반응형 UI 후속 수정 자동 검증 완료: 모바일 상단 헤더/라이브러리 hero 제거, 검색 중심 배치, 데스크톱 floating 추가 버튼과 햄버거 메뉴, 설정 최하단 로그아웃, 추가·편집 모달 불투명화·약한 scrim blur·바깥 클릭 닫힘, 팝오버 외부 클릭·Escape·액션 종료와 포커스 복원, 편집 폼 카테고리 변경, 양 breakpoint 11px 태그를 적용했다. RED→GREEN 회귀 테스트를 추가해 web 59개·전체 156개 테스트와 typecheck, lint, 전체 프로덕션 build가 통과했다. API seed script의 기존 info 1건과 web build의 기존 dynamic import 경고는 exit 0이다.
 - 접근성 후속 정정 자동 검증 완료: 데스크톱 팝오버를 ARIA menu가 아닌 disclosure/group(`<nav aria-label>` + `aria-expanded`/`aria-controls`)으로 정정하고 액션·Escape 모두에서 트리거 focus를 복원했으며(`aria-haspopup` 부재를 `-route.test.tsx`·`-index.test.tsx`가 단언), 모달 scrim은 focus trap 밖 가짜 버튼 대신 `onPointerDown` target-check pointer 경계로 두고 Escape·닫기 버튼으로만 닫으며, `prefers-reduced-transparency: reduce`에 `.dialog-scrim-blur`를 포함해 새 scrim blur를 껐다. `bun run typecheck`, `bun run lint`, 전체 156개 테스트(web 59), `bun run build`가 재통과했다. API seed script info 1건·web build dynamic import 경고는 기존 항목으로 exit 0이다.
 - AI 모델 순서(DND)+사용량 대시보드 플랜 Task 1(모델 체인 폴백 + 분류 모델 기록) 완료: `supabase/migrations/0006_ai_model_order.sql`을 파일만 생성(미push, `ai_settings.model_order text[]` + backfill, `bookmarks.ai_model`). `packages/ai`의 `AiProvider`에 `model` 필드를 노출하고, `packages/shared`에 `bookmarkSchema.aiModel`, `aiStatusResponseSchema.modelOrder`, `reorderAiModelsRequestSchema`를 추가했다. `apps/api/src/services/categorize.ts`는 `provider: AiProvider | null` 단일 호출을 `candidates: AiProviderCandidate[]` 순차 폴백 루프로 교체했다 — 각 후보가 throw하면 `recordUsage` 훅으로 실패를 기록하고 다음 후보로 넘어가며, 성공한 모델명을 `bookmarks.ai_model`에 기록한다(`recordUsage` 배선 자체는 Task 2 몫으로 미룸). `apps/api/src/services/ai-provider.ts`는 `effectiveModelOrder`(저장된 순서 중 키가 설정된 provider의 모델 + 누락분 append)와 `getProviderChain`/`reorderModels`/`getAiProviderChain` export를 추가했다. 기존 `selectModel`/`PUT /api/ai/model`은 이 Task에서 의도적으로 유지했다(Task 3에서 제거 예정). `apps/api/src/routes/bookmarks.ts`의 `categorizeBookmarkForUser`를 `providerResolver`(단일 provider) 대신 `chainResolver`(후보 배열) 기반으로 교체했다. 웹 `EditBookmarkDialog`에 `bookmark.aiModel`이 있으면 `AI_MODEL_CATALOG` 라벨로 분류 모델을 표시한다. `bun run typecheck && bun run lint && bun run test && bun run build` 전부 통과(174 테스트: shared 9 + ai 12 + api 88 + web 65).
+- AI 모델 순서(DND)+사용량 대시보드 플랜 Task 4(카테고리 순서 DND) 완료: `apps/web/src/routes/_authed/settings.tsx`의 `CategorySection` 목록을 Task 3에서 만든 공용 `SortableList`(`onReorder` → 기존 `reorderMutation.mutate`)로 감쌌고, `CategoryRow`의 루트 `<div>`를 `SortableRow`(`handleLabel={`${category.name} 순서 변경`}`, grid을 `sm:grid-cols-[auto_auto_1fr_80px_auto]`로 확장해 핸들 컬럼 추가)로 교체했다. 기존 위/아래 버튼·이름 input·개수·삭제 버튼은 그대로 유지했다. `-settings.test.tsx`의 "category ordering"에 드래그 핸들 존재를 확인하는 RED 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다. `bun run typecheck && bun run lint && bun run test` 전부 통과(179 테스트: shared 9 + ai 12 + api 91 + web 67).
 
 ## 배포 후 TODO
 

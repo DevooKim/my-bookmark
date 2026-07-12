@@ -278,31 +278,36 @@ export function CategorySection() {
         </button>
       </form>
 
-      <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
-        {items.map((category, index) => (
-          <CategoryRow
-            category={category}
-            isFirst={index === 0}
-            isLast={index === items.length - 1}
-            key={category.id}
-            moving={reorderMutation.isPending}
-            onDelete={() => {
-              const count = category.bookmarkCount ?? 0;
-              if (
-                window.confirm(
-                  `북마크 ${count}개가 미분류가 됩니다. 삭제할까요?`,
-                )
-              ) {
-                deleteMutation.mutate(category.id);
+      <SortableList
+        ids={items.map((item) => item.id)}
+        onReorder={(ids) => reorderMutation.mutate(ids)}
+      >
+        <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+          {items.map((category, index) => (
+            <CategoryRow
+              category={category}
+              isFirst={index === 0}
+              isLast={index === items.length - 1}
+              key={category.id}
+              moving={reorderMutation.isPending}
+              onDelete={() => {
+                const count = category.bookmarkCount ?? 0;
+                if (
+                  window.confirm(
+                    `북마크 ${count}개가 미분류가 됩니다. 삭제할까요?`,
+                  )
+                ) {
+                  deleteMutation.mutate(category.id);
+                }
+              }}
+              onMove={(direction) => moveCategory(index, direction)}
+              onUpdate={(next) =>
+                updateMutation.mutate({ id: category.id, next })
               }
-            }}
-            onMove={(direction) => moveCategory(index, direction)}
-            onUpdate={(next) =>
-              updateMutation.mutate({ id: category.id, next })
-            }
-          />
-        ))}
-      </div>
+            />
+          ))}
+        </div>
+      </SortableList>
     </section>
   );
 }
@@ -326,7 +331,11 @@ function CategoryRow({
 }) {
   const [name, setName] = useState(category.name);
   return (
-    <div className="grid gap-2 py-3 sm:grid-cols-[auto_1fr_80px_auto] sm:items-center">
+    <SortableRow
+      className="grid gap-2 py-3 sm:grid-cols-[auto_auto_1fr_80px_auto] sm:items-center"
+      handleLabel={`${category.name} 순서 변경`}
+      id={category.id}
+    >
       <div className="flex gap-1">
         <button
           aria-label={`${category.name} 위로 이동`}
@@ -364,7 +373,7 @@ function CategoryRow({
       >
         <Trash2 className="h-4 w-4" />
       </button>
-    </div>
+    </SortableRow>
   );
 }
 
