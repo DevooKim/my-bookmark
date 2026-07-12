@@ -35,6 +35,8 @@
 | `@dnd-kit`과 SortableList는 유지 | 카테고리 DND가 계속 사용 |
 | 마이그레이션 0008은 파일 생성만, push는 사용자가 0005~0008 일괄 실행 | 원격 DB 변경은 사용자 검토 사항 |
 
+**향후 확장 (이번 범위 아님):** 사용자가 management key를 나중에 제공하기로 함(2026-07-12). 제공되면 `OPEN_ROUTER_MANAGEMENT_KEY` env를 추가하고 `POST /api/v1/analytics/query`(metrics: total_usage/tokens_total, dimensions: model + date__day) 프록시 라우트를 신설해 대시보드에 모델별·일별 토큰/비용 집계 카드를 추가한다. 지금 만드는 구조(로컬 이벤트 집계 + `/key` 계정 카드)는 그대로 두고 카드만 추가되는 형태로 설계돼 있어 충돌 없음. 이 항목을 PROGRESS "배포 후 TODO"에 기록할 것(Task 3).
+
 ## File Structure
 
 | 파일 | 변경 |
