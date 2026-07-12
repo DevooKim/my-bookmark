@@ -27,7 +27,6 @@ create table public.categories (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
   name        text not null check (char_length(name) between 1 and 50),
-  color       text,                          -- 프리셋 팔레트 키 (07-ui 참조)
   sort_order  int  not null default 0,
   created_at  timestamptz not null default now(),
   unique (user_id, name)
@@ -47,6 +46,7 @@ create table public.bookmarks (
   -- idle: AI 미사용(수동/미지정), pending: 분류 대기/진행, done: AI 분류 완료, failed: 분류 실패(재시도 가능)
   ai_status    text not null default 'idle'
                check (ai_status in ('idle','pending','done','failed')),
+  ai_model     text,                        -- 분류에 실사용된 OpenRouter 모델 id (free text, raw 표시)
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   unique (user_id, url)
@@ -67,17 +67,19 @@ create table public.api_keys (
   created_at   timestamptz not null default now()
 );
 
-create table public.ai_settings (
-  user_id                     uuid primary key references auth.users(id) on delete cascade,
-  provider                    text not null default 'gemini'
-                              check (provider in ('gemini', 'anthropic', 'openai')),
-  model                       text not null default 'gemini-flash-lite-latest',
-  gemini_api_key_encrypted    text,
-  anthropic_api_key_encrypted text,
-  openai_api_key_encrypted    text,
-  created_at                  timestamptz not null default now(),
-  updated_at                  timestamptz not null default now()
+create table public.ai_usage_events (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  provider    text not null,                -- 모델 id의 vendor prefix (예: "google"), 실패 시 "openrouter"
+  model       text not null,                -- 성공 시 실사용 모델, 실패 시 "@preset/my-bookmark"
+  bookmark_id uuid references public.bookmarks(id) on delete set null,
+  status      text not null check (status in ('success', 'failed')),
+  error_code  text,
+  duration_ms int,
+  created_at  timestamptz not null default now()
 );
+create index ai_usage_events_user_created_idx
+  on public.ai_usage_events (user_id, created_at desc);
 
 create table public.push_subscriptions (
   id         uuid primary key default gen_random_uuid(),
@@ -111,7 +113,7 @@ Express는 secret key로 접근하므로 RLS를 bypass한다. RLS는 **publishab
 alter table public.categories         enable row level security;
 alter table public.bookmarks          enable row level security;
 alter table public.api_keys           enable row level security;
-alter table public.ai_settings         enable row level security;
+alter table public.ai_usage_events    enable row level security;
 alter table public.push_subscriptions enable row level security;
 alter table public.reminders          enable row level security;
 
@@ -131,7 +133,8 @@ create policy "owner_all" on public.categories
 - **카테고리 삭제** → 소속 북마크는 `on delete set null`로 미분류가 된다. UI에서 이를 안내.
 - **`ai_status` 상태 전이**: `idle → pending`(AI 재분류 요청), `pending → done | failed`, `failed → pending`(재시도). `done/pending` 북마크의 카테고리를 사용자가 수동 변경하면 `idle`로 되돌린다 (사용자 판단이 AI 결과를 덮음).
 - **태그**는 별도 조인 테이블 대신 `bookmarks.tags text[]`에 저장한다. 북마크당 최대 5개를 제약으로 강제하고, 배열 검색을 위해 GIN 인덱스를 둔다. `search_bookmarks` 함수는 API가 인증에서 얻은 `p_user_id`를 필수 조건으로 적용하고 카테고리·커서 조건과 제목·URL·설명·태그 부분 검색을 한 번에 처리한다. 함수 실행 권한은 `service_role`에만 부여한다.
-- **ai_settings**는 사용자별 1행이며 provider별 API 키는 AES-256-GCM 암호문만 저장한다. 평문과 표시용 prefix는 저장하지 않는다. 활성 `provider`/`model` 조합은 `packages/shared` 고정 카탈로그의 6개 조합만 허용한다. 설정 행이 없으면 Gemini Flash Lite 선택·키 미설정 상태로 해석한다.
+- **AI 분류는 서버 env(`OPEN_ROUTER_API_KEY`)로 동작한다** — provider별 키 저장 테이블은 없다(`0008_openrouter_preset.sql`에서 `ai_settings` drop). 모델 선택·폴백·파라미터는 OpenRouter의 preset(`@preset/my-bookmark`)이 담당하므로 DB에 모델 카탈로그나 우선순위 컬럼이 없다.
+- **ai_usage_events**는 분류 시도 1건당 1행이다(성공/실패 모두 기록). 토큰·비용은 로컬에 저장하지 않는다 — 공식 수치는 OpenRouter `GET /key`(계정 사용액)와 openrouter.ai activity 페이지가 원본이다.
 - **reminders**는 단발성(one-shot). 반복 규칙은 추후 컬럼 추가로 확장 (`rrule text` 예약 — 지금은 만들지 않음).
 - 사용자 계정은 Supabase 대시보드에서 수동 생성 1개뿐 — `profiles` 테이블 불필요.
 

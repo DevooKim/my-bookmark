@@ -87,7 +87,7 @@ my-bookmark/
 | `WEB_ORIGIN` | CORS 허용 origin (예: `http://localhost:3000`) |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`, 구 service_role). 서버 전용 |
-| `AI_SETTINGS_ENCRYPTION_KEY` | 설정 화면에서 저장한 AI API 키를 암호화하는 32바이트 base64 키. `openssl rand -base64 32`로 생성. 서버 전용이며 교체 시 기존 키 복호화 불가 |
+| `OPEN_ROUTER_API_KEY` | OpenRouter API 키(https://openrouter.ai/keys). AI 분류는 preset `@preset/my-bookmark` 단일 호출로 동작하며, 모델 선택·폴백·파라미터는 openrouter.ai의 preset 설정이 담당한다(05-ai 참조). 미설정 시 AI 비활성 모드로 기동 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys`로 생성 |
 | `VAPID_SUBJECT` | `mailto:sammy.kim@goorm.io` 형식 |
 | `TRUST_PROXY` | 선택. 리버스 프록시 뒤에서 hop 수(예: `1`) — express `trust proxy` 설정. 미설정 시 미적용 |

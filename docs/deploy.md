@@ -4,7 +4,7 @@
 
 ## 0. 사전 준비 체크리스트
 
-- [ ] Supabase 프로젝트 생성 완료, `ai_settings` 포함 최신 마이그레이션 반영(`bunx supabase db push`)
+- [ ] Supabase 프로젝트 생성 완료, `ai_usage_events` 포함 최신 마이그레이션 반영(`bunx supabase db push`)
 - [ ] Supabase Auth 설정: 이메일/비밀번호 로그인 활성, **신규 가입 차단**(개인용), 계정 1개 생성 — 상세는 `docs/04-auth.md`
 - [ ] `.env` 작성 (아래 표)
 - [ ] VAPID 키 생성 (아래)
@@ -21,7 +21,7 @@
 | `WEB_ORIGIN` | api CORS 허용 origin | 배포 도메인 (예: `https://bm.example.com`) |
 | `SUPABASE_URL` | Supabase 프로젝트 URL | |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`) | **서버 전용. 절대 클라이언트 노출 금지** |
-| `AI_SETTINGS_ENCRYPTION_KEY` | AI provider API 키 암호화 마스터 키 | `openssl rand -base64 32`로 최초 1회 생성. **교체하면 저장된 키를 복호화할 수 없음** |
+| `OPEN_ROUTER_API_KEY` | OpenRouter API 키 | https://openrouter.ai/keys 에서 발급. **서버 전용**. 미설정 시 AI 비활성 모드로 기동 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
 | `TRUST_PROXY` | 리버스 프록시 hop 수 | Caddy 등 프록시 뒤에서는 `1` — 미설정 시 rate limit이 프록시 IP를 클라이언트로 본다 |
@@ -32,7 +32,7 @@
 
 주의: `VITE_*` 값은 **web 이미지 빌드 시점**에 번들로 구워진다. 값을 바꾸면 `docker compose build web`을 다시 해야 한다.
 
-AI provider와 provider별 API 키는 배포 후 웹의 **설정 → AI 분류**에서 저장한다. `.env`의 provider/API 키 fallback은 없으며 키 원문은 설정 조회 응답에 다시 노출되지 않는다.
+AI 분류는 OpenRouter preset(`@preset/my-bookmark`) 단일 호출로 동작한다 — 서버 env `OPEN_ROUTER_API_KEY` 하나가 유일한 설정이며, 모델 선택·폴백 순서는 openrouter.ai 대시보드에서 preset으로 관리한다(`docs/05-ai.md` 참조). 설정 화면에는 키 입력 UI가 없다.
 
 ## 2. VAPID 키 생성
 
@@ -56,7 +56,7 @@ docker compose up -d api
 curl http://localhost:3001/api/health   # {"ok":true}
 ```
 
-API 호스트에는 서버 전용 환경변수(`SUPABASE_SECRET_KEY`, `AI_SETTINGS_ENCRYPTION_KEY`, VAPID private key 포함)를 설정한다. web의 Vercel 프로젝트에는 이 값을 넣지 않는다.
+API 호스트에는 서버 전용 환경변수(`SUPABASE_SECRET_KEY`, `OPEN_ROUTER_API_KEY`, VAPID private key 포함)를 설정한다. web의 Vercel 프로젝트에는 이 값을 넣지 않는다.
 
 ### 3.2 web — Vercel Bun Runtime Beta
 
