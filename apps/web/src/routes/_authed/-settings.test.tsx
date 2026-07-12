@@ -43,7 +43,6 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 import {
   getAiStatus,
   listCategories,
-  reorderCategories,
   testAiConnection,
 } from "../../lib/api-client";
 import { performLogout } from "../../lib/logout";
@@ -202,34 +201,13 @@ describe("category ordering", () => {
     );
   }
 
-  it("moves a category up by sending the full reordered id list", async () => {
-    vi.mocked(listCategories).mockResolvedValue(categories);
-    vi.mocked(reorderCategories).mockResolvedValue(categories);
-    renderCategorySection();
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "📰 뉴스 위로 이동" }),
-    );
-
-    await waitFor(() => expect(reorderCategories).toHaveBeenCalled());
-    expect(vi.mocked(reorderCategories).mock.calls[0]?.[0]).toEqual([
-      "00000000-0000-4000-8000-00000000000b",
-      "00000000-0000-4000-8000-00000000000a",
-    ]);
-  });
-
-  it("disables boundary move buttons", async () => {
+  it("reorders only through drag handles without up/down buttons", async () => {
     vi.mocked(listCategories).mockResolvedValue(categories);
     renderCategorySection();
 
-    const firstUp = await screen.findByRole<HTMLButtonElement>("button", {
-      name: "💻 개발 위로 이동",
-    });
-    const lastDown = screen.getByRole<HTMLButtonElement>("button", {
-      name: "📰 뉴스 아래로 이동",
-    });
-    expect(firstUp.disabled).toBe(true);
-    expect(lastDown.disabled).toBe(true);
+    await screen.findByRole("button", { name: "💻 개발 순서 변경" });
+    expect(screen.queryByRole("button", { name: /위로 이동/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /아래로 이동/ })).toBeNull();
   });
 
   it("renders a drag handle for each category row", async () => {

@@ -89,7 +89,7 @@ my-bookmark/
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`, 구 service_role). 서버 전용 |
 | `OPEN_ROUTER_API_KEY` | OpenRouter API 키(https://openrouter.ai/keys). AI 분류는 preset `@preset/my-bookmark` 단일 호출로 동작하며, 모델 선택·폴백·파라미터는 openrouter.ai의 preset 설정이 담당한다(05-ai 참조). 미설정 시 AI 비활성 모드로 기동 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys`로 생성 |
-| `VAPID_SUBJECT` | `mailto:sammy.kim@goorm.io` 형식 |
+| `VAPID_SUBJECT` | `mailto:{email}` 형식 |
 | `TRUST_PROXY` | 선택. 리버스 프록시 뒤에서 hop 수(예: `1`) — express `trust proxy` 설정. 미설정 시 미적용 |
 
 ### apps/web (클라이언트 노출 — 비밀값 금지)

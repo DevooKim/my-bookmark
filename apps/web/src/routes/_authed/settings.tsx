@@ -3,9 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Bell,
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   Copy,
   KeyRound,
   LogOut,
@@ -229,21 +227,6 @@ export function CategorySection() {
     onError: () => toast.error("순서를 변경하지 못했어요"),
   });
   const items = categoriesQuery.data?.items ?? [];
-  const moveCategory = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= items.length) {
-      return;
-    }
-    const ids = items.map((item) => item.id);
-    const moved = ids[index];
-    const swapped = ids[target];
-    if (!moved || !swapped) {
-      return;
-    }
-    ids[index] = swapped;
-    ids[target] = moved;
-    reorderMutation.mutate(ids);
-  };
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -276,13 +259,10 @@ export function CategorySection() {
         onReorder={(ids) => reorderMutation.mutate(ids)}
       >
         <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
-          {items.map((category, index) => (
+          {items.map((category) => (
             <CategoryRow
               category={category}
-              isFirst={index === 0}
-              isLast={index === items.length - 1}
               key={category.id}
-              moving={reorderMutation.isPending}
               onDelete={() => {
                 const count = category.bookmarkCount ?? 0;
                 if (
@@ -293,7 +273,6 @@ export function CategorySection() {
                   deleteMutation.mutate(category.id);
                 }
               }}
-              onMove={(direction) => moveCategory(index, direction)}
               onUpdate={(next) =>
                 updateMutation.mutate({ id: category.id, next })
               }
@@ -307,48 +286,20 @@ export function CategorySection() {
 
 function CategoryRow({
   category,
-  isFirst,
-  isLast,
-  moving,
-  onMove,
   onUpdate,
   onDelete,
 }: {
   category: CategoryWithCount;
-  isFirst: boolean;
-  isLast: boolean;
-  moving: boolean;
-  onMove: (direction: -1 | 1) => void;
   onUpdate: (next: Partial<CategoryWithCount>) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(category.name);
   return (
     <SortableRow
-      className="grid gap-2 py-3 sm:grid-cols-[auto_auto_1fr_80px_auto] sm:items-center"
+      className="grid gap-2 py-3 sm:grid-cols-[auto_1fr_80px_auto] sm:items-center"
       handleLabel={`${category.name} 순서 변경`}
       id={category.id}
     >
-      <div className="flex gap-1">
-        <button
-          aria-label={`${category.name} 위로 이동`}
-          className="icon-button"
-          disabled={isFirst || moving}
-          onClick={() => onMove(-1)}
-          type="button"
-        >
-          <ChevronUp className="h-4 w-4" />
-        </button>
-        <button
-          aria-label={`${category.name} 아래로 이동`}
-          className="icon-button"
-          disabled={isLast || moving}
-          onClick={() => onMove(1)}
-          type="button"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
-      </div>
       <input
         className="input"
         onBlur={() => name !== category.name && onUpdate({ name })}
