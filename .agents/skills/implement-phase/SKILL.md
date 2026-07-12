@@ -24,7 +24,7 @@ argument-hint: <phase-number>
 
 ## 3. 구현 규칙
 
-- CLAUDE.md의 "구현 원칙"과 코딩 컨벤션을 따른다.
+- AGENTS.md의 "구현 원칙"과 코딩 컨벤션을 따른다.
 - 스펙(docs)과 충돌하는 상황을 만나면: 문서 우선. 문서가 현행 라이브러리 API와 맞지 않으면 현행 API를 따르되 구조는 유지하고, 결정 로그에 기록.
 - 작업 단위마다 커밋 (conventional commits).
 - 이번 Phase 범위 밖의 기능을 추가하지 않는다. 발견한 개선거리는 PROGRESS.md 이슈란에 적는다.
