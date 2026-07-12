@@ -1,6 +1,7 @@
 import {
   API_ERROR_CODES,
   createCategoryRequestSchema,
+  reorderCategoriesRequestSchema,
   updateCategoryRequestSchema,
   uuidSchema,
 } from "@my-bookmark/shared";
@@ -12,7 +13,6 @@ import { HttpError } from "../middleware/error";
 
 interface CategoryUpdate {
   name?: string;
-  sort_order?: number;
 }
 
 export const categoriesRouter = Router();
@@ -75,9 +75,6 @@ categoriesRouter.patch("/categories/:id", async (request, response) => {
   if (body.name !== undefined) {
     updates.name = body.name;
   }
-  if (body.sortOrder !== undefined) {
-    updates.sort_order = body.sortOrder;
-  }
 
   const { data, error } = await getDb()
     .from("categories")
@@ -95,6 +92,55 @@ categoriesRouter.patch("/categories/:id", async (request, response) => {
   }
 
   response.json({ category: mapCategory(data) });
+});
+
+categoriesRouter.put("/categories/order", async (request, response) => {
+  const userId = getUserId(request);
+  const body = reorderCategoriesRequestSchema.parse(request.body);
+  const db = getDb();
+
+  const { data: existing, error: loadError } = await db
+    .from("categories")
+    .select("id")
+    .eq("user_id", userId);
+  if (loadError) {
+    throw loadError;
+  }
+  const existingIds = new Set((existing ?? []).map((row) => row.id));
+  const uniqueRequested = new Set(body.ids);
+  const isExactPermutation =
+    uniqueRequested.size === body.ids.length &&
+    existingIds.size === body.ids.length &&
+    body.ids.every((id) => existingIds.has(id));
+  if (!isExactPermutation) {
+    throw new HttpError(
+      400,
+      API_ERROR_CODES.VALIDATION_ERROR,
+      "ids must include every category exactly once",
+    );
+  }
+
+  for (const [index, id] of body.ids.entries()) {
+    const { error } = await db
+      .from("categories")
+      .update({ sort_order: index })
+      .eq("user_id", userId)
+      .eq("id", id);
+    if (error) {
+      throw error;
+    }
+  }
+
+  const { data, error } = await db
+    .from("categories")
+    .select("*")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw error;
+  }
+  response.json({ items: (data ?? []).map(mapCategory) });
 });
 
 categoriesRouter.delete("/categories/:id", async (request, response) => {

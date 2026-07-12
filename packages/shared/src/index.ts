@@ -139,11 +139,14 @@ export const createCategoryRequestSchema = z.object({
 export const updateCategoryRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(50).optional(),
-    sortOrder: z.number().int().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",
   });
+
+export const reorderCategoriesRequestSchema = z.object({
+  ids: z.array(uuidSchema).min(1).max(200),
+});
 
 export const createReminderRequestSchema = z.object({
   bookmarkId: uuidSchema,
@@ -297,6 +300,9 @@ export type UpdateBookmarkRequest = z.infer<typeof updateBookmarkRequestSchema>;
 export type BookmarkListQuery = z.infer<typeof bookmarkListQuerySchema>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
+export type ReorderCategoriesRequest = z.infer<
+  typeof reorderCategoriesRequestSchema
+>;
 export type CreateReminderRequest = z.infer<typeof createReminderRequestSchema>;
 export type UpdateReminderRequest = z.infer<typeof updateReminderRequestSchema>;
 export type PushSubscriptionRequest = z.infer<

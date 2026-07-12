@@ -205,7 +205,6 @@ function CategorySection() {
     }) =>
       updateCategory(id, {
         name: next.name,
-        sortOrder: next.sortOrder,
       }),
     onSuccess: () => {
       toast.success("카테고리를 수정했어요");
