@@ -12,7 +12,6 @@ import {
   aiModelIdSchema,
   aiProviderNameSchema,
   type ReorderAiModelsRequest,
-  type SelectAiModelRequest,
 } from "@my-bookmark/shared";
 import { z } from "zod";
 import { appEnv } from "../lib/env";
@@ -50,15 +49,10 @@ export interface AiSettingsService {
     provider: AiProviderName,
     apiKey: string,
   ): Promise<AiStatusResponse>;
-  selectModel(
-    userId: string,
-    input: SelectAiModelRequest,
-  ): Promise<AiStatusResponse>;
   deleteKey(
     userId: string,
     provider: AiProviderName,
   ): Promise<AiStatusResponse>;
-  getProvider(userId: string): Promise<AiProvider | null>;
   getProviderChain(userId: string): Promise<AiProviderCandidate[]>;
   reorderModels(
     userId: string,
@@ -153,22 +147,6 @@ export function createAiSettingsService({
       const { user_id: _userId, ...savedValues } = saved;
       return toStatus(savedValues);
     },
-    async selectModel(userId, input) {
-      const values = await loadValues(userId);
-      if (!values[keyColumns[input.provider]]) {
-        throw new HttpError(
-          400,
-          API_ERROR_CODES.VALIDATION_ERROR,
-          "Selected provider requires an API key",
-        );
-      }
-      values.provider = input.provider;
-      values.model = input.model;
-      const saved = await repository.save(userId, values);
-      providerCache.delete(userId);
-      const { user_id: _userId, ...savedValues } = saved;
-      return toStatus(savedValues);
-    },
     async deleteKey(userId, provider) {
       const values = await loadValues(userId);
       values[keyColumns[provider]] = null;
@@ -176,9 +154,6 @@ export function createAiSettingsService({
       providerCache.delete(userId);
       const { user_id: _userId, ...savedValues } = saved;
       return toStatus(savedValues);
-    },
-    async getProvider(userId) {
-      return (await this.getProviderChain(userId))[0]?.instance ?? null;
     },
     async getProviderChain(userId) {
       const cached = providerCache.get(userId);
@@ -313,10 +288,6 @@ export const aiSettingsService = createAiSettingsService({
   repository: createSupabaseAiSettingsRepository(),
   cipher: createSecretCipher(encryptionKey),
 });
-
-export function getAiProvider(userId: string): Promise<AiProvider | null> {
-  return aiSettingsService.getProvider(userId);
-}
 
 export function getAiProviderChain(
   userId: string,

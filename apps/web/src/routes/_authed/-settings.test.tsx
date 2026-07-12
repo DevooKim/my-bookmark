@@ -18,10 +18,10 @@ vi.mock("../../lib/api-client", () => ({
   getAiStatus: vi.fn(),
   listApiKeys: vi.fn(),
   listCategories: vi.fn(),
+  reorderAiModels: vi.fn(),
   reorderCategories: vi.fn(),
   revokeApiKey: vi.fn(),
   saveAiProviderKey: vi.fn(),
-  selectAiModel: vi.fn(),
   testAiProviderConnection: vi.fn(),
   updateCategory: vi.fn(),
 }));
@@ -31,9 +31,9 @@ import {
   deleteAiProviderKey,
   getAiStatus,
   listCategories,
+  reorderAiModels,
   reorderCategories,
   saveAiProviderKey,
-  selectAiModel,
   testAiProviderConnection,
 } from "../../lib/api-client";
 import { performLogout } from "../../lib/logout";
@@ -141,22 +141,11 @@ describe("AI settings", () => {
     );
   });
 
-  it("shows models only for providers with a configured key", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
-    renderAiSection();
-
-    await screen.findByRole("button", { name: "Gemini 키 삭제" });
-    const selector = screen.getByLabelText("사용 모델") as HTMLSelectElement;
-    expect(selector.querySelectorAll("optgroup")).toHaveLength(1);
-    expect(screen.getAllByRole("option")).toHaveLength(2);
-    expect(screen.queryByRole("option", { name: /Claude/ })).toBeNull();
-    expect(screen.queryByRole("option", { name: /GPT/ })).toBeNull();
-  });
-
   it("shows an empty state when no provider keys are configured", async () => {
     vi.mocked(getAiStatus).mockResolvedValue({
       ...aiStatus,
       enabled: false,
+      modelOrder: [],
       providers: {
         gemini: { configured: false },
         anthropic: { configured: false },
@@ -168,26 +157,30 @@ describe("AI settings", () => {
     expect(
       await screen.findByText("먼저 provider API 키를 등록하세요"),
     ).toBeTruthy();
-    expect(screen.queryByLabelText("사용 모델")).toBeNull();
+    expect(screen.queryByRole("button", { name: /순서 변경/ })).toBeNull();
   });
 
-  it("saves the selected model separately", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
-    vi.mocked(selectAiModel).mockResolvedValue({
+  it("renders the model priority list with drag handles and moves a model down", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue({
       ...aiStatus,
-      model: "gemini-flash-latest",
+      modelOrder: ["gemini-flash-lite-latest", "gemini-flash-latest"],
     });
+    vi.mocked(reorderAiModels).mockResolvedValue(aiStatus);
     renderAiSection();
 
-    fireEvent.change(await screen.findByLabelText("사용 모델"), {
-      target: { value: "gemini-flash-latest" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "모델 저장" }));
+    expect(
+      await screen.findByRole("button", {
+        name: "Gemini Flash Lite 순서 변경",
+      }),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Gemini Flash Lite 아래로 이동" }),
+    );
 
     await waitFor(() =>
-      expect(selectAiModel).toHaveBeenCalledWith({
-        provider: "gemini",
-        model: "gemini-flash-latest",
+      expect(vi.mocked(reorderAiModels).mock.calls[0]?.[0]).toEqual({
+        models: ["gemini-flash-latest", "gemini-flash-lite-latest"],
       }),
     );
   });

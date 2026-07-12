@@ -29,10 +29,10 @@ import {
   pushTestResponseSchema,
   type ReminderResponse,
   type RemindersResponse,
+  type ReorderAiModelsRequest,
   reminderResponseSchema,
   remindersResponseSchema,
   type SaveAiProviderKeyRequest,
-  type SelectAiModelRequest,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
@@ -142,10 +142,10 @@ export async function saveAiProviderKey(
   );
 }
 
-export async function selectAiModel(
-  body: SelectAiModelRequest,
+export async function reorderAiModels(
+  body: ReorderAiModelsRequest,
 ): Promise<AiStatusResponse> {
-  const response = await apiFetch("/api/ai/model", {
+  const response = await apiFetch("/api/ai/model-order", {
     method: "PUT",
     body: JSON.stringify(body),
   });

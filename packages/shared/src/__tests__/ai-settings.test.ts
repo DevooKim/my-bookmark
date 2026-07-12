@@ -3,8 +3,8 @@ import {
   AI_MODEL_CATALOG,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
+  reorderAiModelsRequestSchema,
   saveAiProviderKeyRequestSchema,
-  selectAiModelRequestSchema,
 } from "../index";
 
 describe("AI settings schemas", () => {
@@ -77,17 +77,15 @@ describe("AI settings schemas", () => {
     ).toThrow();
   });
 
-  it("accepts valid model selections and rejects mismatched pairs", () => {
+  it("accepts a full unique reorder and rejects duplicate models", () => {
     expect(
-      selectAiModelRequestSchema.parse({
-        provider: "gemini",
-        model: "gemini-flash-latest",
+      reorderAiModelsRequestSchema.parse({
+        models: ["gemini-flash-latest", "gemini-flash-lite-latest"],
       }),
-    ).toEqual({ provider: "gemini", model: "gemini-flash-latest" });
+    ).toEqual({ models: ["gemini-flash-latest", "gemini-flash-lite-latest"] });
     expect(() =>
-      selectAiModelRequestSchema.parse({
-        provider: "gemini",
-        model: "gpt-4o-mini",
+      reorderAiModelsRequestSchema.parse({
+        models: ["gemini-flash-latest", "gemini-flash-latest"],
       }),
     ).toThrow();
   });

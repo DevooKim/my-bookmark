@@ -2,7 +2,6 @@ import {
   AI_MODEL_CATALOG,
   type AiModelId,
   type AiProviderName,
-  aiModelIdSchema,
   type CategoryWithCount,
 } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,10 +27,10 @@ import {
   getPushStatus,
   listApiKeys,
   listCategories,
+  reorderAiModels,
   reorderCategories,
   revokeApiKey,
   saveAiProviderKey,
-  selectAiModel,
   sendTestPush,
   testAiProviderConnection,
   updateCategory,
@@ -42,6 +41,7 @@ import {
   enablePushNotifications,
   getPushSupportStatus,
 } from "../../lib/push";
+import { SortableList, SortableRow } from "./-components/sortable-list";
 
 export const Route = createFileRoute("/_authed/settings")({
   component: SettingsPage,
@@ -545,27 +545,8 @@ function getModelConfig(model: AiModelId) {
 export function AiSection() {
   const queryClient = useQueryClient();
   const aiQuery = useQuery({ queryKey: ["ai"], queryFn: getAiStatus });
-  const [model, setModel] = useState<AiModelId>("gemini-flash-lite-latest");
   const [apiKeys, setApiKeys] = useState(emptyAiKeys);
-  const availableModels = AI_MODEL_CATALOG.filter(
-    (item) => aiQuery.data?.providers[item.provider].configured,
-  );
-
-  useEffect(() => {
-    if (!aiQuery.data) {
-      return;
-    }
-    const activeConfigured =
-      aiQuery.data.providers[aiQuery.data.provider].configured;
-    const firstAvailable = AI_MODEL_CATALOG.find(
-      (item) => aiQuery.data?.providers[item.provider].configured,
-    );
-    if (activeConfigured) {
-      setModel(aiQuery.data.model);
-    } else if (firstAvailable) {
-      setModel(firstAvailable.model);
-    }
-  }, [aiQuery.data]);
+  const modelOrder = aiQuery.data?.modelOrder ?? [];
 
   const keyMutation = useMutation({
     mutationFn: ({
@@ -584,17 +565,29 @@ export function AiSection() {
     },
     onError: () => toast.error("AI API 키를 저장하지 못했어요"),
   });
-  const modelMutation = useMutation({
-    mutationFn: () => {
-      const selected = getModelConfig(model);
-      return selectAiModel({ provider: selected.provider, model });
-    },
+  const orderMutation = useMutation({
+    mutationFn: reorderAiModels,
     onSuccess: (status) => {
       queryClient.setQueryData(["ai"], status);
-      toast.success("사용 모델을 저장했어요");
+      toast.success("모델 우선순위를 저장했어요");
     },
-    onError: () => toast.error("사용 모델을 저장하지 못했어요"),
+    onError: () => toast.error("모델 우선순위를 저장하지 못했어요"),
   });
+  const moveModel = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= modelOrder.length) {
+      return;
+    }
+    const models = [...modelOrder];
+    const moved = models[index];
+    const swapped = models[target];
+    if (!moved || !swapped) {
+      return;
+    }
+    models[index] = swapped;
+    models[target] = moved;
+    orderMutation.mutate({ models });
+  };
   const testMutation = useMutation({
     mutationFn: (provider: AiProviderName) =>
       testAiProviderConnection(provider),
@@ -629,48 +622,78 @@ export function AiSection() {
 
       <div className="mt-5 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
         <h3 className="text-sm font-semibold">사용 모델</h3>
-        {availableModels.length === 0 ? (
+        {modelOrder.length === 0 ? (
           <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950">
             먼저 provider API 키를 등록하세요
           </p>
         ) : (
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="grid flex-1 gap-1 text-sm">
-              사용 모델
-              <select
-                className="input"
-                disabled={modelMutation.isPending}
-                onChange={(event) =>
-                  setModel(aiModelIdSchema.parse(event.target.value))
-                }
-                value={model}
-              >
-                {aiProviderNames.map((provider) => {
-                  const models = availableModels.filter(
-                    (item) => item.provider === provider,
-                  );
-                  return models.length > 0 ? (
-                    <optgroup key={provider} label={aiProviderLabels[provider]}>
-                      {models.map((item) => (
-                        <option key={item.model} value={item.model}>
-                          {item.label} · {item.tier}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null;
-                })}
-              </select>
-            </label>
-            <button
-              aria-label="모델 저장"
-              className="btn-primary justify-center"
-              disabled={modelMutation.isPending}
-              onClick={() => modelMutation.mutate()}
-              type="button"
+          <>
+            <p className="mt-1 text-xs text-zinc-500">
+              위에서부터 순서대로 시도하고, 실패하면 다음 모델로 넘어갑니다.
+              드래그하거나 버튼으로 순서를 바꾸세요.
+            </p>
+            <SortableList
+              ids={modelOrder}
+              onReorder={(models) =>
+                orderMutation.mutate({
+                  models: models.filter((model): model is AiModelId =>
+                    modelOrder.some((item) => item === model),
+                  ),
+                })
+              }
             >
-              모델 저장
-            </button>
-          </div>
+              <ol className="mt-2 space-y-2">
+                {modelOrder.map((model, index) => {
+                  const item = getModelConfig(model);
+                  return (
+                    <li key={model}>
+                      <SortableRow
+                        className="flex items-center gap-2 rounded-xl border border-zinc-200 p-2 dark:border-zinc-800"
+                        handleLabel={`${item.label} 순서 변경`}
+                        id={model}
+                      >
+                        <span className="w-5 text-center text-xs text-zinc-400">
+                          {index + 1}
+                        </span>
+                        <span className="flex-1 text-sm">
+                          {item.label}{" "}
+                          <span className="text-xs text-zinc-500">
+                            {aiProviderLabels[item.provider]} · {item.tier}
+                          </span>
+                          {index === 0 ? (
+                            <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[0.6875rem] text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                              우선 사용
+                            </span>
+                          ) : null}
+                        </span>
+                        <button
+                          aria-label={`${item.label} 위로 이동`}
+                          className="icon-button"
+                          disabled={index === 0 || orderMutation.isPending}
+                          onClick={() => moveModel(index, -1)}
+                          type="button"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          aria-label={`${item.label} 아래로 이동`}
+                          className="icon-button"
+                          disabled={
+                            index === modelOrder.length - 1 ||
+                            orderMutation.isPending
+                          }
+                          onClick={() => moveModel(index, 1)}
+                          type="button"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </SortableRow>
+                    </li>
+                  );
+                })}
+              </ol>
+            </SortableList>
+          </>
         )}
       </div>
 

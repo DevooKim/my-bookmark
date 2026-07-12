@@ -5,8 +5,8 @@ import {
   aiStatusResponseSchema,
   aiUsageQuerySchema,
   aiUsageResponseSchema,
+  reorderAiModelsRequestSchema,
   saveAiProviderKeyRequestSchema,
-  selectAiModelRequestSchema,
 } from "@my-bookmark/shared";
 import { type RequestHandler, Router } from "express";
 import { supabaseAdmin } from "../lib/supabase";
@@ -41,9 +41,9 @@ export function createAiRouter(
     response.json(aiStatusResponseSchema.parse(status));
   });
 
-  router.put("/ai/model", async (request, response) => {
-    const body = selectAiModelRequestSchema.parse(request.body);
-    const status = await service.selectModel(getUserId(request), body);
+  router.put("/ai/model-order", async (request, response) => {
+    const body = reorderAiModelsRequestSchema.parse(request.body);
+    const status = await service.reorderModels(getUserId(request), body);
     response.json(aiStatusResponseSchema.parse(status));
   });
 

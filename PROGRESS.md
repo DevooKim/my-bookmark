@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Apple 스타일 반응형 UI 후속 개편 완료. AI 모델 순서(DND)+사용량 대시보드 플랜의 Task 1(모델 체인 폴백 + 분류 모델 기록) 완료. 다음: 같은 플랜의 Task 2(사용량 이벤트 로깅/조회 API) 이후.
-- **최종 갱신**: 2026-07-12 (AI 모델 체인 폴백 + 분류 모델 기록, Task 1)
+- **현재 Phase**: Apple 스타일 반응형 UI 후속 개편 완료. AI 모델 순서(DND)+사용량 대시보드 플랜의 Task 1(모델 체인 폴백 + 분류 모델 기록), Task 2(사용량 이벤트 로깅/조회 API), Task 3(설정 UI 모델 우선순위 DND 리스트 + `PUT /ai/model` 제거) 완료. 다음: 같은 플랜의 Task 4(카테고리 순서 DND) 이후.
+- **최종 갱신**: 2026-07-12 (설정 화면 AI 모델 우선순위를 DND로 관리, Task 3)
 
 ## Phase 체크리스트
 
@@ -67,6 +67,8 @@
 | 2026-07-12 | 데스크톱의 중앙 nav와 독립 로그아웃을 우측 햄버거 팝오버로 통합하고, 추가·편집 모달은 불투명 surface와 3px backdrop-blur scrim 조합으로 통일했다. | 헤더의 시각 요소를 줄이고 계정 액션을 한곳에 모으며, 폼은 선명하게 유지하되 모달 바깥 맥락만 약하게 분리하라는 사용자 요청 반영. |
 | 2026-07-12 | 데스크톱 팝오버를 `role="menu"`가 아니라 `aria-label`이 붙은 `<nav>`(disclosure/group) + `aria-expanded`/`aria-controls` 트리거로 선언하고, 액션 실행·Escape 모두에서 트리거로 focus를 복원했다. | 화살표 키 roving focus를 구현하지 않았으므로 ARIA menu로 선언하면 실제 동작과 어긋난 키보드 계약을 스크린리더에 약속하게 된다. 실제로 구현한 disclosure 동작에 맞춰 정정. |
 | 2026-07-12 | 모달 scrim을 focus trap 밖의 가짜 버튼 대신 `onPointerDown` target-check로 닫는 pointer 전용 배경 경계로 두고, 닫기는 Escape·명시적 닫기 버튼이 담당하게 했다. 또한 `prefers-reduced-transparency: reduce`에서 `.dialog-scrim-blur`를 포함해 backdrop blur를 확실히 끄도록 했다. | 배경 버튼은 tab 순서에 잡히지 않는 조작 불가 요소가 되어 스크린리더 사용자를 혼란시킨다. 닫기는 키보드로 도달 가능한 경로(Escape·버튼)로만 노출하고, 투명도 축소 사용자에게 새 scrim blur가 남지 않게 한다. |
+| 2026-07-12 | AI 모델 우선순위 플랜 Task 3: `PUT /api/ai/model` + `selectModel` + 모델 select UI를 제거하고 `PUT /api/ai/model-order` + `reorderModels` + `@dnd-kit` 기반 DND 우선순위 리스트로 대체했다. `AiSettingsService.getProvider`/`getAiProvider`는 `getProviderChain` 도입 후 다른 사용처가 없어 함께 제거했다. | 계획서(`docs/superpowers/plans/2026-07-12-ai-model-order-usage-dashboard.md`) Task 3 그대로 구현. `@dnd-kit/core@6.3.1`·`@dnd-kit/sortable@10.0.0`·`@dnd-kit/utilities@3.2.2`의 실제 타입 정의가 계획서 코드와 100% 일치해 `sortable-list.tsx`는 계획서 코드를 그대로 사용했다. |
+| 2026-07-12 | `@dnd-kit/core` 추가 도입 중 `bun install`이 만든 기존 `node_modules`에 `react`/`react-dom`이 루트와 `node_modules/.bun/react@19.2.7` 양쪽에 물리적으로 중복 설치돼 있어(다른 inode) `useSensor` 렌더 시 "Cannot read properties of null (reading 'useMemo')"로 즉시 실패했다. `node_modules` 전체를 삭제하고 `bun install`을 재실행해 단일 React 인스턴스로 재설치한 뒤 해결을 확인했다. | hoisted linker(`bunfig.toml`) 자체의 결함이 아니라 이전 설치 상태의 드리프트로 판단 — 앱 코드 변경 없이 재설치만으로 재현·해소를 확인했다. 이후 세션에서 새 최상위 의존성 추가 시 훅 관련 원인불명 에러가 나면 동일 증상을 의심할 것. |
 
 ## 알려진 이슈 / 기술 부채
 

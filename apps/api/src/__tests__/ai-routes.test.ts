@@ -33,9 +33,7 @@ function setup() {
   const service: AiSettingsService = {
     getStatus: vi.fn().mockResolvedValue(status),
     saveKey: vi.fn().mockResolvedValue({ ...status, enabled: true }),
-    selectModel: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     deleteKey: vi.fn().mockResolvedValue(status),
-    getProvider: vi.fn(),
     getProviderChain: vi.fn().mockResolvedValue([]),
     reorderModels: vi.fn().mockResolvedValue({ ...status, enabled: true }),
     testConnection: vi.fn().mockResolvedValue(true),
@@ -80,17 +78,16 @@ describe("AI settings routes", () => {
     expect(JSON.stringify(response.body)).not.toContain("new-secret");
   });
 
-  it("selects a model independently from provider keys", async () => {
+  it("reorders the model priority chain", async () => {
     const { app, service } = setup();
     const response = await request(app)
-      .put("/api/ai/model")
+      .put("/api/ai/model-order")
       .set("Authorization", "Bearer token")
-      .send({ provider: "anthropic", model: "claude-sonnet-4-6" });
+      .send({ models: ["claude-sonnet-4-6", "gemini-flash-lite-latest"] });
 
     expect(response.status).toBe(200);
-    expect(service.selectModel).toHaveBeenCalledWith(userId, {
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
+    expect(service.reorderModels).toHaveBeenCalledWith(userId, {
+      models: ["claude-sonnet-4-6", "gemini-flash-lite-latest"],
     });
   });
 

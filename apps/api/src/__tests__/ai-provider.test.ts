@@ -61,7 +61,7 @@ describe("AI settings service", () => {
     expect(repository.requestedUsers).toEqual([userId]);
   });
 
-  it("encrypts provider keys and retains them across model updates", async () => {
+  it("encrypts provider keys and retains them across model reorders", async () => {
     const { repository, service } = setup();
 
     await service.saveKey(userId, "gemini", "gemini-key");
@@ -70,9 +70,13 @@ describe("AI settings service", () => {
       provider: "gemini",
       model: "gemini-flash-lite-latest",
     });
-    await service.selectModel(userId, {
-      provider: "gemini",
-      model: "gemini-flash-latest",
+    await service.reorderModels(userId, {
+      models: [
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gpt-4o-mini",
+        "gpt-5.4-mini",
+      ],
     });
 
     const row = repository.rows.get(userId);
@@ -91,12 +95,11 @@ describe("AI settings service", () => {
     });
   });
 
-  it("deletes one provider key and disables it when selected", async () => {
+  it("disables the settings when the last configured provider key is deleted", async () => {
     const { repository, service } = setup();
     await service.saveKey(userId, "openai", "openai-key");
-    await service.selectModel(userId, {
-      provider: "openai",
-      model: "gpt-4o-mini",
+    await service.reorderModels(userId, {
+      models: ["gpt-4o-mini", "gpt-5.4-mini"],
     });
 
     const status = await service.deleteKey(userId, "openai");
@@ -112,8 +115,15 @@ describe("AI settings service", () => {
       models: ["claude-haiku-4-5", "claude-sonnet-4-6"],
     });
 
-    await expect(service.getProvider(userId)).resolves.toBe(provider);
-    await expect(service.getProvider(userId)).resolves.toBe(provider);
+    await expect(service.getProviderChain(userId)).resolves.toEqual([
+      { provider: "anthropic", model: "claude-haiku-4-5", instance: provider },
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        instance: provider,
+      },
+    ]);
+    await service.getProviderChain(userId);
     expect(providerFactory).toHaveBeenCalledTimes(2);
     expect(providerFactory).toHaveBeenCalledWith({
       provider: "anthropic",
@@ -122,24 +132,13 @@ describe("AI settings service", () => {
     });
 
     await service.saveKey(userId, "anthropic", "key-two");
-    await service.getProvider(userId);
+    await service.getProviderChain(userId);
     expect(providerFactory).toHaveBeenCalledTimes(4);
     expect(providerFactory).toHaveBeenCalledWith({
       provider: "anthropic",
       apiKey: "key-two",
       model: "claude-haiku-4-5",
     });
-  });
-
-  it("rejects selecting a model whose provider has no stored or submitted key", async () => {
-    const { service } = setup();
-
-    await expect(
-      service.selectModel(userId, {
-        provider: "openai",
-        model: "gpt-4o-mini",
-      }),
-    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("tests a configured provider without adding the temporary instance to cache", async () => {

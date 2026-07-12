@@ -227,19 +227,6 @@ export const aiStatusResponseSchema = z.object({
 export const saveAiProviderKeyRequestSchema = z.object({
   apiKey: z.string().trim().min(1).max(512),
 });
-export const selectAiModelRequestSchema = z
-  .object({
-    provider: aiProviderNameSchema,
-    model: aiModelIdSchema,
-  })
-  .refine(
-    (value) =>
-      AI_MODEL_CATALOG.some(
-        (item) =>
-          item.provider === value.provider && item.model === value.model,
-      ),
-    { message: "Model does not belong to provider", path: ["model"] },
-  );
 export const reorderAiModelsRequestSchema = z
   .object({
     models: z.array(aiModelIdSchema).min(1).max(AI_MODEL_CATALOG.length),
@@ -352,7 +339,6 @@ export type AiConnectionTestResponse = z.infer<
 export type SaveAiProviderKeyRequest = z.infer<
   typeof saveAiProviderKeyRequestSchema
 >;
-export type SelectAiModelRequest = z.infer<typeof selectAiModelRequestSchema>;
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;
 export type CreateApiKeyResponse = z.infer<typeof createApiKeyResponseSchema>;
