@@ -1,8 +1,7 @@
-import {
-  AI_MODEL_CATALOG,
-  type Bookmark,
-  type CategoryWithCount,
-  type CreateBookmarkRequest,
+import type {
+  Bookmark,
+  CategoryWithCount,
+  CreateBookmarkRequest,
 } from "@my-bookmark/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cloneElement, useEffect, useId, useRef, useState } from "react";
@@ -235,9 +234,7 @@ export function EditBookmarkDialog({
         <TagInput value={tags} onChange={setTags} />
         {bookmark.aiModel ? (
           <p className="text-xs text-zinc-500">
-            AI 분류 모델:{" "}
-            {AI_MODEL_CATALOG.find((item) => item.model === bookmark.aiModel)
-              ?.label ?? bookmark.aiModel}
+            AI 분류 모델: {bookmark.aiModel}
           </p>
         ) : null}
         <button

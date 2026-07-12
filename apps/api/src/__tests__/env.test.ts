@@ -10,23 +10,26 @@ describe("parseEnv", () => {
     expect(env.WEB_ORIGIN).toBe("http://localhost:3000");
   });
 
-  it("requires Supabase and AI encryption settings outside test", () => {
+  it("requires Supabase settings outside test", () => {
     expect(() => parseEnv({})).toThrow("SUPABASE_URL is required outside test");
     expect(() =>
       parseEnv({
         SUPABASE_URL: "https://example.supabase.co",
-        SUPABASE_SECRET_KEY: "secret",
       }),
-    ).toThrow("AI_SETTINGS_ENCRYPTION_KEY is required outside test");
+    ).toThrow("SUPABASE_SECRET_KEY is required outside test");
   });
 
-  it("rejects an AI encryption key that is not 32 base64 bytes", () => {
-    expect(() =>
+  it("keeps OPEN_ROUTER_API_KEY optional in every environment", () => {
+    expect(
       parseEnv({
-        NODE_ENV: "test",
-        AI_SETTINGS_ENCRYPTION_KEY: Buffer.alloc(31).toString("base64"),
-      }),
-    ).toThrow("AI_SETTINGS_ENCRYPTION_KEY must encode exactly 32 bytes");
+        SUPABASE_URL: "https://example.supabase.co",
+        SUPABASE_SECRET_KEY: "secret",
+      }).OPEN_ROUTER_API_KEY,
+    ).toBeUndefined();
+    expect(
+      parseEnv({ NODE_ENV: "test", OPEN_ROUTER_API_KEY: "or-key" })
+        .OPEN_ROUTER_API_KEY,
+    ).toBe("or-key");
   });
 
   it("rejects invalid WEB_ORIGIN", () => {

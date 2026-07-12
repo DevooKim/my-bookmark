@@ -165,88 +165,30 @@ export const updateReminderRequestSchema = z
   });
 
 export const meResponseSchema = z.object({ userId: uuidSchema });
-export const aiProviderNameSchema = z.enum(["gemini", "anthropic", "openai"]);
-export const aiModelIdSchema = z.enum([
-  "gemini-flash-lite-latest",
-  "gemini-flash-latest",
-  "claude-haiku-4-5",
-  "claude-sonnet-4-6",
-  "gpt-4o-mini",
-  "gpt-5.4-mini",
-]);
-export const AI_MODEL_CATALOG = [
-  {
-    provider: "gemini",
-    model: "gemini-flash-lite-latest",
-    label: "Gemini Flash Lite",
-    tier: "저비용",
-  },
-  {
-    provider: "gemini",
-    model: "gemini-flash-latest",
-    label: "Gemini Flash",
-    tier: "균형",
-  },
-  {
-    provider: "anthropic",
-    model: "claude-haiku-4-5",
-    label: "Claude Haiku 4.5",
-    tier: "저비용",
-  },
-  {
-    provider: "anthropic",
-    model: "claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
-    tier: "균형",
-  },
-  {
-    provider: "openai",
-    model: "gpt-4o-mini",
-    label: "GPT-4o mini",
-    tier: "저비용",
-  },
-  {
-    provider: "openai",
-    model: "gpt-5.4-mini",
-    label: "GPT-5.4 mini",
-    tier: "균형",
-  },
-] as const;
-export const aiProviderStatusSchema = z.object({ configured: z.boolean() });
+
 export const aiStatusResponseSchema = z.object({
-  provider: aiProviderNameSchema,
-  model: aiModelIdSchema,
   enabled: z.boolean(),
-  modelOrder: z.array(aiModelIdSchema),
-  providers: z.object({
-    gemini: aiProviderStatusSchema,
-    anthropic: aiProviderStatusSchema,
-    openai: aiProviderStatusSchema,
-  }),
+  preset: z.string(),
 });
-export const saveAiProviderKeyRequestSchema = z.object({
-  apiKey: z.string().trim().min(1).max(512),
+export const aiConnectionTestResponseSchema = z.object({ ok: z.boolean() });
+
+export const aiAccountUsageResponseSchema = z.object({
+  usage: z.number(),
+  usageDaily: z.number(),
+  usageWeekly: z.number(),
+  usageMonthly: z.number(),
+  limit: z.number().nullable(),
+  limitRemaining: z.number().nullable(),
+  isFreeTier: z.boolean(),
 });
-export const reorderAiModelsRequestSchema = z
-  .object({
-    models: z.array(aiModelIdSchema).min(1).max(AI_MODEL_CATALOG.length),
-  })
-  .refine((value) => new Set(value.models).size === value.models.length, {
-    message: "models must be unique",
-    path: ["models"],
-  });
-export type ReorderAiModelsRequest = z.infer<
-  typeof reorderAiModelsRequestSchema
+export type AiAccountUsageResponse = z.infer<
+  typeof aiAccountUsageResponseSchema
 >;
-export const aiConnectionTestResponseSchema = z.object({
-  provider: aiProviderNameSchema,
-  ok: z.boolean(),
-});
 
 export const aiUsageStatusSchema = z.enum(["success", "failed"]);
 export const aiUsageEventSchema = z.object({
   id: uuidSchema,
-  provider: aiProviderNameSchema,
+  provider: z.string(),
   model: z.string(),
   bookmarkId: uuidSchema.nullable(),
   status: aiUsageStatusSchema,
@@ -330,14 +272,9 @@ export type PushSubscriptionRequest = z.infer<
   typeof pushSubscriptionRequestSchema
 >;
 export type MeResponse = z.infer<typeof meResponseSchema>;
-export type AiProviderName = z.infer<typeof aiProviderNameSchema>;
-export type AiModelId = z.infer<typeof aiModelIdSchema>;
 export type AiStatusResponse = z.infer<typeof aiStatusResponseSchema>;
 export type AiConnectionTestResponse = z.infer<
   typeof aiConnectionTestResponseSchema
->;
-export type SaveAiProviderKeyRequest = z.infer<
-  typeof saveAiProviderKeyRequestSchema
 >;
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequestSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;

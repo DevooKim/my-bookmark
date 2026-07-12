@@ -83,7 +83,9 @@ describe("AiUsagePage", () => {
     const totalsSection = within(
       screen.getByRole("region", { name: "모델별 사용량" }),
     );
-    const geminiLabel = await totalsSection.findByText("Gemini Flash Lite");
+    const geminiLabel = await totalsSection.findByText(
+      "gemini-flash-lite-latest",
+    );
     expect(geminiLabel).toBeTruthy();
     const geminiRow = geminiLabel.closest("li");
     expect(geminiRow).not.toBeNull();

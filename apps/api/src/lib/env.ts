@@ -9,7 +9,7 @@ const envSchema = z
     WEB_ORIGIN: z.url().default("http://localhost:3000"),
     SUPABASE_URL: z.url().optional(),
     SUPABASE_SECRET_KEY: z.string().min(1).optional(),
-    AI_SETTINGS_ENCRYPTION_KEY: z.string().optional(),
+    OPEN_ROUTER_API_KEY: z.string().min(1).optional(),
     VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_SUBJECT: z.string().optional(),
@@ -35,28 +35,6 @@ const envSchema = z
         code: "custom",
         path: ["SUPABASE_SECRET_KEY"],
         message: "SUPABASE_SECRET_KEY is required outside test",
-      });
-    }
-
-    if (!env.AI_SETTINGS_ENCRYPTION_KEY) {
-      context.addIssue({
-        code: "custom",
-        path: ["AI_SETTINGS_ENCRYPTION_KEY"],
-        message: "AI_SETTINGS_ENCRYPTION_KEY is required outside test",
-      });
-    }
-  })
-  .superRefine((env, context) => {
-    if (!env.AI_SETTINGS_ENCRYPTION_KEY) {
-      return;
-    }
-    const value = env.AI_SETTINGS_ENCRYPTION_KEY;
-    const validBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(value);
-    if (!validBase64 || Buffer.from(value, "base64").length !== 32) {
-      context.addIssue({
-        code: "custom",
-        path: ["AI_SETTINGS_ENCRYPTION_KEY"],
-        message: "AI_SETTINGS_ENCRYPTION_KEY must encode exactly 32 bytes",
       });
     }
   });

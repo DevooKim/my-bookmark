@@ -403,13 +403,18 @@ describe("EditBookmarkDialog", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <EditBookmarkDialog
-          bookmark={{ ...bookmark, aiModel: "claude-haiku-4-5" }}
+          bookmark={{
+            ...bookmark,
+            aiModel: "google/gemini-3.1-flash-lite-20260507",
+          }}
           categories={[]}
           onClose={() => undefined}
         />
       </QueryClientProvider>,
     );
-    expect(screen.getByText(/Claude Haiku 4.5/)).toBeTruthy();
+    expect(
+      screen.getByText(/google\/gemini-3.1-flash-lite-20260507/),
+    ).toBeTruthy();
   });
 
   it("recategorizes a done bookmark after user confirmation", async () => {

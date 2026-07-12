@@ -1,9 +1,10 @@
 import {
+  type AiAccountUsageResponse,
   type AiConnectionTestResponse,
-  type AiProviderName,
   type AiStatusResponse,
   type AiUsageResponse,
   type ApiKeysResponse,
+  aiAccountUsageResponseSchema,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
   aiUsageResponseSchema,
@@ -31,10 +32,8 @@ import {
   pushTestResponseSchema,
   type ReminderResponse,
   type RemindersResponse,
-  type ReorderAiModelsRequest,
   reminderResponseSchema,
   remindersResponseSchema,
-  type SaveAiProviderKeyRequest,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
@@ -131,28 +130,10 @@ export async function getAiStatus(): Promise<AiStatusResponse> {
   );
 }
 
-export async function saveAiProviderKey(
-  provider: AiProviderName,
-  body: SaveAiProviderKeyRequest,
-): Promise<AiStatusResponse> {
-  const response = await apiFetch(`/api/ai/keys/${provider}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
+export async function testAiConnection(): Promise<AiConnectionTestResponse> {
+  const response = await apiFetch("/api/ai/test", { method: "POST" });
   return parseJsonResponse(response, (json) =>
-    aiStatusResponseSchema.parse(json),
-  );
-}
-
-export async function reorderAiModels(
-  body: ReorderAiModelsRequest,
-): Promise<AiStatusResponse> {
-  const response = await apiFetch("/api/ai/model-order", {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-  return parseJsonResponse(response, (json) =>
-    aiStatusResponseSchema.parse(json),
+    aiConnectionTestResponseSchema.parse(json),
   );
 }
 
@@ -163,25 +144,10 @@ export async function getAiUsage(days: number): Promise<AiUsageResponse> {
   );
 }
 
-export async function testAiProviderConnection(
-  provider: AiProviderName,
-): Promise<AiConnectionTestResponse> {
-  const response = await apiFetch(`/api/ai/test/${provider}`, {
-    method: "POST",
-  });
+export async function getAiAccountUsage(): Promise<AiAccountUsageResponse> {
+  const response = await apiFetch("/api/ai/account");
   return parseJsonResponse(response, (json) =>
-    aiConnectionTestResponseSchema.parse(json),
-  );
-}
-
-export async function deleteAiProviderKey(
-  provider: AiProviderName,
-): Promise<AiStatusResponse> {
-  const response = await apiFetch(`/api/ai/keys/${provider}`, {
-    method: "DELETE",
-  });
-  return parseJsonResponse(response, (json) =>
-    aiStatusResponseSchema.parse(json),
+    aiAccountUsageResponseSchema.parse(json),
   );
 }
 

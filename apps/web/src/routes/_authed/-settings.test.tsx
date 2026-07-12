@@ -13,16 +13,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/api-client", () => ({
   createApiKey: vi.fn(),
   createCategory: vi.fn(),
-  deleteAiProviderKey: vi.fn(),
   deleteCategory: vi.fn(),
   getAiStatus: vi.fn(),
   listApiKeys: vi.fn(),
   listCategories: vi.fn(),
-  reorderAiModels: vi.fn(),
   reorderCategories: vi.fn(),
   revokeApiKey: vi.fn(),
-  saveAiProviderKey: vi.fn(),
-  testAiProviderConnection: vi.fn(),
+  testAiConnection: vi.fn(),
   updateCategory: vi.fn(),
 }));
 vi.mock("../../lib/logout", () => ({ performLogout: vi.fn() }));
@@ -44,13 +41,10 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 });
 
 import {
-  deleteAiProviderKey,
   getAiStatus,
   listCategories,
-  reorderAiModels,
   reorderCategories,
-  saveAiProviderKey,
-  testAiProviderConnection,
+  testAiConnection,
 } from "../../lib/api-client";
 import { performLogout } from "../../lib/logout";
 import {
@@ -66,15 +60,8 @@ afterEach(() => {
 });
 
 const aiStatus = {
-  provider: "gemini" as const,
-  model: "gemini-flash-lite-latest" as const,
   enabled: true,
-  modelOrder: ["gemini-flash-lite-latest" as const],
-  providers: {
-    gemini: { configured: true },
-    anthropic: { configured: false },
-    openai: { configured: false },
-  },
+  preset: "@preset/my-bookmark",
 };
 
 function renderAiSection() {
@@ -102,21 +89,32 @@ it("logs out from the bottom of settings", () => {
 });
 
 describe("AI settings", () => {
-  it("shows the model selector first inside a rounded card", async () => {
+  it("shows the preset name and an active status", async () => {
     vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
     renderAiSection();
 
-    const modelHeading = await screen.findByRole("heading", {
-      name: "사용 모델",
-    });
-    const keyHeading = screen.getByRole("heading", { name: "AI API 키" });
-
+    expect(await screen.findByText("활성")).toBeTruthy();
+    expect(screen.getByText("@preset/my-bookmark")).toBeTruthy();
     expect(
-      modelHeading.compareDocumentPosition(keyHeading) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
-    expect(modelHeading.parentElement?.className).toContain("rounded-xl");
-    expect(modelHeading.parentElement?.className).toContain("border");
+      screen.getByText("서버에 OpenRouter 키가 설정되어 있어요"),
+    ).toBeTruthy();
+  });
+
+  it("shows a disabled status when the server key is missing", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue({
+      enabled: false,
+      preset: "@preset/my-bookmark",
+    });
+    renderAiSection();
+
+    expect(await screen.findByText("비활성")).toBeTruthy();
+    expect(
+      screen.getByText("서버 env에 OPEN_ROUTER_API_KEY가 필요해요"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "연결 테스트" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 
   it("links to the AI usage dashboard", async () => {
@@ -129,115 +127,15 @@ describe("AI settings", () => {
     expect(link.getAttribute("href")).toBe("/ai-usage");
   });
 
-  it("renders independent API key controls for all providers", async () => {
+  it("tests the OpenRouter connection and shows a success toast", async () => {
     vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
+    vi.mocked(testAiConnection).mockResolvedValue({ ok: true });
     renderAiSection();
 
-    await screen.findByRole("button", { name: "Gemini 키 삭제" });
-    expect(screen.getByLabelText("Gemini API 키")).toBeTruthy();
-    expect(screen.getByLabelText("Anthropic API 키")).toBeTruthy();
-    expect(screen.getByLabelText("OpenAI API 키")).toBeTruthy();
-  });
+    await screen.findByText("활성");
+    fireEvent.click(screen.getByRole("button", { name: "연결 테스트" }));
 
-  it("saves one provider key without changing the model", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
-    vi.mocked(saveAiProviderKey).mockResolvedValue({
-      ...aiStatus,
-      providers: {
-        ...aiStatus.providers,
-        anthropic: { configured: true },
-      },
-    });
-    renderAiSection();
-
-    fireEvent.change(await screen.findByLabelText("Anthropic API 키"), {
-      target: { value: "new-secret" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Anthropic 키 저장" }));
-
-    await waitFor(() =>
-      expect(saveAiProviderKey).toHaveBeenCalledWith("anthropic", {
-        apiKey: "new-secret",
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        (screen.getByLabelText("Anthropic API 키") as HTMLInputElement).value,
-      ).toBe(""),
-    );
-  });
-
-  it("shows an empty state when no provider keys are configured", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue({
-      ...aiStatus,
-      enabled: false,
-      modelOrder: [],
-      providers: {
-        gemini: { configured: false },
-        anthropic: { configured: false },
-        openai: { configured: false },
-      },
-    });
-    renderAiSection();
-
-    expect(
-      await screen.findByText("먼저 provider API 키를 등록하세요"),
-    ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /순서 변경/ })).toBeNull();
-  });
-
-  it("renders the model priority list with drag handles and moves a model down", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue({
-      ...aiStatus,
-      modelOrder: ["gemini-flash-lite-latest", "gemini-flash-latest"],
-    });
-    vi.mocked(reorderAiModels).mockResolvedValue(aiStatus);
-    renderAiSection();
-
-    expect(
-      await screen.findByRole("button", {
-        name: "Gemini Flash Lite 순서 변경",
-      }),
-    ).toBeTruthy();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Gemini Flash Lite 아래로 이동" }),
-    );
-
-    await waitFor(() =>
-      expect(vi.mocked(reorderAiModels).mock.calls[0]?.[0]).toEqual({
-        models: ["gemini-flash-latest", "gemini-flash-lite-latest"],
-      }),
-    );
-  });
-
-  it("tests and deletes a configured provider key", async () => {
-    vi.mocked(getAiStatus).mockResolvedValue(aiStatus);
-    vi.mocked(testAiProviderConnection).mockResolvedValue({
-      provider: "gemini",
-      ok: true,
-    });
-    vi.mocked(deleteAiProviderKey).mockResolvedValue({
-      ...aiStatus,
-      enabled: false,
-      providers: {
-        ...aiStatus.providers,
-        gemini: { configured: false },
-      },
-    });
-    renderAiSection();
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Gemini 연결 테스트" }),
-    );
-    await waitFor(() =>
-      expect(testAiProviderConnection).toHaveBeenCalledWith("gemini"),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Gemini 키 삭제" }));
-    await waitFor(() =>
-      expect(deleteAiProviderKey).toHaveBeenCalledWith("gemini"),
-    );
+    await waitFor(() => expect(testAiConnection).toHaveBeenCalled());
   });
 });
 

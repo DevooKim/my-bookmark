@@ -1,62 +1,29 @@
 import {
   API_ERROR_CODES,
-  aiConnectionTestResponseSchema,
-  aiProviderNameSchema,
   aiStatusResponseSchema,
   aiUsageQuerySchema,
   aiUsageResponseSchema,
-  reorderAiModelsRequestSchema,
-  saveAiProviderKeyRequestSchema,
 } from "@my-bookmark/shared";
 import { type RequestHandler, Router } from "express";
+import { appEnv } from "../lib/env";
 import { supabaseAdmin } from "../lib/supabase";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
-import {
-  type AiSettingsService,
-  aiSettingsService,
-} from "../services/ai-provider";
-import { listAiUsageEvents } from "../services/ai-usage";
+import { getAiStatus, testAiConnection } from "../services/ai-provider";
+import { fetchAccountUsage, listAiUsageEvents } from "../services/ai-usage";
 
 export function createAiRouter(
-  service: AiSettingsService,
   authMiddleware: RequestHandler = requireAuth(),
 ): Router {
   const router = Router();
   router.use("/ai", authMiddleware);
 
-  router.get("/ai", async (request, response) => {
-    const status = await service.getStatus(getUserId(request));
-    response.json(aiStatusResponseSchema.parse(status));
+  router.get("/ai", async (_request, response) => {
+    response.json(aiStatusResponseSchema.parse(getAiStatus()));
   });
 
-  router.put("/ai/keys/:provider", async (request, response) => {
-    const provider = aiProviderNameSchema.parse(request.params.provider);
-    const body = saveAiProviderKeyRequestSchema.parse(request.body);
-    const status = await service.saveKey(
-      getUserId(request),
-      provider,
-      body.apiKey,
-    );
-    response.json(aiStatusResponseSchema.parse(status));
-  });
-
-  router.put("/ai/model-order", async (request, response) => {
-    const body = reorderAiModelsRequestSchema.parse(request.body);
-    const status = await service.reorderModels(getUserId(request), body);
-    response.json(aiStatusResponseSchema.parse(status));
-  });
-
-  router.post("/ai/test/:provider", async (request, response) => {
-    const provider = aiProviderNameSchema.parse(request.params.provider);
-    const ok = await service.testConnection(getUserId(request), provider);
-    response.json(aiConnectionTestResponseSchema.parse({ provider, ok }));
-  });
-
-  router.delete("/ai/keys/:provider", async (request, response) => {
-    const provider = aiProviderNameSchema.parse(request.params.provider);
-    const status = await service.deleteKey(getUserId(request), provider);
-    response.json(aiStatusResponseSchema.parse(status));
+  router.post("/ai/test", async (_request, response) => {
+    response.json({ ok: await testAiConnection() });
   });
 
   router.get("/ai/usage", async (request, response) => {
@@ -67,6 +34,18 @@ export function createAiRouter(
       query.days,
     );
     response.json(aiUsageResponseSchema.parse({ days: query.days, items }));
+  });
+
+  router.get("/ai/account", async (_request, response) => {
+    if (!appEnv.OPEN_ROUTER_API_KEY) {
+      throw new HttpError(
+        400,
+        API_ERROR_CODES.VALIDATION_ERROR,
+        "OPEN_ROUTER_API_KEY is not configured",
+      );
+    }
+    const usage = await fetchAccountUsage(appEnv.OPEN_ROUTER_API_KEY);
+    response.json(usage);
   });
 
   return router;
@@ -83,4 +62,4 @@ function getUsageDb() {
   return supabaseAdmin;
 }
 
-export const aiRouter = createAiRouter(aiSettingsService);
+export const aiRouter = createAiRouter();

@@ -1,10 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { GoogleGenAI, Type } from "@google/genai";
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import {
-  analyzeResponseSchema,
   jsonSchema,
+  openRouterCompletionSchema,
   parseAnalyzeResponse,
   systemPrompt,
   userPrompt,
@@ -13,190 +9,107 @@ import {
 import type {
   AiProvider,
   AiProviderConfig,
-  AnalyzeResult,
+  AnalyzeOutcome,
   CategorizeInput,
 } from "./types";
 
-export const DEFAULT_MODELS = {
-  // rolling alias: google retired gemini-2.5-flash for generateContent
-  // (404 as of 2026-07). lite tier suits single-label classification and
-  // answers well under the 15s abort budget.
-  gemini: "gemini-flash-lite-latest",
-  anthropic: "claude-haiku-4-5",
-  openai: "gpt-4o-mini",
-} as const;
+export const PRESET_MODEL = "@preset/my-bookmark";
+
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+export interface HttpError extends Error {
+  status: number;
+}
+
+function httpError(status: number, message: string): HttpError {
+  const error = new Error(message) as HttpError;
+  error.status = status;
+  return error;
+}
 
 export function createAiProvider(config: AiProviderConfig): AiProvider {
-  if (config.provider === "gemini") {
-    return new GeminiProvider(
-      config.apiKey,
-      config.model ?? DEFAULT_MODELS.gemini,
-    );
-  }
-  if (config.provider === "anthropic") {
-    return new AnthropicProvider(
-      config.apiKey,
-      config.model ?? DEFAULT_MODELS.anthropic,
-    );
-  }
-  return new OpenAiProvider(
-    config.apiKey,
-    config.model ?? DEFAULT_MODELS.openai,
-  );
+  return new OpenRouterProvider(config.apiKey);
 }
 
-class GeminiProvider implements AiProvider {
-  readonly name = "gemini";
-  private readonly client: GoogleGenAI;
-
-  constructor(
-    apiKey: string,
-    readonly model: string,
-  ) {
-    this.client = new GoogleGenAI({ apiKey });
-  }
+class OpenRouterProvider implements AiProvider {
+  constructor(private readonly apiKey: string) {}
 
   async validateConnection(): Promise<void> {
-    await withTimeout(
-      (signal) =>
-        this.client.models.list({
-          config: { pageSize: 1, abortSignal: signal },
-        }),
-      10_000,
-    );
-  }
-
-  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
-    return withTimeout(async (signal) => {
-      const response = await this.client.models.generateContent({
-        model: this.model,
-        contents: [{ role: "user", parts: [{ text: userPrompt(input) }] }],
-        config: {
-          systemInstruction: systemPrompt(),
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              category: {
-                type: Type.OBJECT,
-                properties: {
-                  type: {
-                    type: Type.STRING,
-                    enum: ["existing", "new", "none"],
-                  },
-                  categoryId: { type: Type.STRING },
-                  name: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER },
-                },
-                required: ["type"],
-              },
-              summaryTitle: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ["category", "summaryTitle", "summary", "tags"],
-          },
-          abortSignal: signal,
-        },
+    await withTimeout(async (signal) => {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/key`, {
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        signal,
       });
-      return parseJsonText(response.text ?? "{}");
-    });
-  }
-}
-
-class AnthropicProvider implements AiProvider {
-  readonly name = "anthropic";
-  private readonly client: Anthropic;
-
-  constructor(
-    apiKey: string,
-    readonly model: string,
-  ) {
-    this.client = new Anthropic({ apiKey });
+      if (!response.ok) {
+        throw httpError(
+          response.status,
+          `OpenRouter key validation failed with status ${response.status}`,
+        );
+      }
+    }, 10_000);
   }
 
-  async validateConnection(): Promise<void> {
-    await withTimeout(
-      (signal) => this.client.models.list({ limit: 1 }, { signal }),
-      10_000,
-    );
-  }
-
-  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
+  async categorize(input: CategorizeInput): Promise<AnalyzeOutcome> {
     return withTimeout(async (signal) => {
-      const message = await this.client.messages.create(
-        {
-          model: this.model,
-          max_tokens: 512,
-          system: systemPrompt(),
-          messages: [{ role: "user", content: userPrompt(input) }],
-          tools: [
-            {
-              name: "analyze_bookmark",
-              description:
-                "Return the bookmark category, summary title, and tags.",
-              input_schema: jsonSchema,
-            },
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "X-Title": "my-bookmark",
+        },
+        body: JSON.stringify({
+          model: PRESET_MODEL,
+          max_tokens: 2048,
+          provider: { require_parameters: true },
+          messages: [
+            { role: "system", content: systemPrompt() },
+            { role: "user", content: userPrompt(input) },
           ],
-          tool_choice: { type: "tool", name: "analyze_bookmark" },
-        },
-        { signal },
-      );
-      const toolUse = message.content.find((part) => part.type === "tool_use");
-      return requireAnalyzeResponse(toolUse?.input);
-    });
-  }
-}
-
-class OpenAiProvider implements AiProvider {
-  readonly name = "openai";
-  private readonly client: OpenAI;
-
-  constructor(
-    apiKey: string,
-    readonly model: string,
-  ) {
-    this.client = new OpenAI({ apiKey });
-  }
-
-  async validateConnection(): Promise<void> {
-    await withTimeout((signal) => this.client.models.list({ signal }), 10_000);
-  }
-
-  async categorize(input: CategorizeInput): Promise<AnalyzeResult> {
-    return withTimeout(async (signal) => {
-      const response = await this.client.responses.parse(
-        {
-          model: this.model,
-          instructions: systemPrompt(),
-          input: userPrompt(input),
-          text: {
-            format: zodTextFormat(analyzeResponseSchema, "bookmark_analysis"),
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "bookmark_analysis",
+              strict: true,
+              schema: jsonSchema,
+            },
           },
-        },
-        { signal },
-      );
-      return requireAnalyzeResponse(response.output_parsed);
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        throw httpError(
+          response.status,
+          `OpenRouter chat completion failed with status ${response.status}`,
+        );
+      }
+
+      const parsed = openRouterCompletionSchema.parse(await response.json());
+      const content = parsed.choices[0]?.message.content ?? null;
+      if (content === null) {
+        throw new Error("AI analysis response is malformed");
+      }
+
+      let json: unknown;
+      try {
+        json = JSON.parse(content);
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          console.warn("AI JSON parse failed", error);
+          throw new Error("AI analysis response is malformed", {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+
+      const analysis = parseAnalyzeResponse(json);
+      if (!analysis) {
+        throw new Error("AI analysis response is malformed");
+      }
+
+      return { analysis, model: parsed.model || PRESET_MODEL };
     });
   }
-}
-
-function parseJsonText(text: string): AnalyzeResult {
-  try {
-    return requireAnalyzeResponse(JSON.parse(text));
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      console.warn("AI JSON parse failed", error);
-      throw new Error("AI analysis response is malformed", { cause: error });
-    }
-    throw error;
-  }
-}
-
-function requireAnalyzeResponse(value: unknown): AnalyzeResult {
-  const result = parseAnalyzeResponse(value);
-  if (!result) {
-    throw new Error("AI analysis response is malformed");
-  }
-  return result;
 }

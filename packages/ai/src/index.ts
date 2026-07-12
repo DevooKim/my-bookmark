@@ -1,9 +1,10 @@
-export { createAiProvider, DEFAULT_MODELS } from "./providers";
+export { createAiProvider, PRESET_MODEL } from "./providers";
 export { categorizeResponseSchema, parseCategorizeResponse } from "./schema";
 export type {
   AiProvider,
   AiProviderConfig,
-  AiProviderName,
+  AnalyzeOutcome,
+  AnalyzeResult,
   CategorizeInput,
   CategorizeResult,
 } from "./types";

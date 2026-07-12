@@ -1,9 +1,4 @@
-import {
-  AI_MODEL_CATALOG,
-  type AiModelId,
-  type AiProviderName,
-  type CategoryWithCount,
-} from "@my-bookmark/shared";
+import type { CategoryWithCount } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -22,18 +17,15 @@ import { toast } from "sonner";
 import {
   createApiKey,
   createCategory,
-  deleteAiProviderKey,
   deleteCategory,
   getAiStatus,
   getPushStatus,
   listApiKeys,
   listCategories,
-  reorderAiModels,
   reorderCategories,
   revokeApiKey,
-  saveAiProviderKey,
   sendTestPush,
-  testAiProviderConnection,
+  testAiConnection,
   updateCategory,
 } from "../../lib/api-client";
 import { performLogout } from "../../lib/logout";
@@ -532,282 +524,65 @@ function ApiKeySection() {
   );
 }
 
-const aiProviderLabels: Record<AiProviderName, string> = {
-  gemini: "Gemini",
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-};
-const aiProviderNames = ["gemini", "anthropic", "openai"] as const;
-const emptyAiKeys: Record<AiProviderName, string> = {
-  gemini: "",
-  anthropic: "",
-  openai: "",
-};
-
-function getModelConfig(model: AiModelId) {
-  const config = AI_MODEL_CATALOG.find((item) => item.model === model);
-  if (!config) {
-    throw new Error("Unknown AI model");
-  }
-  return config;
-}
-
 export function AiSection() {
-  const queryClient = useQueryClient();
   const aiQuery = useQuery({ queryKey: ["ai"], queryFn: getAiStatus });
-  const [apiKeys, setApiKeys] = useState(emptyAiKeys);
-  const modelOrder = aiQuery.data?.modelOrder ?? [];
-
-  const keyMutation = useMutation({
-    mutationFn: ({
-      provider,
-      apiKey,
-    }: {
-      provider: AiProviderName;
-      apiKey: string;
-    }) => saveAiProviderKey(provider, { apiKey }),
-    onSuccess: (status, variables) => {
-      queryClient.setQueryData(["ai"], status);
-      setApiKeys((current) => ({ ...current, [variables.provider]: "" }));
-      toast.success(
-        `${aiProviderLabels[variables.provider]} API 키를 저장했어요`,
-      );
-    },
-    onError: () => toast.error("AI API 키를 저장하지 못했어요"),
-  });
-  const orderMutation = useMutation({
-    mutationFn: reorderAiModels,
-    onSuccess: (status) => {
-      queryClient.setQueryData(["ai"], status);
-      toast.success("모델 우선순위를 저장했어요");
-    },
-    onError: () => toast.error("모델 우선순위를 저장하지 못했어요"),
-  });
-  const moveModel = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= modelOrder.length) {
-      return;
-    }
-    const models = [...modelOrder];
-    const moved = models[index];
-    const swapped = models[target];
-    if (!moved || !swapped) {
-      return;
-    }
-    models[index] = swapped;
-    models[target] = moved;
-    orderMutation.mutate({ models });
-  };
   const testMutation = useMutation({
-    mutationFn: (provider: AiProviderName) =>
-      testAiProviderConnection(provider),
-    onSuccess: (result) => {
-      const label = aiProviderLabels[result.provider];
+    mutationFn: testAiConnection,
+    onSuccess: (result) =>
       result.ok
-        ? toast.success(`${label} 연결에 성공했어요`)
-        : toast.error(`${label} API 키를 확인해 주세요`);
-    },
+        ? toast.success("OpenRouter 연결에 성공했어요")
+        : toast.error("OpenRouter 키를 확인해 주세요"),
     onError: () => toast.error("연결 테스트를 완료하지 못했어요"),
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (provider: AiProviderName) => deleteAiProviderKey(provider),
-    onSuccess: (status) => {
-      queryClient.setQueryData(["ai"], status);
-      toast.success("AI API 키를 삭제했어요");
-    },
-    onError: () => toast.error("AI API 키를 삭제하지 못했어요"),
   });
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="font-bold">AI 분류</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        provider API 키를 관리하고, 키가 등록된 provider의 모델을 선택합니다.
+        분류는 OpenRouter preset이 담당합니다. 모델·폴백·파라미터는
+        openrouter.ai 대시보드에서 관리하세요.
       </p>
-      <Link
-        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600"
-        to="/ai-usage"
-      >
-        사용량 대시보드 <ChevronRight className="h-4 w-4" />
-      </Link>
       {aiQuery.isError ? (
         <p className="mt-3 text-sm text-red-600">
           AI 설정을 불러오지 못했어요.
         </p>
       ) : null}
-
-      <div className="mt-5 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-        <h3 className="text-sm font-semibold">사용 모델</h3>
-        {modelOrder.length === 0 ? (
-          <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-500 dark:bg-zinc-950">
-            먼저 provider API 키를 등록하세요
+      <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+        <div>
+          <p className="text-sm font-medium">
+            {aiQuery.data?.preset ?? "@preset/my-bookmark"}
           </p>
-        ) : (
-          <>
-            <p className="mt-1 text-xs text-zinc-500">
-              위에서부터 순서대로 시도하고, 실패하면 다음 모델로 넘어갑니다.
-              드래그하거나 버튼으로 순서를 바꾸세요.
-            </p>
-            <SortableList
-              ids={modelOrder}
-              onReorder={(models) =>
-                orderMutation.mutate({
-                  models: models.filter((model): model is AiModelId =>
-                    modelOrder.some((item) => item === model),
-                  ),
-                })
-              }
-            >
-              <ol className="mt-2 space-y-2">
-                {modelOrder.map((model, index) => {
-                  const item = getModelConfig(model);
-                  return (
-                    <li key={model}>
-                      <SortableRow
-                        className="flex items-center gap-2 rounded-xl border border-zinc-200 p-2 dark:border-zinc-800"
-                        handleLabel={`${item.label} 순서 변경`}
-                        id={model}
-                      >
-                        <span className="w-5 text-center text-xs text-zinc-400">
-                          {index + 1}
-                        </span>
-                        <span className="flex-1 text-sm">
-                          {item.label}{" "}
-                          <span className="text-xs text-zinc-500">
-                            {aiProviderLabels[item.provider]} · {item.tier}
-                          </span>
-                          {index === 0 ? (
-                            <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[0.6875rem] text-blue-700 dark:bg-blue-950 dark:text-blue-200">
-                              우선 사용
-                            </span>
-                          ) : null}
-                        </span>
-                        <button
-                          aria-label={`${item.label} 위로 이동`}
-                          className="icon-button"
-                          disabled={index === 0 || orderMutation.isPending}
-                          onClick={() => moveModel(index, -1)}
-                          type="button"
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          aria-label={`${item.label} 아래로 이동`}
-                          className="icon-button"
-                          disabled={
-                            index === modelOrder.length - 1 ||
-                            orderMutation.isPending
-                          }
-                          onClick={() => moveModel(index, 1)}
-                          type="button"
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
-                      </SortableRow>
-                    </li>
-                  );
-                })}
-              </ol>
-            </SortableList>
-          </>
-        )}
-      </div>
-
-      <div className="mt-6">
-        <h3 className="text-sm font-semibold">AI API 키</h3>
-        <div className="mt-2 grid gap-3 lg:grid-cols-3">
-          {aiProviderNames.map((provider) => {
-            const configured =
-              aiQuery.data?.providers[provider].configured ?? false;
-            const saving =
-              keyMutation.isPending &&
-              keyMutation.variables?.provider === provider;
-            const testing =
-              testMutation.isPending && testMutation.variables === provider;
-            return (
-              <div
-                className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
-                key={provider}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">
-                    {aiProviderLabels[provider]}
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    {configured ? "설정됨" : "API 키 필요"}
-                  </span>
-                </div>
-                <label className="mt-3 grid gap-1 text-sm">
-                  {aiProviderLabels[provider]} API 키
-                  <input
-                    autoComplete="off"
-                    className="input"
-                    maxLength={512}
-                    onChange={(event) =>
-                      setApiKeys((current) => ({
-                        ...current,
-                        [provider]: event.target.value,
-                      }))
-                    }
-                    placeholder={
-                      configured ? "새 키를 입력하면 교체됩니다" : "API 키 입력"
-                    }
-                    type="password"
-                    value={apiKeys[provider]}
-                  />
-                </label>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    aria-label={`${aiProviderLabels[provider]} 키 저장`}
-                    className="btn-secondary"
-                    disabled={
-                      !apiKeys[provider].trim() || keyMutation.isPending
-                    }
-                    onClick={() =>
-                      keyMutation.mutate({
-                        provider,
-                        apiKey: apiKeys[provider].trim(),
-                      })
-                    }
-                    type="button"
-                  >
-                    {saving ? "저장 중…" : configured ? "키 교체" : "키 저장"}
-                  </button>
-                  {configured ? (
-                    <>
-                      <button
-                        aria-label={`${aiProviderLabels[provider]} 연결 테스트`}
-                        className="btn-secondary"
-                        disabled={
-                          testMutation.isPending || deleteMutation.isPending
-                        }
-                        onClick={() => testMutation.mutate(provider)}
-                        type="button"
-                      >
-                        {testing ? "확인 중…" : "연결 테스트"}
-                      </button>
-                      <button
-                        aria-label={`${aiProviderLabels[provider]} 키 삭제`}
-                        className="btn-secondary text-red-600"
-                        disabled={
-                          testMutation.isPending || deleteMutation.isPending
-                        }
-                        onClick={() => deleteMutation.mutate(provider)}
-                        type="button"
-                      >
-                        키 삭제
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+          <p className="text-xs text-zinc-500">
+            {aiQuery.data?.enabled
+              ? "서버에 OpenRouter 키가 설정되어 있어요"
+              : "서버 env에 OPEN_ROUTER_API_KEY가 필요해요"}
+          </p>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          연결 테스트는 Models API로 키 인증만 확인하며 추론을 실행하지
-          않습니다.
-        </p>
+        <span
+          className={
+            aiQuery.data?.enabled
+              ? "text-xs text-green-600"
+              : "text-xs text-red-600"
+          }
+        >
+          {aiQuery.data?.enabled ? "활성" : "비활성"}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          className="btn-secondary"
+          disabled={!aiQuery.data?.enabled || testMutation.isPending}
+          onClick={() => testMutation.mutate()}
+          type="button"
+        >
+          {testMutation.isPending ? "확인 중…" : "연결 테스트"}
+        </button>
+        <Link
+          className="inline-flex items-center gap-1 text-sm font-medium text-blue-600"
+          to="/ai-usage"
+        >
+          사용량 대시보드 <ChevronRight className="h-4 w-4" />
+        </Link>
       </div>
     </section>
   );

@@ -1,4 +1,4 @@
-import { AI_MODEL_CATALOG, type AiUsageEvent } from "@my-bookmark/shared";
+import type { AiUsageEvent } from "@my-bookmark/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
@@ -52,7 +52,7 @@ export function aggregateUsage(events: AiUsageEvent[]): {
 }
 
 export function modelLabel(model: string): string {
-  return AI_MODEL_CATALOG.find((item) => item.model === model)?.label ?? model;
+  return model;
 }
 
 export function AiUsagePage() {

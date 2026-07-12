@@ -5,12 +5,22 @@ export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("existing"),
     categoryId: z.string().min(1),
-    confidence: z.number().min(0).max(1).default(0),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .nullish()
+      .transform((value) => value ?? 0),
   }),
   z.object({
     type: z.literal("new"),
     name: z.string().trim().min(1).max(16),
-    confidence: z.number().min(0).max(1).default(0),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .nullish()
+      .transform((value) => value ?? 0),
   }),
   z.object({ type: z.literal("none") }),
 ]);
@@ -44,35 +54,38 @@ export function parseAnalyzeResponse(value: unknown): AnalyzeResult | null {
   return parsed.data;
 }
 
-const categoryJsonSchema = {
-  type: "object" as const,
-  properties: {
-    type: { type: "string" as const, enum: ["existing", "new", "none"] },
-    categoryId: { type: "string" as const },
-    name: { type: "string" as const },
-    confidence: { type: "number" as const, minimum: 0, maximum: 1 },
-  },
-  required: ["type"],
-  additionalProperties: false,
-};
-
+// strict json_schema 규칙(실측 2026-07-12): OpenAI 계열 업스트림은 strict 모드에서
+// 모든 property가 required여야 한다. 조건부 필드(categoryId/name/confidence)는
+// nullable(type 배열에 "null" 포함)로 선언하고 전부 required에 넣는다.
 export const jsonSchema = {
   type: "object" as const,
   properties: {
-    category: categoryJsonSchema,
-    summaryTitle: { type: "string" as const, minLength: 1, maxLength: 40 },
-    summary: { type: "string" as const, minLength: 1, maxLength: 300 },
-    tags: {
-      type: "array" as const,
-      items: { type: "string" as const, minLength: 1, maxLength: 20 },
-      minItems: 3,
-      maxItems: 5,
-      uniqueItems: true,
+    category: {
+      type: "object" as const,
+      properties: {
+        type: { type: "string" as const, enum: ["existing", "new", "none"] },
+        categoryId: { type: ["string", "null"] as const },
+        name: { type: ["string", "null"] as const },
+        confidence: { type: ["number", "null"] as const },
+      },
+      required: ["type", "categoryId", "name", "confidence"],
+      additionalProperties: false,
     },
+    summaryTitle: { type: "string" as const },
+    summary: { type: "string" as const },
+    tags: { type: "array" as const, items: { type: "string" as const } },
   },
   required: ["category", "summaryTitle", "summary", "tags"],
   additionalProperties: false,
 };
+
+// OpenRouter chat/completions 응답 경계 스키마.
+export const openRouterCompletionSchema = z.object({
+  model: z.string().default(""),
+  choices: z
+    .array(z.object({ message: z.object({ content: z.string().nullable() }) }))
+    .min(1),
+});
 
 export function systemPrompt(): string {
   return [
@@ -86,6 +99,7 @@ export function systemPrompt(): string {
     "6. summaryTitle은 원문을 핵심만 요약한 한국어 제목 스타일로 작성하며 최대 40자다.",
     "7. tags는 중복 없는 한국어 태그 3~5개로 작성하며 각 태그는 최대 20자다. 고유 기술명은 원문을 허용한다.",
     "8. summary는 원문의 핵심을 한국어 1~3문장으로 요약한다. 불필요한 수식 없이 정보만 담고, 전체 300자 이내로 한다.",
+    "9. 해당 없는 필드(categoryId, name)는 null로 채운다.",
   ].join("\n");
 }
 

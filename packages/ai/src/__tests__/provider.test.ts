@@ -1,88 +1,123 @@
-import { describe, expect, it, vi } from "vitest";
-
-const sdkMocks = vi.hoisted(() => ({
-  anthropicCreate: vi.fn(),
-  anthropicListModels: vi.fn(),
-  geminiGenerateContent: vi.fn(),
-  geminiListModels: vi.fn(),
-  openAiListModels: vi.fn(),
-  openAiParse: vi.fn(),
-}));
-
-vi.mock("@google/genai", () => ({
-  GoogleGenAI: vi.fn(function GoogleGenAI() {
-    return {
-      models: {
-        generateContent: sdkMocks.geminiGenerateContent,
-        list: sdkMocks.geminiListModels,
-      },
-    };
-  }),
-  Type: {
-    ARRAY: "array",
-    NUMBER: "number",
-    OBJECT: "object",
-    STRING: "string",
-  },
-}));
-
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn(function Anthropic() {
-    return {
-      messages: { create: sdkMocks.anthropicCreate },
-      models: { list: sdkMocks.anthropicListModels },
-    };
-  }),
-}));
-
-vi.mock("openai", () => ({
-  default: vi.fn(function OpenAI() {
-    return {
-      responses: { parse: sdkMocks.openAiParse },
-      models: { list: sdkMocks.openAiListModels },
-    };
-  }),
-}));
-
-vi.mock("openai/helpers/zod", () => ({
-  zodTextFormat: vi.fn((schema, name) => ({ name, schema })),
-}));
-
-import { type AiProvider, createAiProvider } from "../index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAiProvider, PRESET_MODEL } from "../index";
 import { parseAnalyzeResponse } from "../schema";
 
-const expected = {
-  category: {
-    type: "existing" as const,
-    categoryId: "cat-dev",
-    confidence: 0.91,
-  },
+const analysis = {
+  category: { type: "new" as const, name: "💻 개발", confidence: 0.9 },
   summaryTitle: "React 19 핵심 변경 사항",
-  summary:
-    "React 19에서 달라진 핵심 API를 정리한다. Actions와 use 훅 중심으로 마이그레이션 포인트를 짚는다.",
+  summary: "React 19의 핵심 변경을 정리한다.",
   tags: ["React", "프론트엔드", "자바스크립트"],
 };
 
-describe("AI provider contract", () => {
-  it("describes a categorize interface", async () => {
-    const provider: AiProvider = {
-      name: "fake",
-      model: "fake-model",
-      categorize: async () => expected,
-      validateConnection: async () => undefined,
-    };
+function completionResponse(
+  content: unknown,
+  model = "google/gemini-3.1-flash-lite-20260507",
+) {
+  return new Response(
+    JSON.stringify({
+      model,
+      choices: [
+        {
+          message: {
+            content:
+              typeof content === "string" ? content : JSON.stringify(content),
+          },
+        },
+      ],
+    }),
+    { status: 200 },
+  );
+}
 
+afterEach(() => vi.unstubAllGlobals());
+
+describe("OpenRouter preset provider", () => {
+  it("calls the preset with strict json_schema and returns the analysis outcome", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completionResponse(analysis));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createAiProvider({ apiKey: "or-key" });
+
+    const outcome = await provider.categorize({
+      url: "https://example.com",
+      existingCategories: [],
+    });
+
+    expect(outcome.analysis).toEqual(analysis);
+    expect(outcome.model).toBe("google/gemini-3.1-flash-lite-20260507");
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBe(PRESET_MODEL);
+    expect(body.max_tokens).toBe(2048);
+    expect(body.provider).toEqual({ require_parameters: true });
+    expect(body.response_format.json_schema.strict).toBe(true);
+    // strict 규칙: category의 모든 property가 required
+    expect(
+      body.response_format.json_schema.schema.properties.category.required,
+    ).toEqual(["type", "categoryId", "name", "confidence"]);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("parses nullable category fields from strict output", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        completionResponse({
+          ...analysis,
+          category: {
+            type: "new",
+            categoryId: null,
+            name: "💻 개발",
+            confidence: null,
+          },
+        }),
+      ),
+    );
+    const provider = createAiProvider({ apiKey: "or-key" });
+    const outcome = await provider.categorize({
+      url: "https://example.com",
+      existingCategories: [],
+    });
+    expect(outcome.analysis.category).toEqual({
+      type: "new",
+      name: "💻 개발",
+      confidence: 0,
+    });
+  });
+
+  it("throws with status attached on non-2xx", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 429 })),
+    );
+    const provider = createAiProvider({ apiKey: "or-key" });
     await expect(
       provider.categorize({
         url: "https://example.com",
         existingCategories: [],
       }),
-    ).resolves.toEqual(expected);
+    ).rejects.toMatchObject({ status: 429 });
   });
 
+  it("validates the key against GET /key", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createAiProvider({ apiKey: "k" }).validateConnection(),
+    ).resolves.toBeUndefined();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://openrouter.ai/api/v1/key",
+    );
+  });
+});
+
+describe("AI analysis response parsing", () => {
   it("parses a complete analysis and rejects malformed analysis", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(parseAnalyzeResponse(expected)).toEqual(expected);
+    expect(parseAnalyzeResponse(analysis)).toEqual(analysis);
     expect(
       parseAnalyzeResponse({
         category: { type: "none" },
@@ -92,203 +127,16 @@ describe("AI provider contract", () => {
     ).toBeNull();
     expect(
       parseAnalyzeResponse({
-        ...expected,
+        ...analysis,
         category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
       }),
     ).toEqual({
-      ...expected,
+      ...analysis,
       category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
     });
     expect(
-      parseAnalyzeResponse({ ...expected, summary: "가".repeat(301) }),
+      parseAnalyzeResponse({ ...analysis, summary: "가".repeat(301) }),
     ).toBeNull();
-    warn.mockRestore();
-  });
-
-  it("creates the selected provider", () => {
-    expect(createAiProvider({ provider: "gemini", apiKey: "test" }).name).toBe(
-      "gemini",
-    );
-    expect(
-      createAiProvider({ provider: "anthropic", apiKey: "test" }).name,
-    ).toBe("anthropic");
-    expect(createAiProvider({ provider: "openai", apiKey: "test" }).name).toBe(
-      "openai",
-    );
-  });
-
-  it("parses Gemini structured JSON responses and passes an abort signal", async () => {
-    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify(expected),
-    });
-
-    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
-
-    await expect(
-      provider.categorize({
-        url: "https://example.com",
-        title: "React 19",
-        existingCategories: [{ id: "cat-dev", name: "개발" }],
-      }),
-    ).resolves.toEqual(expected);
-    expect(sdkMocks.geminiGenerateContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          abortSignal: expect.any(AbortSignal),
-          responseMimeType: "application/json",
-        }),
-      }),
-    );
-  });
-
-  it("defaults omitted Gemini confidence without failing the analysis", async () => {
-    sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({
-        ...expected,
-        category: { type: "existing", categoryId: "cat-dev" },
-      }),
-    });
-
-    const provider = createAiProvider({ provider: "gemini", apiKey: "test" });
-
-    await expect(
-      provider.categorize({
-        url: "https://example.com",
-        existingCategories: [{ id: "cat-dev", name: "개발" }],
-      }),
-    ).resolves.toEqual({
-      ...expected,
-      category: { type: "existing", categoryId: "cat-dev", confidence: 0 },
-    });
-  });
-
-  it("parses Anthropic forced tool-use responses", async () => {
-    sdkMocks.anthropicCreate.mockResolvedValueOnce({
-      content: [
-        {
-          type: "tool_use",
-          input: expected,
-        },
-      ],
-    });
-
-    const provider = createAiProvider({
-      provider: "anthropic",
-      apiKey: "test",
-    });
-
-    await expect(
-      provider.categorize({
-        url: "https://example.com",
-        existingCategories: [],
-      }),
-    ).resolves.toEqual(expected);
-    expect(sdkMocks.anthropicCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tool_choice: { type: "tool", name: "analyze_bookmark" },
-      }),
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-  });
-
-  it("parses OpenAI structured output responses", async () => {
-    sdkMocks.openAiParse.mockResolvedValueOnce({
-      output_parsed: expected,
-    });
-
-    const provider = createAiProvider({ provider: "openai", apiKey: "test" });
-
-    await expect(
-      provider.categorize({
-        url: "https://example.com",
-        existingCategories: [],
-      }),
-    ).resolves.toEqual(expected);
-    expect(sdkMocks.openAiParse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text: expect.objectContaining({
-          format: expect.objectContaining({ name: "bookmark_analysis" }),
-        }),
-      }),
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-  });
-
-  it("validates provider connections through Models APIs without inference", async () => {
-    sdkMocks.geminiGenerateContent.mockClear();
-    sdkMocks.anthropicCreate.mockClear();
-    sdkMocks.openAiParse.mockClear();
-    sdkMocks.geminiListModels.mockResolvedValueOnce({});
-    sdkMocks.anthropicListModels.mockResolvedValueOnce({});
-    sdkMocks.openAiListModels.mockResolvedValueOnce({});
-
-    await createAiProvider({
-      provider: "gemini",
-      apiKey: "test",
-    }).validateConnection();
-    await createAiProvider({
-      provider: "anthropic",
-      apiKey: "test",
-    }).validateConnection();
-    await createAiProvider({
-      provider: "openai",
-      apiKey: "test",
-    }).validateConnection();
-
-    expect(sdkMocks.geminiListModels).toHaveBeenCalledWith({
-      config: {
-        pageSize: 1,
-        abortSignal: expect.any(AbortSignal),
-      },
-    });
-    expect(sdkMocks.anthropicListModels).toHaveBeenCalledWith(
-      { limit: 1 },
-      { signal: expect.any(AbortSignal) },
-    );
-    expect(sdkMocks.openAiListModels).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
-    });
-    expect(sdkMocks.geminiGenerateContent).not.toHaveBeenCalled();
-    expect(sdkMocks.anthropicCreate).not.toHaveBeenCalled();
-    expect(sdkMocks.openAiParse).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [
-      "gemini",
-      () =>
-        sdkMocks.geminiGenerateContent.mockResolvedValueOnce({
-          text: "not json",
-        }),
-    ],
-    [
-      "anthropic",
-      () =>
-        sdkMocks.anthropicCreate.mockResolvedValueOnce({
-          content: [
-            { type: "tool_use", input: { category: { type: "none" } } },
-          ],
-        }),
-    ],
-    [
-      "openai",
-      () => sdkMocks.openAiParse.mockResolvedValueOnce({ output_parsed: null }),
-    ],
-  ] as const)("throws when %s output is malformed", async (providerName, arrange) => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    arrange();
-
-    const provider = createAiProvider({
-      provider: providerName,
-      apiKey: "test",
-    });
-
-    await expect(
-      provider.categorize({
-        url: "https://example.com",
-        existingCategories: [],
-      }),
-    ).rejects.toThrow("AI analysis response is malformed");
     warn.mockRestore();
   });
 });

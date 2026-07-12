@@ -54,15 +54,9 @@ describe("bookmark route security helpers", () => {
     ]);
   });
 
-  it("resolves the AI provider chain for the authenticated user", async () => {
-    const candidates = [
-      {
-        provider: "gemini" as const,
-        model: "gemini-flash-lite-latest",
-        instance: { name: "fake", categorize: vi.fn() },
-      },
-    ];
-    const chainResolver = vi.fn().mockResolvedValue(candidates);
+  it("resolves the configured AI provider for the authenticated user", async () => {
+    const provider = { categorize: vi.fn(), validateConnection: vi.fn() };
+    const providerResolver = vi.fn().mockReturnValue(provider);
     const categorize = vi.fn().mockResolvedValue(undefined);
     const db = { from: vi.fn() };
 
@@ -70,24 +64,22 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      chainResolver,
+      providerResolver,
       categorize,
     });
 
-    expect(chainResolver).toHaveBeenCalledWith(userId);
+    expect(providerResolver).toHaveBeenCalledWith();
     expect(categorize).toHaveBeenCalledWith({
       db,
       userId,
       bookmarkId,
-      candidates,
+      provider,
       recordUsage: expect.any(Function),
     });
   });
 
-  it("continues categorization with an empty chain when credentials cannot be decrypted", async () => {
-    const chainResolver = vi
-      .fn()
-      .mockRejectedValue(new Error("decrypt failed"));
+  it("passes a null provider through when AI is not configured", async () => {
+    const providerResolver = vi.fn().mockReturnValue(null);
     const categorize = vi.fn().mockResolvedValue(undefined);
     const db = { from: vi.fn() };
 
@@ -95,7 +87,7 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      chainResolver,
+      providerResolver,
       categorize,
     });
 
@@ -103,7 +95,7 @@ describe("bookmark route security helpers", () => {
       db,
       userId,
       bookmarkId,
-      candidates: [],
+      provider: null,
       recordUsage: expect.any(Function),
     });
   });

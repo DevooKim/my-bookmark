@@ -1,98 +1,61 @@
 import { describe, expect, it } from "vitest";
 import {
-  AI_MODEL_CATALOG,
+  aiAccountUsageResponseSchema,
   aiConnectionTestResponseSchema,
   aiStatusResponseSchema,
-  reorderAiModelsRequestSchema,
-  saveAiProviderKeyRequestSchema,
+  aiUsageEventSchema,
 } from "../index";
 
-describe("AI settings schemas", () => {
-  it("provides two fixed low-cost or balanced models per provider", () => {
-    expect(AI_MODEL_CATALOG).toEqual([
-      {
-        provider: "gemini",
-        model: "gemini-flash-lite-latest",
-        label: "Gemini Flash Lite",
-        tier: "저비용",
-      },
-      {
-        provider: "gemini",
-        model: "gemini-flash-latest",
-        label: "Gemini Flash",
-        tier: "균형",
-      },
-      {
-        provider: "anthropic",
-        model: "claude-haiku-4-5",
-        label: "Claude Haiku 4.5",
-        tier: "저비용",
-      },
-      {
-        provider: "anthropic",
-        model: "claude-sonnet-4-6",
-        label: "Claude Sonnet 4.6",
-        tier: "균형",
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        label: "GPT-4o mini",
-        tier: "저비용",
-      },
-      {
-        provider: "openai",
-        model: "gpt-5.4-mini",
-        label: "GPT-5.4 mini",
-        tier: "균형",
-      },
-    ]);
-  });
-
-  it("parses selected model and provider configuration without credentials", () => {
+describe("AI schemas", () => {
+  it("parses the preset status response", () => {
     expect(
       aiStatusResponseSchema.parse({
-        provider: "openai",
-        model: "gpt-4o-mini",
         enabled: true,
-        modelOrder: ["gpt-4o-mini"],
-        providers: {
-          gemini: { configured: false },
-          anthropic: { configured: false },
-          openai: { configured: true },
-        },
+        preset: "@preset/my-bookmark",
       }),
-    ).toMatchObject({ provider: "openai", model: "gpt-4o-mini" });
-  });
-
-  it("parses provider-key requests independently from model selection", () => {
-    expect(
-      saveAiProviderKeyRequestSchema.parse({ apiKey: " secret-key " }),
-    ).toEqual({ apiKey: "secret-key" });
-    expect(() =>
-      saveAiProviderKeyRequestSchema.parse({ apiKey: " " }),
-    ).toThrow();
-    expect(() =>
-      saveAiProviderKeyRequestSchema.parse({ apiKey: "x".repeat(513) }),
-    ).toThrow();
-  });
-
-  it("accepts a full unique reorder and rejects duplicate models", () => {
-    expect(
-      reorderAiModelsRequestSchema.parse({
-        models: ["gemini-flash-latest", "gemini-flash-lite-latest"],
-      }),
-    ).toEqual({ models: ["gemini-flash-latest", "gemini-flash-lite-latest"] });
-    expect(() =>
-      reorderAiModelsRequestSchema.parse({
-        models: ["gemini-flash-latest", "gemini-flash-latest"],
-      }),
-    ).toThrow();
+    ).toEqual({ enabled: true, preset: "@preset/my-bookmark" });
   });
 
   it("parses connection test results", () => {
+    expect(aiConnectionTestResponseSchema.parse({ ok: true })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("parses the OpenRouter account usage response", () => {
     expect(
-      aiConnectionTestResponseSchema.parse({ provider: "openai", ok: true }),
-    ).toEqual({ provider: "openai", ok: true });
+      aiAccountUsageResponseSchema.parse({
+        usage: 1.2,
+        usageDaily: 0.1,
+        usageWeekly: 0.5,
+        usageMonthly: 1.2,
+        limit: 10,
+        limitRemaining: 8.8,
+        isFreeTier: false,
+      }),
+    ).toEqual({
+      usage: 1.2,
+      usageDaily: 0.1,
+      usageWeekly: 0.5,
+      usageMonthly: 1.2,
+      limit: 10,
+      limitRemaining: 8.8,
+      isFreeTier: false,
+    });
+  });
+
+  it("accepts a free-text provider on usage events", () => {
+    expect(
+      aiUsageEventSchema.parse({
+        id: "11111111-1111-4111-8111-111111111111",
+        provider: "google",
+        model: "google/gemini-3.1-flash-lite-20260507",
+        bookmarkId: null,
+        status: "success",
+        errorCode: null,
+        durationMs: 700,
+        createdAt: "2026-07-12T10:00:00.000Z",
+      }),
+    ).toMatchObject({ provider: "google" });
   });
 });

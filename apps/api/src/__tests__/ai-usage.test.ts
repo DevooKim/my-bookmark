@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { createAiUsageRecorder, listAiUsageEvents } from "../services/ai-usage";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createAiUsageRecorder,
+  fetchAccountUsage,
+  listAiUsageEvents,
+} from "../services/ai-usage";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 
@@ -79,6 +83,53 @@ describe("listAiUsageEvents", () => {
       model: "gemini-flash-lite-latest",
       status: "success",
       durationMs: 700,
+    });
+  });
+});
+
+describe("fetchAccountUsage", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("maps the OpenRouter /key response to camelCase", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              usage: 1.2,
+              usage_daily: 0.1,
+              usage_weekly: 0.5,
+              usage_monthly: 1.2,
+              limit: 10,
+              limit_remaining: 8.8,
+              is_free_tier: false,
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(fetchAccountUsage("or-key")).resolves.toEqual({
+      usage: 1.2,
+      usageDaily: 0.1,
+      usageWeekly: 0.5,
+      usageMonthly: 1.2,
+      limit: 10,
+      limitRemaining: 8.8,
+      isFreeTier: false,
+    });
+  });
+
+  it("throws a 502 HttpError when the key lookup fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+    );
+
+    await expect(fetchAccountUsage("bad-key")).rejects.toMatchObject({
+      status: 502,
     });
   });
 });

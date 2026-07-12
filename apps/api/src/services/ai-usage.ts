@@ -1,4 +1,12 @@
-import { type AiUsageEvent, aiUsageEventSchema } from "@my-bookmark/shared";
+import {
+  type AiAccountUsageResponse,
+  type AiUsageEvent,
+  API_ERROR_CODES,
+  aiAccountUsageResponseSchema,
+  aiUsageEventSchema,
+} from "@my-bookmark/shared";
+import { z } from "zod";
+import { HttpError } from "../middleware/error";
 import type { AiUsageEventInput } from "./categorize";
 
 interface UsageInsertDb {
@@ -11,7 +19,7 @@ interface UsageInsertDb {
 
 interface UsageRow {
   id: string;
-  provider: "gemini" | "anthropic" | "openai";
+  provider: string;
   model: string;
   bookmark_id: string | null;
   status: "success" | "failed";
@@ -98,4 +106,41 @@ export async function listAiUsageEvents(
       createdAt: row.created_at,
     }),
   );
+}
+
+const openRouterKeyResponseSchema = z.object({
+  data: z.object({
+    usage: z.number(),
+    usage_daily: z.number(),
+    usage_weekly: z.number(),
+    usage_monthly: z.number(),
+    limit: z.number().nullable(),
+    limit_remaining: z.number().nullable(),
+    is_free_tier: z.boolean(),
+  }),
+});
+
+export async function fetchAccountUsage(
+  apiKey: string,
+): Promise<AiAccountUsageResponse> {
+  const response = await fetch("https://openrouter.ai/api/v1/key", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!response.ok) {
+    throw new HttpError(
+      502,
+      API_ERROR_CODES.INTERNAL,
+      "OpenRouter key lookup failed",
+    );
+  }
+  const parsed = openRouterKeyResponseSchema.parse(await response.json());
+  return aiAccountUsageResponseSchema.parse({
+    usage: parsed.data.usage,
+    usageDaily: parsed.data.usage_daily,
+    usageWeekly: parsed.data.usage_weekly,
+    usageMonthly: parsed.data.usage_monthly,
+    limit: parsed.data.limit,
+    limitRemaining: parsed.data.limit_remaining,
+    isFreeTier: parsed.data.is_free_tier,
+  });
 }

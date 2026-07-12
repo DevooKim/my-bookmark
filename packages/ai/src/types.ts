@@ -18,17 +18,16 @@ export interface AnalyzeResult {
   tags: string[];
 }
 
-export interface AiProvider {
-  readonly name: string;
-  readonly model: string;
-  categorize(input: CategorizeInput): Promise<AnalyzeResult>;
-  validateConnection(): Promise<void>;
+export interface AiProviderConfig {
+  apiKey: string;
 }
 
-export type AiProviderName = "gemini" | "anthropic" | "openai";
+export interface AnalyzeOutcome {
+  analysis: AnalyzeResult;
+  model: string;
+}
 
-export interface AiProviderConfig {
-  provider: AiProviderName;
-  apiKey: string;
-  model?: string;
+export interface AiProvider {
+  categorize(input: CategorizeInput): Promise<AnalyzeOutcome>;
+  validateConnection(): Promise<void>;
 }

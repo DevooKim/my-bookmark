@@ -1,8 +1,7 @@
-import type { AiProvider } from "@my-bookmark/ai";
+import type { AiProvider, AnalyzeResult } from "@my-bookmark/ai";
+import { PRESET_MODEL } from "@my-bookmark/ai";
 import { domainFromUrl } from "../lib/url";
 import { fetchMetadata, type PageMetadata } from "./metadata";
-
-type AnalyzeResult = Awaited<ReturnType<AiProvider["categorize"]>>;
 
 interface DbError {
   code?: string;
@@ -28,14 +27,8 @@ interface BookmarkCategorizeDb {
   from(table: string): unknown;
 }
 
-export interface AiProviderCandidate {
-  provider: "gemini" | "anthropic" | "openai";
-  model: string;
-  instance: AiProvider;
-}
-
 export interface AiUsageEventInput {
-  provider: AiProviderCandidate["provider"];
+  provider: string;
   model: string;
   bookmarkId: string | null;
   status: "success" | "failed";
@@ -47,16 +40,23 @@ interface CategorizeOptions {
   db: BookmarkCategorizeDb;
   userId: string;
   bookmarkId: string;
-  candidates: AiProviderCandidate[];
+  provider: AiProvider | null;
   recordUsage?: (event: AiUsageEventInput) => Promise<void>;
   metadataFetcher?: (url: string) => Promise<PageMetadata>;
+}
+
+// 성공한 모델 id의 vendor prefix를 provider 컬럼에 기록한다
+// ("google/gemini-..." -> "google"). 실패 시엔 어떤 모델이 시도됐는지
+// OpenRouter가 알려주지 않으므로 고정값 "openrouter"를 사용한다.
+function vendorOf(model: string): string {
+  return model.split("/")[0] || "openrouter";
 }
 
 export async function categorizeBookmark({
   db,
   userId,
   bookmarkId,
-  candidates,
+  provider,
   recordUsage,
   metadataFetcher = fetchMetadata,
 }: CategorizeOptions): Promise<void> {
@@ -79,7 +79,7 @@ export async function categorizeBookmark({
       og_image_url: metadata.ogImageUrl,
     });
 
-    if (candidates.length === 0) {
+    if (!provider) {
       await markFailed(db, userId, bookmarkId);
       return;
     }
@@ -93,29 +93,12 @@ export async function categorizeBookmark({
       existingCategories: categories,
     };
 
-    for (const candidate of candidates) {
-      const startedAt = Date.now();
-      let result: AnalyzeResult;
-      try {
-        result = await candidate.instance.categorize(input);
-      } catch (error) {
-        console.warn(
-          `AI model ${candidate.model} failed, trying next candidate`,
-          error,
-        );
-        await recordUsage?.({
-          provider: candidate.provider,
-          model: candidate.model,
-          bookmarkId,
-          status: "failed",
-          errorCode: extractErrorCode(error),
-          durationMs: Date.now() - startedAt,
-        });
-        continue;
-      }
+    const startedAt = Date.now();
+    try {
+      const outcome = await provider.categorize(input);
       await recordUsage?.({
-        provider: candidate.provider,
-        model: candidate.model,
+        provider: vendorOf(outcome.model),
+        model: outcome.model,
         bookmarkId,
         status: "success",
         errorCode: null,
@@ -126,12 +109,21 @@ export async function categorizeBookmark({
         userId,
         bookmarkId,
         categories,
-        result,
-        candidate.model,
+        outcome.analysis,
+        outcome.model,
       );
-      return;
+    } catch (error) {
+      console.warn("AI categorization request failed", error);
+      await recordUsage?.({
+        provider: "openrouter",
+        model: PRESET_MODEL,
+        bookmarkId,
+        status: "failed",
+        errorCode: extractErrorCode(error),
+        durationMs: Date.now() - startedAt,
+      });
+      await markFailed(db, userId, bookmarkId);
     }
-    await markFailed(db, userId, bookmarkId);
   } catch (error) {
     console.warn("AI categorization failed", error);
     await markFailed(db, userId, bookmarkId).catch((markError) =>

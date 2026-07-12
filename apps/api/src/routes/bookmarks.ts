@@ -11,12 +11,9 @@ import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
-import { getAiProviderChain } from "../services/ai-provider";
+import { getAiProvider } from "../services/ai-provider";
 import { createAiUsageRecorder } from "../services/ai-usage";
-import {
-  type AiProviderCandidate,
-  categorizeBookmark,
-} from "../services/categorize";
+import { categorizeBookmark } from "../services/categorize";
 import { fetchMetadata, type PageMetadata } from "../services/metadata";
 
 interface DbError {
@@ -290,7 +287,7 @@ interface CategorizeBookmarkForUserOptions {
   db: Parameters<typeof categorizeBookmark>[0]["db"];
   userId: string;
   bookmarkId: string;
-  chainResolver?: typeof getAiProviderChain;
+  providerResolver?: typeof getAiProvider;
   categorize?: typeof categorizeBookmark;
 }
 
@@ -298,20 +295,14 @@ export async function categorizeBookmarkForUser({
   db,
   userId,
   bookmarkId,
-  chainResolver = getAiProviderChain,
+  providerResolver = getAiProvider,
   categorize = categorizeBookmark,
 }: CategorizeBookmarkForUserOptions): Promise<void> {
-  let candidates: AiProviderCandidate[] = [];
-  try {
-    candidates = await chainResolver(userId);
-  } catch (error) {
-    console.warn("AI provider credentials could not be loaded", error);
-  }
   await categorize({
     db,
     userId,
     bookmarkId,
-    candidates,
+    provider: providerResolver(),
     recordUsage: createAiUsageRecorder(db, userId),
   });
 }
