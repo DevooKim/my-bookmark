@@ -39,6 +39,7 @@ describe("OpenRouter preset provider", () => {
     const provider = createAiProvider({ apiKey: "or-key" });
 
     const outcome = await provider.categorize({
+      kind: "link",
       url: "https://example.com",
       existingCategories: [],
     });
@@ -61,6 +62,28 @@ describe("OpenRouter preset provider", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("sends private image data after the text prompt", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(completionResponse(analysis));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createAiProvider({ apiKey: "or-key" });
+
+    await provider.categorize({
+      kind: "image",
+      image: { mimeType: "image/jpeg", base64: "AQID" },
+      existingCategories: [{ id: "category-1", name: "🎨 디자인" }],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.messages[1].content).toEqual([
+      { type: "text", text: expect.stringContaining("existingCategories") },
+      {
+        type: "image_url",
+        image_url: { url: "data:image/jpeg;base64,AQID" },
+      },
+    ]);
+  });
+
   it("parses nullable category fields from strict output", async () => {
     vi.stubGlobal(
       "fetch",
@@ -78,6 +101,7 @@ describe("OpenRouter preset provider", () => {
     );
     const provider = createAiProvider({ apiKey: "or-key" });
     const outcome = await provider.categorize({
+      kind: "link",
       url: "https://example.com",
       existingCategories: [],
     });
@@ -96,6 +120,7 @@ describe("OpenRouter preset provider", () => {
     const provider = createAiProvider({ apiKey: "or-key" });
     await expect(
       provider.categorize({
+        kind: "link",
         url: "https://example.com",
         existingCategories: [],
       }),

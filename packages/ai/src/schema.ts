@@ -90,7 +90,7 @@ export const openRouterCompletionSchema = z.object({
 
 export function systemPrompt(): string {
   return [
-    "너는 북마크 분류기다. 웹페이지 정보와 사용자의 기존 카테고리 목록을 보고 가장 적합한 카테고리를 고른다.",
+    "너는 저장 자료 분류기다. 링크 또는 이미지와 사용자의 기존 카테고리 목록을 보고 가장 적합한 카테고리를 고른다.",
     "규칙:",
     "1. 기존 카테고리 중 명확히 맞는 것이 있으면 반드시 그것을 선택한다 (id로).",
     "2. 기존 카테고리로 무리 없이 분류할 수 없을 때만 새 카테고리를 제안한다.",
@@ -105,8 +105,21 @@ export function systemPrompt(): string {
 }
 
 export function userPrompt(input: CategorizeInput): string {
+  if (input.kind === "image") {
+    return JSON.stringify(
+      {
+        contentType: "image",
+        instruction:
+          "첨부 이미지를 분석해 핵심을 설명하는 한국어 제목, 요약, 태그, 카테고리를 생성한다. OCR 원문 전체를 옮기지 않는다.",
+        existingCategories: input.existingCategories,
+      },
+      null,
+      2,
+    );
+  }
   return JSON.stringify(
     {
+      contentType: "link",
       url: input.url,
       title: input.title,
       description: input.description,

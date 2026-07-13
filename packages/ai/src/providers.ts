@@ -51,6 +51,19 @@ class OpenRouterProvider implements AiProvider {
 
   async categorize(input: CategorizeInput): Promise<AnalyzeOutcome> {
     return withTimeout(async (signal) => {
+      const prompt = userPrompt(input);
+      const userContent =
+        input.kind === "image"
+          ? [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${input.image.mimeType};base64,${input.image.base64}`,
+                },
+              },
+            ]
+          : prompt;
       const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
@@ -64,7 +77,7 @@ class OpenRouterProvider implements AiProvider {
           provider: { require_parameters: true },
           messages: [
             { role: "system", content: systemPrompt() },
-            { role: "user", content: userPrompt(input) },
+            { role: "user", content: userContent },
           ],
           response_format: {
             type: "json_schema",

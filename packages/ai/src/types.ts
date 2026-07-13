@@ -1,10 +1,27 @@
-export interface CategorizeInput {
-  url: string;
-  title?: string;
-  description?: string;
-  siteName?: string;
-  existingCategories: { id: string; name: string }[];
+interface CategoryInput {
+  id: string;
+  name: string;
 }
+
+interface BaseCategorizeInput {
+  existingCategories: CategoryInput[];
+}
+
+export type CategorizeInput =
+  | (BaseCategorizeInput & {
+      kind: "link";
+      url: string;
+      title?: string;
+      description?: string;
+      siteName?: string;
+    })
+  | (BaseCategorizeInput & {
+      kind: "image";
+      image: {
+        mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+        base64: string;
+      };
+    });
 
 export type CategorizeResult =
   | { type: "existing"; categoryId: string; confidence: number }
