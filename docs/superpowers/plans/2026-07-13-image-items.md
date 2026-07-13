@@ -573,3 +573,49 @@ git commit -m "docs: 이미지 분석 기능과 검증 결과 반영"
 - [ ] **Step 6: Final code review**
 
 Review the complete diff against `docs/superpowers/specs/2026-07-13-image-items-design.md`, run `git diff --check`, ensure no secrets or signed URLs were logged, and verify `git status --short` contains only intentional changes.
+
+### Task 10: Explicit image save trigger
+
+**Files:**
+- Modify: `apps/web/src/routes/_authed/-components/image-upload.tsx`
+- Modify: `apps/web/src/routes/_authed/-components/image-upload.test.tsx`
+- Modify: `apps/web/src/routes/_authed/-index.test.tsx`
+- Modify: `apps/web/src/routes/_authed/share-target.tsx`
+- Modify: `PROGRESS.md`
+
+- [ ] **Step 1: Write failing selection tests**
+
+Change the upload component tests so selecting, dropping, or pasting files renders them with `선택됨` but leaves `createImage` uncalled. Click the accessible `이미지 저장` button and assert that requests begin only afterward. Keep the repeated-selection concurrency test and retry test, but click `이미지 저장` before expecting requests.
+
+- [ ] **Step 2: Write failing parent-flow tests**
+
+In the bookmark dialog test, switch to 이미지, select a file, assert the dialog stays closable and `createImage` is uncalled, then click `이미지 저장` and assert the request starts and the close control becomes disabled while pending. Cover the shared-image screen with the same explicit save trigger through the common component contract.
+
+- [ ] **Step 3: Confirm RED**
+
+Run:
+
+```bash
+bun run --cwd apps/web test -- src/routes/_authed/-components/image-upload.test.tsx src/routes/_authed/-index.test.tsx
+```
+
+Expected: selection tests fail because the current scheduler starts every `queued` item immediately and no `이미지 저장` button exists.
+
+- [ ] **Step 4: Separate selected files from the active queue**
+
+Extend `UploadStatus` with `selected`. New files enter `selected`; the scheduler continues to consume only `queued`. Add an `이미지 저장` button that changes all current `selected` items to `queued`, is disabled when there are no selected files or a batch is active, and preserves the global concurrency limit of two. `busy` remains limited to `queued | uploading`, so users can close or cancel before saving.
+
+- [ ] **Step 5: Keep settled state consistent**
+
+Notify the parent when a new selection is added so the share-target route can clear its previous settled state. Preserve per-file success, failure, removal, retry, preview cleanup, query invalidation, and staged-file deletion after the explicitly started batch settles.
+
+- [ ] **Step 6: Verify and commit**
+
+Run focused tests, then the full verification loop:
+
+```bash
+bun run --cwd apps/web test -- src/routes/_authed/-components/image-upload.test.tsx src/routes/_authed/-index.test.tsx
+bun run typecheck && bun run lint && bun run test && bun run build
+```
+
+Update `PROGRESS.md` with the explicit-save behavior and remote migration status, then commit the implementation and documentation with a Korean conventional commit message.
