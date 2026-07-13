@@ -657,3 +657,35 @@ Change the detail image to `h-[70dvh] max-h-[48rem] w-full object-contain`. Keep
 - [ ] **Step 6: Verify with Task 10 and commit**
 
 Run both focused suites, web typecheck/lint, and the repository-wide verification loop before updating `PROGRESS.md` and committing.
+
+### Task 12: Preview-first image detail
+
+**Files:**
+- Modify: `apps/web/src/routes/_authed/images.$id.tsx`
+- Modify: `apps/web/src/routes/_authed/-image-detail.test.tsx`
+
+- [ ] **Step 1: Write failing preview-first tests**
+
+Render a detail item with distinct signed thumbnail and original URLs. Assert the initial image source is `thumbnailUrl`, `원본 보기` exists, and `원본 다운로드` is absent. Click `원본 보기`, assert the image source changes to `originalUrl`, the download action appears, and `미리보기로 돌아가기` restores the thumbnail.
+
+- [ ] **Step 2: Confirm RED**
+
+Run:
+
+```bash
+bun run --cwd apps/web test -- src/routes/_authed/-image-detail.test.tsx
+```
+
+Expected: FAIL because the current detail view renders `originalUrl` immediately and has no source toggle.
+
+- [ ] **Step 3: Implement explicit original viewing**
+
+Keep local `showOriginal` state in `ImageDetailView`. Derive the visible source from `showOriginal ? originalUrl : thumbnailUrl`; never fall back to the original while preview mode is active. Render `원본 보기` when the original exists, switch it to `미리보기로 돌아가기` in original mode, and expose `원본 다운로드` only in original mode.
+
+- [ ] **Step 4: Reset media recovery per source**
+
+Add an `onMediaSourceChange` callback from the page container to the view. When the user switches between preview and original, clear `mediaBroken` and the one-shot retry ref so each signed source can independently refetch once before showing the fallback.
+
+- [ ] **Step 5: Verify the combined behavior**
+
+Run the image upload, home-card, and detail focused suites, then web typecheck/lint and the full repository verification loop. Record explicit save, full-card navigation, preview-first detail, remote migration application, and API 200 evidence in `PROGRESS.md`.
