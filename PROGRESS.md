@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: OpenRouter preset 전환 완료 + 후속(카테고리 위/아래 버튼 제거로 DND 일원화, 사용 이벤트 BYOK 기록). AI 분류는 서버 env `OPEN_ROUTER_API_KEY` + preset `@preset/my-bookmark` 단일 호출로 동작하며, 자체 provider 카탈로그·모델 우선순위 DND·폴백 체인·`ai_settings` 테이블·provider별 키 관리는 전부 제거됐다. `GET /api/ai`, `POST /api/ai/test`, `GET /api/ai/usage`, `GET /api/ai/account` 4개 라우트와 대시보드(로컬 이벤트 집계 + OpenRouter 계정 사용액 카드 + BYOK/크레딧 배지)가 최종 형태다. 마이그레이션 0005~0008은 원격 적용 완료(2026-07-12 사용자 push, dev E2E·브라우저 검증 통과), **0009(is_byok)는 파일만 생성된 push 대기 상태**.
-- **최종 갱신**: 2026-07-13 (management key 기반 OpenRouter 모델별·일별 비용/토큰 집계 카드 추가 — 대시보드는 이제 로컬 이벤트 집계 + 계정 사용액 + analytics 집계 3원 구성)
+- **현재 Phase**: 이미지 항목 후속 구현 완료. 링크와 이미지를 `bookmarks.kind`로 통합하고, private Supabase Storage 원본·썸네일, `POST /api/images`, OpenRouter vision 분석, 웹/PWA 다중 업로드, OS share target, 이미지 상세 화면, `전체/링크/이미지` 필터를 구현했다. AI는 제목·요약·태그·카테고리만 저장하며 OCR 원문은 추출·저장·검색하지 않는다. **마이그레이션 0009와 `20260713141607_image_items.sql`은 원격 push 대기 상태**다.
+- **최종 갱신**: 2026-07-14 (이미지 항목 구현 및 회귀 보강)
 
 ## Phase 체크리스트
 
@@ -18,6 +18,7 @@
 - [x] Phase 6 — Web Push + 리마인더
 - [x] Phase 7 — 성능 + Docker + 마무리
 - [x] Phase 8 후속 — 설정 기반 AI provider/API 키 관리
+- [x] 후속 — 이미지 항목 저장·AI 분석·iOS 단축어/PWA 공유
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
@@ -83,6 +84,9 @@
 | 2026-07-13 | 카테고리 순서 변경의 위/아래 버튼을 제거하고 드래그 핸들(DND)로 일원화했다. 키보드 접근성은 dnd-kit KeyboardSensor(핸들 포커스 후 Space→화살표→Space)가 담당한다. | 사용자 요청. DND 도입 후 두 경로가 중복 UI였다. |
 | 2026-07-13 | OpenRouter 응답 `usage.is_byok`를 `ai_usage_events.is_byok`(nullable boolean, 마이그레이션 0009)에 기록하고 대시보드 최근 이벤트에 BYOK/크레딧 배지로 표시한다. 실패 이벤트는 null. | 사용자 요청("이벤트별로 byok인지 credit인지 확인"). 토큰·비용 미저장 결정과 달리 boolean 플래그는 응답에서만 알 수 있고 사후 조회 불가라 저장이 유일한 방법. |
 | 2026-07-13 | `OPEN_ROUTER_MANAGEMENT_KEY`(선택 env) 기반 `GET /api/ai/analytics`를 추가했다. OpenRouter `/analytics/query`를 metrics [total_usage, tokens_total, request_count] × dimensions [model] × granularity day로 프록시하고, 키 미설정 시 `configured:false`로 대시보드 카드만 생략한다. 토큰·비용의 원천은 여전히 OpenRouter(로컬 미저장 결정 유지). | 사용자가 management key 제공. 실측으로 요청/응답 형태 확정(수치 일부가 문자열, 시계열은 granularity 방식). |
+| 2026-07-14 | 이미지도 링크와 같은 `bookmarks` 행으로 저장하되 `kind='image'`, nullable `url`, private Storage의 `original_path`/`thumbnail_path`로 구분한다. 원본은 보존하고 썸네일과 AI 입력 이미지만 서버에서 파생한다. | 통합 목록·카테고리·태그·리마인더·AI 상태 전이를 중복 구현하지 않으면서 원본 접근은 signed URL로 제한하기 위함. 승인 설계 준수. |
+| 2026-07-14 | 이미지 업로드는 파일당 독립 항목, 전체 큐 동시 2개로 처리한다. 업로드 중에는 다이얼로그/공유 화면 이탈을 막고, 성공·실패를 파일별로 표시한다. HEIC/HEIF는 stock Sharp의 코덱 의존을 피하기 위해 `heic-decode`로 RGBA 디코딩한 뒤 Sharp 파이프라인에 넣는다. | iOS 공유 시 여러 사진을 안정적으로 등록하고, 중복 요청·미완료 이탈·프로덕션 HEIC 미지원 위험을 제거하기 위함. |
+| 2026-07-14 | 수동으로 제목·요약·태그·URL·카테고리를 수정하면 `ai_status='idle'`로 전이해 대기 중 AI 결과의 조건부 UPDATE가 사용자 편집을 덮어쓰지 못하게 한다. 이미지 signed URL 발급 실패는 항목 생성/AI 분석과 분리해 201 + nullable URL로 복구한다. | 사용자 입력 우선 원칙과 private Storage 일시 장애 시 데이터 유실 방지. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -143,11 +147,15 @@
 - AI 모델 순서(DND)+사용량 대시보드 플랜 Task 4(카테고리 순서 DND) 완료: `apps/web/src/routes/_authed/settings.tsx`의 `CategorySection` 목록을 Task 3에서 만든 공용 `SortableList`(`onReorder` → 기존 `reorderMutation.mutate`)로 감쌌고, `CategoryRow`의 루트 `<div>`를 `SortableRow`(`handleLabel={`${category.name} 순서 변경`}`, grid을 `sm:grid-cols-[auto_auto_1fr_80px_auto]`로 확장해 핸들 컬럼 추가)로 교체했다. 기존 위/아래 버튼·이름 input·개수·삭제 버튼은 그대로 유지했다. `-settings.test.tsx`의 "category ordering"에 드래그 핸들 존재를 확인하는 RED 테스트를 먼저 추가해 실패를 확인한 뒤 구현했다. `bun run typecheck && bun run lint && bun run test` 전부 통과(179 테스트: shared 9 + ai 12 + api 91 + web 67).
 - OpenRouter preset 전환(플랜 #3) Task 1·2 완료(커밋 `ca663f2`, `90904c6`): `packages/ai`를 SDK 3종 제거 후 fetch+zod로 재작성(`OpenRouterProvider`, `PRESET_MODEL = "@preset/my-bookmark"`, strict json_schema, `max_tokens: 2048`), `apps/api/src/services/ai-provider.ts`를 env 키 기반 싱글턴으로 축소, `categorize.ts`를 candidates 폴백 루프에서 단일 provider + outcome 기반 기록으로 되돌리고 `ai_usage_events` 기록·`bookmarks.ai_model` 저장을 유지, `routes/ai.ts`를 `GET /ai`·`POST /ai/test`·`GET /ai/usage`·`GET /ai/account` 4개로 축소, `apps/web`의 설정 AI 섹션을 상태 카드로 축소하고 `ai-usage.tsx`에 OpenRouter 계정 사용액 카드(오늘/이번 주/이번 달 USD, free tier, 잔여 한도)와 activity 외부 링크를 추가했다. `secret-crypto.ts`와 `ai_settings` 관련 코드 전부 제거, 마이그레이션 `0008_openrouter_preset.sql`은 파일만 생성(미push).
 - OpenRouter preset 전환 Task 3(문서 동기화 + 전체 검증) 완료: `docs/02-database.md`(categories color 제거, bookmarks.ai_model, ai_usage_events 테이블, ai_settings 삭제 반영), `docs/03-api.md`(카테고리 color 제거 + `PUT /api/categories/order` 추가, AI 섹션을 최종 4개 라우트로 재작성, bookmark 응답 aiModel 문서화, 제거된 라우트 정리), `docs/05-ai.md`(OpenRouter preset 아키텍처로 전면 재작성 — 단일 호출, fetch+zod, strict json_schema 규칙과 실측 400/402 대응, 폴백/모델 관리는 openrouter.ai, 토큰·비용 로컬 미저장 + activity 안내, 이모지 카테고리·summary 규칙), `docs/01-architecture.md`와 `.env.example`(`OPEN_ROUTER_API_KEY` 문서화, 구 AI env 제거 확인 — `.env.example`은 이미 최종 상태였음), `docs/deploy.md`(체크리스트의 `ai_settings`→`ai_usage_events`, env 표의 `AI_SETTINGS_ENCRYPTION_KEY`→`OPEN_ROUTER_API_KEY`, provider 키 저장 문구 제거)를 갱신했다. 코드는 이미 최종 상태였으므로 코드 변경 없이 `bun run typecheck && bun run lint && bun run test && bun run build` 전부 통과(164 테스트: shared 8 + ai 5 + api 81 + web 70, 재실행 없이 1회 통과).
+- 이미지 항목 자동 검증 완료(2026-07-14): shared 12 + ai 6 + api 103 + web 91 = 전체 212 테스트, typecheck, Biome lint, API/web 프로덕션 build가 모두 통과했다. 실제 HEIC fixture 디코딩, 형식/크기/픽셀 제한, private Storage 경로·정리, API Key/Bearer 경계, signed URL 실패 복구, 신규 선택과 재시도를 합친 전역 동시 업로드 2개, 업로드 중 이탈 차단, 수동 편집의 pending AI 취소, 이미지 필터·상세 오류 복구·share target 로그인 복귀·SW signed URL 비캐시를 회귀 테스트로 고정했다. 빌드된 API를 `PORT=3903 node apps/api/dist/index.js`로 기동해 `/api/health` 200 `{"ok":true}`를 확인했다. `apps/api/Dockerfile`로 Node 24 Alpine 이미지를 재빌드하고 이미지 내부의 production `heic-decode`로 같은 fixture를 `16x16:1024` RGBA로 실제 디코딩했다.
+- Supabase 원격 검증(비변경): `bun x supabase db push --dry-run --linked`에서 `0009_usage_byok.sql`, `20260713141607_image_items.sql` 두 파일만 적용 대상으로 확인했고, `bun x supabase db lint --linked --level error --fail-on error`는 `No schema errors found`로 통과했다. 실제 push는 하지 않았다.
+- 이미지 UI 브라우저 확인 제한: 375px 프로덕션 화면은 비인증 상태에서 `/login`까지 렌더·콘솔 확인했으나, 도구에 로그인 자격 증명이 없어 인증 후 다중 업로드/목록/상세 화면은 캡처하지 못했다. 관련 웹 동작은 90개 테스트와 프로덕션 build로 검증했다.
 
 ## 사용자 확인 필요
 
 - (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
-- **마이그레이션 0009 원격 미적용**: `0009_usage_byok.sql`(`ai_usage_events.is_byok boolean` 추가)이 push 대기 상태다. push 전에는 이벤트 insert가 존재하지 않는 컬럼 때문에 실패하지만 recorder가 삼키므로(warn 로그) **분류는 정상 동작하되 새 이벤트가 기록되지 않는다**. `bun x supabase db push --dry-run`으로 0009 하나만 확인 후 push할 것. push 후 새 분류 1건으로 최근 이벤트의 BYOK/크레딧 배지 표시를 확인.
+- **마이그레이션 0009 + 이미지 항목 원격 미적용**: dry-run에서 `0009_usage_byok.sql`과 `20260713141607_image_items.sql` 두 파일을 확인했다. 실제 push 전에는 기존 분류 이벤트의 `is_byok` 기록과 이미지 테이블/Storage 정책이 없어 이미지 등록을 실환경에서 사용할 수 없다. 사용자 검토 후 `bun x supabase db push --linked`로 함께 적용할 것.
+- **이미지 실환경 확인**: 마이그레이션 적용 후 JPEG/HEIC 각 1장, 여러 장 동시 업로드, OpenRouter vision 결과(제목·요약·태그·카테고리), unsigned Storage URL 403/404, iOS 단축어와 PWA 공유 시트, 이미지 리마인더 클릭의 내부 상세 이동을 실제 계정/기기에서 확인해야 한다. 자동 검증에서는 외부 상태를 변경하지 않았다.
 - **카테고리 순서 변경 DND 실사용 확인**: 데스크톱 dev 브라우저에서 위 방향 드래그(핸들 → 위 항목)는 자동화로 검증 완료(순서 변경 + 서버 저장 + 새로고침 유지). 아래 방향 드래그는 agent-browser의 합성 드래그(중간 pointermove 부족)에서 반영되지 않았는데 앱 버그인지 자동화 한계인지 미확정 — 실제 마우스/터치로 아래 방향 드래그 1회와 iOS Safari/PWA 터치 드래그를 직접 확인 필요(사용자가 추가 자동화 검증은 생략하기로 함, 2026-07-13).
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
 
