@@ -689,3 +689,25 @@ Add an `onMediaSourceChange` callback from the page container to the view. When 
 - [ ] **Step 5: Verify the combined behavior**
 
 Run the image upload, home-card, and detail focused suites, then web typecheck/lint and the full repository verification loop. Record explicit save, full-card navigation, preview-first detail, remote migration application, and API 200 evidence in `PROGRESS.md`.
+
+### Task 13: Original file size metadata
+
+**Files:**
+- Modify: `apps/web/src/routes/_authed/images.$id.tsx`
+- Modify: `apps/web/src/routes/_authed/-image-detail.test.tsx`
+
+- [ ] **Step 1: Write a failing size-display test**
+
+Set the detail fixture's `fileSize` to `5_773_378` and assert the metadata footer includes `5.5 MB` between dimensions and analysis status.
+
+- [ ] **Step 2: Confirm RED**
+
+Run `bun run --cwd apps/web test -- src/routes/_authed/-image-detail.test.tsx`. Expected: FAIL because the footer currently omits `bookmark.image.fileSize`.
+
+- [ ] **Step 3: Implement readable byte formatting**
+
+Add a small local `formatFileSize(bytes)` helper. Keep bytes below 1024 as `B`, divide once for `KB` and twice for `MB`, and use a Korean `Intl.NumberFormat` with at most one fractional digit. Render the formatted original size after dimensions and before analysis status.
+
+- [ ] **Step 4: Verify and include in the final commit**
+
+Run the detail suite, combined image suites, web typecheck/lint, and full repository verification loop. Update `PROGRESS.md` and include this behavior with Tasks 10–12 in the implementation commit.
