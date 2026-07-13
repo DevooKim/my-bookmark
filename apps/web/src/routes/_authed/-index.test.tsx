@@ -310,9 +310,13 @@ describe("HomePage", () => {
     await waitFor(() =>
       expect(listBookmarks).toHaveBeenLastCalledWith({ kind: "image" }),
     );
-    const title = await screen.findByRole("link", { name: "푸른 바다 풍경" });
-    expect(title.getAttribute("href")).toBe(`/images/${imageBookmark.id}`);
-    expect(title.getAttribute("target")).toBeNull();
+    const detailLink = await screen.findByRole("link", {
+      name: "푸른 바다 풍경 크게 보기",
+    });
+    expect(detailLink.getAttribute("href")).toBe(`/images/${imageBookmark.id}`);
+    expect(detailLink.getAttribute("target")).toBeNull();
+    expect(detailLink.className).toContain("absolute");
+    expect(detailLink.className).toContain("inset-0");
     expect(screen.getByRole("img", { name: "푸른 바다 풍경" })).toHaveProperty(
       "src",
       imageBookmark.image.thumbnailUrl,
@@ -321,7 +325,7 @@ describe("HomePage", () => {
 });
 
 describe("BookmarkDialog", () => {
-  it("switches to automatic image upload mode", async () => {
+  it("starts automatic image analysis only after save", async () => {
     URL.createObjectURL = vi.fn(() => "blob:sample");
     URL.revokeObjectURL = vi.fn();
     vi.mocked(createImage).mockResolvedValue({
@@ -353,10 +357,12 @@ describe("BookmarkDialog", () => {
       },
     });
 
+    expect(createImage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
     await waitFor(() => expect(createImage).toHaveBeenCalledTimes(1));
   });
 
-  it("prevents closing the add dialog while an image upload is active", async () => {
+  it("allows closing before save and prevents it while upload is active", async () => {
     URL.createObjectURL = vi.fn(() => "blob:sample");
     URL.revokeObjectURL = vi.fn();
     vi.mocked(createImage).mockImplementation(() => new Promise(() => {}));
@@ -375,6 +381,11 @@ describe("BookmarkDialog", () => {
       },
     });
 
+    expect(createImage).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "닫기" }).disabled,
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
     await waitFor(() => expect(createImage).toHaveBeenCalledOnce());
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "닫기" }).disabled,

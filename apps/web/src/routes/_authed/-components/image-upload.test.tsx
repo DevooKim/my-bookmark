@@ -68,6 +68,9 @@ it("uploads multiple images independently and keeps a failed item retryable", as
     target: { files },
   });
 
+  expect(createImage).not.toHaveBeenCalled();
+  expect(screen.getAllByText("선택됨")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
   await waitFor(() => expect(createImage).toHaveBeenCalledTimes(2));
   expect(await screen.findByText("완료")).toBeTruthy();
   expect(await screen.findByText("다시 시도")).toBeTruthy();
@@ -87,6 +90,8 @@ it("accepts an image pasted from the clipboard", async () => {
     clipboardData: { files: [pasted] },
   });
 
+  expect(createImage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
   await waitFor(() => expect(createImage).toHaveBeenCalledWith(pasted));
 });
 
@@ -118,6 +123,8 @@ it("limits concurrency to two across repeated selections", async () => {
     },
   });
 
+  expect(createImage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
   await waitFor(() => expect(createImage).toHaveBeenCalledTimes(2));
   await act(async () => {
     resolvers[0]?.(uploadedBookmark);
@@ -148,6 +155,8 @@ it("routes retries through the same two-upload scheduler", async () => {
     },
   });
 
+  expect(createImage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
   const retry = await screen.findByRole("button", { name: "다시 시도" });
   await waitFor(() => expect(createImage).toHaveBeenCalledTimes(3));
   fireEvent.click(retry);

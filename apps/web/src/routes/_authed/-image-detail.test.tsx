@@ -14,7 +14,7 @@ const imageBookmark: Extract<Bookmark, { kind: "image" }> = {
     thumbnailUrl: "https://signed.example/thumbnail",
     originalUrl: "https://signed.example/original",
     mimeType: "image/png",
-    fileSize: 4,
+    fileSize: 5_773_378,
     width: 2,
     height: 2,
     filename: "sample.png",
@@ -33,11 +33,12 @@ const imageBookmark: Extract<Bookmark, { kind: "image" }> = {
 };
 
 describe("ImageDetailView", () => {
-  it("renders the private original and exposes image actions", () => {
+  it("shows the preview first and reveals the original explicitly", () => {
     const onEdit = vi.fn();
     const onRecategorize = vi.fn();
     const onDelete = vi.fn();
     const onMediaError = vi.fn();
+    const onMediaSourceChange = vi.fn();
 
     render(
       <ImageDetailView
@@ -46,15 +47,30 @@ describe("ImageDetailView", () => {
         onDelete={onDelete}
         onEdit={onEdit}
         onMediaError={onMediaError}
+        onMediaSourceChange={onMediaSourceChange}
         onRecategorize={onRecategorize}
       />,
     );
 
     const image = screen.getByRole("img", { name: "푸른 바다 풍경" });
+    expect(image).toHaveProperty("src", imageBookmark.image.thumbnailUrl);
+    expect(image.className).toContain("h-[70dvh]");
+    expect(image.className).toContain("max-h-[48rem]");
+    expect(image.className).toContain("object-contain");
+    expect(screen.getByText(/5\.5 MB/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "원본 보기" }));
     expect(image).toHaveProperty("src", imageBookmark.image.originalUrl);
     const download = screen.getByRole("link", { name: "원본 다운로드" });
     expect(download.getAttribute("href")).toBe(imageBookmark.image.originalUrl);
     expect(download.getAttribute("download")).toBe("sample.png");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "미리보기로 돌아가기" }),
+    );
+    expect(image).toHaveProperty("src", imageBookmark.image.thumbnailUrl);
+    expect(onMediaSourceChange).toHaveBeenCalledTimes(2);
 
     fireEvent.error(image);
     fireEvent.click(screen.getByRole("button", { name: "편집" }));
@@ -66,7 +82,7 @@ describe("ImageDetailView", () => {
     expect(onDelete).toHaveBeenCalledOnce();
   });
 
-  it("shows a recoverable state when the signed original is absent", () => {
+  it("keeps showing the preview when the signed original is absent", () => {
     render(
       <ImageDetailView
         bookmark={{
@@ -77,27 +93,37 @@ describe("ImageDetailView", () => {
         onDelete={vi.fn()}
         onEdit={vi.fn()}
         onMediaError={vi.fn()}
+        onMediaSourceChange={vi.fn()}
         onRecategorize={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("원본 이미지를 불러오지 못했어요.")).toBeTruthy();
+    expect(screen.getByRole("img")).toHaveProperty(
+      "src",
+      imageBookmark.image.thumbnailUrl,
+    );
+    expect(screen.queryByRole("button", { name: "원본 보기" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
   });
 
-  it("shows the fallback after the one-shot media refresh also fails", () => {
+  it("shows the fallback after the one-shot preview refresh also fails", () => {
     render(
       <ImageDetailView
-        bookmark={imageBookmark}
+        bookmark={{
+          ...imageBookmark,
+          image: { ...imageBookmark.image, thumbnailUrl: null },
+        }}
         categoryName={null}
         mediaBroken
         onDelete={vi.fn()}
         onEdit={vi.fn()}
         onMediaError={vi.fn()}
+        onMediaSourceChange={vi.fn()}
         onRecategorize={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("원본 이미지를 불러오지 못했어요.")).toBeTruthy();
+    expect(screen.getByText("미리보기를 불러오지 못했어요.")).toBeTruthy();
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
   });

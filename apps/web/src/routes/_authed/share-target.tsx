@@ -97,6 +97,7 @@ function ShareTargetPage() {
               setSettled(true);
             }}
             onBusyChange={setBusy}
+            onSelectionChange={() => setSettled(false)}
             onUploaded={() => {
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
               void queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -114,6 +115,7 @@ function ShareTargetPage() {
             {settled ? (
               <button
                 className="btn-primary"
+                disabled={busy}
                 onClick={() => {
                   toast.success("공유 이미지를 처리했어요");
                   void navigate({ to: "/" });

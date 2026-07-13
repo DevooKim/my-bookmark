@@ -100,7 +100,8 @@ export function BookmarkDialog({
       {contentKind === "image" ? (
         <div className="space-y-3">
           <p className="text-sm text-zinc-500">
-            이미지마다 별도 항목으로 저장하고 AI가 자동으로 분석합니다.
+            이미지를 선택한 뒤 저장하면 별도 항목으로 등록하고 AI가 자동으로
+            분석합니다.
           </p>
           <ImageUpload
             onBusyChange={setImageBusy}

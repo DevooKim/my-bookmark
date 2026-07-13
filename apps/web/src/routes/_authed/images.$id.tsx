@@ -16,6 +16,21 @@ export const Route = createFileRoute("/_authed/images/$id")({
   component: ImageDetailPage,
 });
 
+const fileSizeFormatter = new Intl.NumberFormat("ko-KR", {
+  maximumFractionDigits: 1,
+});
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return `${fileSizeFormatter.format(kilobytes)} KB`;
+  }
+  return `${fileSizeFormatter.format(kilobytes / 1024)} MB`;
+}
+
 function ImageDetailPage() {
   const { id } = Route.useParams();
   return <ImageDetailPageForId id={id} key={id} />;
@@ -27,6 +42,10 @@ function ImageDetailPageForId({ id }: { id: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [mediaBroken, setMediaBroken] = useState(false);
   const mediaRetryAttempted = useRef(false);
+  const resetMediaRecovery = () => {
+    mediaRetryAttempted.current = false;
+    setMediaBroken(false);
+  };
   const bookmarkQuery = useQuery({
     queryKey: ["bookmark", id],
     queryFn: () => getBookmark(id),
@@ -99,6 +118,7 @@ function ImageDetailPageForId({ id }: { id: string }) {
           mediaRetryAttempted.current = true;
           void bookmarkQuery.refetch();
         }}
+        onMediaSourceChange={resetMediaRecovery}
         onRecategorize={() => recategorizeMutation.mutate()}
       />
       {isEditing ? (
@@ -122,6 +142,7 @@ export function ImageDetailView({
   onDelete,
   onEdit,
   onMediaError,
+  onMediaSourceChange,
   onRecategorize,
 }: {
   bookmark: Extract<Bookmark, { kind: "image" }>;
@@ -130,9 +151,19 @@ export function ImageDetailView({
   onDelete: () => void;
   onEdit: () => void;
   onMediaError: () => void;
+  onMediaSourceChange: () => void;
   onRecategorize: () => void;
 }) {
   const title = bookmark.title ?? bookmark.image.filename ?? "이미지";
+  const [showOriginal, setShowOriginal] = useState(false);
+  const mediaUrl = showOriginal
+    ? bookmark.image.originalUrl
+    : bookmark.image.thumbnailUrl;
+
+  function toggleMediaSource() {
+    onMediaSourceChange();
+    setShowOriginal((current) => !current);
+  }
 
   return (
     <main className="page-stack">
@@ -163,16 +194,18 @@ export function ImageDetailView({
       </header>
 
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-950 dark:border-zinc-800">
-        {bookmark.image.originalUrl && !mediaBroken ? (
+        {mediaUrl && !mediaBroken ? (
           <img
             alt={title}
-            className="mx-auto max-h-[70vh] w-full object-contain"
+            className="mx-auto h-[70dvh] max-h-[48rem] w-full object-contain"
             onError={onMediaError}
-            src={bookmark.image.originalUrl}
+            src={mediaUrl}
           />
         ) : (
           <div className="flex min-h-72 items-center justify-center px-6 text-center text-zinc-300">
-            원본 이미지를 불러오지 못했어요.
+            {showOriginal
+              ? "원본 이미지를 불러오지 못했어요."
+              : "미리보기를 불러오지 못했어요."}
           </div>
         )}
       </section>
@@ -185,15 +218,26 @@ export function ImageDetailView({
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">{title}</h1>
           </div>
-          {bookmark.image.originalUrl && !mediaBroken ? (
-            <a
-              className="btn-secondary"
-              download={bookmark.image.filename ?? "image"}
-              href={bookmark.image.originalUrl}
-            >
-              <Download className="h-4 w-4" /> 원본 다운로드
-            </a>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {bookmark.image.originalUrl ? (
+              <button
+                className="btn-secondary"
+                onClick={toggleMediaSource}
+                type="button"
+              >
+                {showOriginal ? "미리보기로 돌아가기" : "원본 보기"}
+              </button>
+            ) : null}
+            {showOriginal && bookmark.image.originalUrl && !mediaBroken ? (
+              <a
+                className="btn-secondary"
+                download={bookmark.image.filename ?? "image"}
+                href={bookmark.image.originalUrl}
+              >
+                <Download className="h-4 w-4" /> 원본 다운로드
+              </a>
+            ) : null}
+          </div>
         </div>
         {bookmark.description ? (
           <p className="leading-7 text-zinc-600 dark:text-zinc-300">
@@ -211,7 +255,7 @@ export function ImageDetailView({
         ) : null}
         <p className="text-xs text-zinc-500">
           {bookmark.image.filename ?? "파일명 없음"} · {bookmark.image.width}×
-          {bookmark.image.height} ·{" "}
+          {bookmark.image.height} · {formatFileSize(bookmark.image.fileSize)} ·{" "}
           {bookmark.aiStatus === "pending"
             ? "분석 중"
             : bookmark.aiStatus === "failed"

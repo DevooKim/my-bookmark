@@ -421,8 +421,20 @@ function BookmarkCard({
   };
 
   return (
-    <article className="bookmark-card">
-      <div className="flex gap-3">
+    <article
+      className={`bookmark-card${bookmark.kind === "image" ? " relative" : ""}`}
+    >
+      {bookmark.kind === "image" ? (
+        <a
+          className="absolute inset-0 z-0 rounded-[1.25rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          href={`/images/${bookmark.id}`}
+        >
+          <span className="sr-only">{title} 크게 보기</span>
+        </a>
+      ) : null}
+      <div
+        className={`flex gap-3${bookmark.kind === "image" ? " pointer-events-none relative z-10" : ""}`}
+      >
         {bookmark.kind === "image" ? (
           <img
             alt={title}
@@ -442,18 +454,20 @@ function BookmarkCard({
           />
         )}
         <div className="min-w-0 flex-1">
-          <a
-            className="text-[1.02rem] font-semibold leading-snug tracking-[-0.01em] hover:text-blue-600"
-            href={
-              bookmark.kind === "image"
-                ? `/images/${bookmark.id}`
-                : bookmark.url
-            }
-            rel={bookmark.kind === "link" ? "noreferrer" : undefined}
-            target={bookmark.kind === "link" ? "_blank" : undefined}
-          >
-            {title}
-          </a>
+          {bookmark.kind === "image" ? (
+            <span className="text-[1.02rem] font-semibold leading-snug tracking-[-0.01em]">
+              {title}
+            </span>
+          ) : (
+            <a
+              className="text-[1.02rem] font-semibold leading-snug tracking-[-0.01em] hover:text-blue-600"
+              href={bookmark.url}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {title}
+            </a>
+          )}
           {bookmark.description ? (
             <p className="mt-2 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
               {bookmark.description}
@@ -478,7 +492,7 @@ function BookmarkCard({
                   </span>
                   <button
                     aria-label={`${tag} 태그 검색`}
-                    className="hidden min-h-7 items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] leading-4 text-zinc-600 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100 sm:inline-flex"
+                    className={`hidden min-h-7 items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] leading-4 text-zinc-600 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100 sm:inline-flex${bookmark.kind === "image" ? " pointer-events-auto relative z-20" : ""}`}
                     onClick={() => onTagSearch(tag)}
                     type="button"
                   >
@@ -499,7 +513,10 @@ function BookmarkCard({
             </span>
           ) : null}
         </div>
-        <div className="relative" ref={menuRef}>
+        <div
+          className={`relative${bookmark.kind === "image" ? " pointer-events-auto z-20" : ""}`}
+          ref={menuRef}
+        >
           <button
             aria-controls={`bookmark-menu-${bookmark.id}`}
             aria-expanded={menuOpen}

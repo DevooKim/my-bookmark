@@ -3,7 +3,7 @@ import { ImagePlus, RefreshCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createImage } from "../../../lib/api-client";
 
-type UploadStatus = "queued" | "uploading" | "success" | "failed";
+type UploadStatus = "selected" | "queued" | "uploading" | "success" | "failed";
 
 interface UploadItem {
   id: string;
@@ -18,11 +18,13 @@ export function ImageUpload({
   onAllSettled,
   onUploaded,
   onBusyChange,
+  onSelectionChange,
 }: {
   initialFiles?: File[];
   onAllSettled?: () => void;
   onUploaded: (bookmark: Bookmark) => void;
   onBusyChange?: (busy: boolean) => void;
+  onSelectionChange?: () => void;
 }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const previewUrls = useRef(new Set<string>());
@@ -31,6 +33,7 @@ export function ImageUpload({
   const busy = items.some(
     (item) => item.status === "queued" || item.status === "uploading",
   );
+  const hasSelected = items.some((item) => item.status === "selected");
 
   useEffect(() => {
     onBusyChange?.(busy);
@@ -83,25 +86,37 @@ export function ImageUpload({
     }
   }, [items, uploadItem]);
 
-  const enqueue = useCallback((files: File[]) => {
-    const entries = files
-      .filter((file) => file.type.startsWith("image/"))
-      .map((file) => {
-        const previewUrl = URL.createObjectURL(file);
-        previewUrls.current.add(previewUrl);
-        return {
-          id: crypto.randomUUID(),
-          file,
-          previewUrl,
-          status: "queued" as const,
-          error: null,
-        };
-      });
-    if (entries.length === 0) {
-      return;
-    }
-    setItems((current) => [...current, ...entries]);
-  }, []);
+  const enqueue = useCallback(
+    (files: File[]) => {
+      const entries = files
+        .filter((file) => file.type.startsWith("image/"))
+        .map((file) => {
+          const previewUrl = URL.createObjectURL(file);
+          previewUrls.current.add(previewUrl);
+          return {
+            id: crypto.randomUUID(),
+            file,
+            previewUrl,
+            status: "selected" as const,
+            error: null,
+          };
+        });
+      if (entries.length === 0) {
+        return;
+      }
+      setItems((current) => [...current, ...entries]);
+      onSelectionChange?.();
+    },
+    [onSelectionChange],
+  );
+
+  function startSelectedUploads() {
+    setItems((current) =>
+      current.map((item) =>
+        item.status === "selected" ? { ...item, status: "queued" } : item,
+      ),
+    );
+  }
 
   useEffect(() => {
     if (initialFilesQueued.current || !initialFiles?.length) {
@@ -163,6 +178,7 @@ export function ImageUpload({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{item.file.name}</p>
                 <p className="text-xs text-zinc-500">
+                  {item.status === "selected" ? "선택됨" : null}
                   {item.status === "queued" ? "대기 중" : null}
                   {item.status === "uploading" ? "업로드 중…" : null}
                   {item.status === "success" ? "완료" : null}
@@ -181,7 +197,7 @@ export function ImageUpload({
                   <span className="sr-only">다시 시도</span>
                 </button>
               ) : null}
-              {item.status !== "uploading" ? (
+              {item.status !== "uploading" && item.status !== "queued" ? (
                 <button
                   aria-label={`${item.file.name} 제거`}
                   className="icon-button"
@@ -195,6 +211,15 @@ export function ImageUpload({
           ))}
         </ul>
       ) : null}
+      <button
+        aria-label="이미지 저장"
+        className="btn-primary w-full"
+        disabled={!hasSelected || busy}
+        onClick={startSelectedUploads}
+        type="button"
+      >
+        {busy ? "저장 중…" : "이미지 저장"}
+      </button>
     </div>
   );
 }
