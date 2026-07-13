@@ -1,5 +1,6 @@
 import { API_ERROR_CODES, type ApiErrorCode } from "@my-bookmark/shared";
 import type { ErrorRequestHandler } from "express";
+import { MulterError } from "multer";
 import { ZodError } from "zod";
 
 export class HttpError extends Error {
@@ -25,6 +26,16 @@ export const errorMiddleware: ErrorRequestHandler = (
         code: API_ERROR_CODES.VALIDATION_ERROR,
         message: "Validation failed",
         details: error.flatten(),
+      },
+    });
+    return;
+  }
+
+  if (error instanceof MulterError && error.code === "LIMIT_FILE_SIZE") {
+    response.status(413).json({
+      error: {
+        code: API_ERROR_CODES.VALIDATION_ERROR,
+        message: "이미지는 20MB 이하여야 합니다",
       },
     });
     return;

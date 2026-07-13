@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   type ImageStorageBucket,
+  loadImageForAnalysis,
   removeImage,
   signImage,
   storeImage,
@@ -24,6 +25,10 @@ function fakeBucket(): ImageStorageBucket {
     remove: vi.fn().mockResolvedValue({ error: null }),
     createSignedUrl: vi.fn().mockResolvedValue({
       data: { signedUrl: "https://signed.example/image" },
+      error: null,
+    }),
+    download: vi.fn().mockResolvedValue({
+      data: new Blob([Buffer.from("downloaded")]),
       error: null,
     }),
   };
@@ -94,6 +99,26 @@ describe("image storage", () => {
     expect(storage.createSignedUrl).toHaveBeenCalledWith(
       paths.thumbnailPath,
       600,
+    );
+  });
+
+  it("downloads a private original and returns normalized base64", async () => {
+    const storage = fakeBucket();
+    const processor = vi.fn().mockResolvedValue(image);
+
+    await expect(
+      loadImageForAnalysis(
+        storage,
+        "user-1/bookmark-1/original.heic",
+        processor,
+      ),
+    ).resolves.toEqual({
+      mimeType: "image/jpeg",
+      base64: image.analysisImage.toString("base64"),
+    });
+    expect(processor).toHaveBeenCalledWith(
+      Buffer.from("downloaded"),
+      "original.heic",
     );
   });
 });

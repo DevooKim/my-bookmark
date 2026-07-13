@@ -12,6 +12,7 @@ import { aiRouter } from "./routes/ai";
 import { bookmarksRouter } from "./routes/bookmarks";
 import { categoriesRouter } from "./routes/categories";
 import { healthRouter } from "./routes/health";
+import { imagesRouter } from "./routes/images";
 import { keysRouter } from "./routes/keys";
 import { meRouter } from "./routes/me";
 import { pushRouter } from "./routes/push";
@@ -77,6 +78,7 @@ export function createApp(): express.Express {
   app.use("/api", keysRouter);
   app.use("/api", categoriesRouter);
   app.use("/api", bookmarksRouter);
+  app.use("/api", imagesRouter);
   app.use("/api", remindersRouter);
   app.use("/api", pushRouter);
   app.use("/api", aiRouter);
@@ -100,6 +102,7 @@ function isApiKeyAllowedPath(path: string): boolean {
   return (
     path === "/bookmarks" ||
     path.startsWith("/bookmarks/") ||
+    path === "/images" ||
     path === "/categories" ||
     path.startsWith("/categories/")
   );

@@ -15,7 +15,9 @@ interface DueReminderRow {
   remind_at: string;
   note: string | null;
   bookmark: {
-    url: string;
+    id: string;
+    kind: "link" | "image";
+    url: string | null;
     title: string | null;
   };
 }
@@ -38,6 +40,7 @@ export interface ProcessDueRemindersOptions {
   pushSender: PushSenderLike;
   now?: Date;
   limit?: number;
+  webOrigin?: string;
 }
 
 export async function processDueReminders({
@@ -45,6 +48,7 @@ export async function processDueReminders({
   pushSender,
   now = new Date(),
   limit = 20,
+  webOrigin = appEnv.WEB_ORIGIN,
 }: ProcessDueRemindersOptions): Promise<{
   scanned: number;
   claimed: number;
@@ -64,11 +68,15 @@ export async function processDueReminders({
     claimed += 1;
 
     const subscriptions = await db.subscriptionsForUser(reminder.user_id);
+    const { fallback, targetUrl } = reminderTarget(
+      reminder.bookmark,
+      webOrigin,
+    );
     for (const subscription of subscriptions) {
       const result = await pushSender.send(subscription, {
-        title: `🔖 ${reminder.bookmark.title ?? domainFromUrl(reminder.bookmark.url)}`,
-        body: reminder.note ?? domainFromUrl(reminder.bookmark.url),
-        url: reminder.bookmark.url,
+        title: `🔖 ${reminder.bookmark.title ?? fallback}`,
+        body: reminder.note ?? fallback,
+        url: targetUrl,
       });
       if (result.ok) {
         sent += 1;
@@ -123,7 +131,7 @@ export function createSupabaseReminderCronDb(): ReminderCronDb {
       const { data, error } = await db
         .from("reminders")
         .select(
-          "id,user_id,bookmark_id,remind_at,note,bookmarks!inner(url,title)",
+          "id,user_id,bookmark_id,remind_at,note,bookmarks!inner(id,kind,url,title)",
         )
         .eq("status", "pending")
         .lte("remind_at", now.toISOString())
@@ -185,4 +193,24 @@ export function createSupabaseReminderCronDb(): ReminderCronDb {
 
 function domainFromUrl(url: string): string {
   return new URL(url).hostname.replace(/^www\./, "");
+}
+
+function reminderTarget(
+  bookmark: DueReminderRow["bookmark"],
+  webOrigin: string,
+): { fallback: string; targetUrl: string } {
+  if (bookmark.kind === "image") {
+    return {
+      fallback: "이미지",
+      targetUrl: `${webOrigin}/images/${bookmark.id}`,
+    };
+  }
+  if (!bookmark.url) {
+    throw new HttpError(
+      500,
+      API_ERROR_CODES.INTERNAL,
+      "Link reminder bookmark is missing its URL",
+    );
+  }
+  return { fallback: domainFromUrl(bookmark.url), targetUrl: bookmark.url };
 }

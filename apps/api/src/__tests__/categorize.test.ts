@@ -10,7 +10,9 @@ class FakeDb {
   bookmark = {
     id: "bookmark",
     user_id: "user",
-    url: "https://example.com/article",
+    kind: "link" as "link" | "image",
+    url: "https://example.com/article" as string | null,
+    image_original_path: null as string | null,
     title: "기존 메타데이터 제목" as string | null,
     description: null as string | null,
     site_name: null as string | null,
@@ -266,6 +268,39 @@ function fakeProvider(categorize: AiProvider["categorize"]): AiProvider {
 }
 
 describe("categorizeBookmark", () => {
+  it("loads a private image and sends it as an image analysis input", async () => {
+    const db = new FakeDb();
+    db.bookmark.kind = "image";
+    db.bookmark.url = null;
+    db.bookmark.image_original_path = "user/bookmark/original.heic";
+    const categorize = vi.fn().mockResolvedValue({
+      analysis: successResult,
+      model: "google/gemini-3.1-flash-lite-20260507",
+      isByok: false,
+    });
+    const imageLoader = vi.fn().mockResolvedValue({
+      mimeType: "image/jpeg" as const,
+      base64: "AQID",
+    });
+
+    await categorizeBookmark({
+      db,
+      userId: "user",
+      bookmarkId: "bookmark",
+      provider: fakeProvider(categorize),
+      imageLoader,
+    });
+
+    expect(imageLoader).toHaveBeenCalledWith({
+      originalPath: "user/bookmark/original.heic",
+    });
+    expect(categorize).toHaveBeenCalledWith({
+      kind: "image",
+      image: { mimeType: "image/jpeg", base64: "AQID" },
+      existingCategories: db.categories,
+    });
+  });
+
   it("preserves prior title, tags, and category when the provider is unset", async () => {
     const db = new FakeDb();
     db.bookmark.category_id = "cat-dev";

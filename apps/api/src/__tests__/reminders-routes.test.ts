@@ -20,7 +20,12 @@ interface ReminderRow {
   status: "pending" | "sent" | "cancelled";
   sent_at: string | null;
   created_at: string;
-  bookmarks: { id: string; url: string; title: string | null } | null;
+  bookmarks: {
+    id: string;
+    kind: "link" | "image";
+    url: string | null;
+    title: string | null;
+  } | null;
 }
 
 class FakeRemindersDb {
@@ -37,6 +42,7 @@ class FakeRemindersDb {
       created_at: "2026-07-10T12:00:00.000Z",
       bookmarks: {
         id: bookmarkId,
+        kind: "link",
         url: "https://example.com",
         title: "Example",
       },
@@ -73,6 +79,7 @@ class FakeRemindersDb {
       created_at: "2026-07-10T12:00:00.000Z",
       bookmarks: {
         id: input.bookmarkId,
+        kind: "link",
         url: "https://example.com",
         title: "Example",
       },

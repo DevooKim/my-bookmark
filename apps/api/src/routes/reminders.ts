@@ -19,7 +19,12 @@ interface ReminderDbRow {
   status: "pending" | "sent" | "cancelled";
   sent_at: string | null;
   created_at: string;
-  bookmarks: { id: string; url: string; title: string | null } | null;
+  bookmarks: {
+    id: string;
+    kind: "link" | "image";
+    url: string | null;
+    title: string | null;
+  } | null;
 }
 
 interface RemindersDb {
@@ -112,7 +117,7 @@ export function createSupabaseRemindersDb(): RemindersDb {
     async listPending(userId) {
       const { data, error } = await db
         .from("reminders")
-        .select("*,bookmarks(id,url,title)")
+        .select("*,bookmarks(id,kind,url,title)")
         .eq("user_id", userId)
         .eq("status", "pending")
         .order("remind_at", { ascending: true });
@@ -143,7 +148,7 @@ export function createSupabaseRemindersDb(): RemindersDb {
           note: input.note,
           status: "pending",
         })
-        .select("*,bookmarks(id,url,title)")
+        .select("*,bookmarks(id,kind,url,title)")
         .single();
       if (error) {
         throw error;
@@ -164,7 +169,7 @@ export function createSupabaseRemindersDb(): RemindersDb {
         .eq("user_id", input.userId)
         .eq("id", input.id)
         .eq("status", "pending")
-        .select("*,bookmarks(id,url,title)")
+        .select("*,bookmarks(id,kind,url,title)")
         .maybeSingle();
       if (error) {
         throw error;

@@ -1,12 +1,13 @@
 import {
   API_ERROR_CODES,
+  type BookmarkListQuery,
   bookmarkListQuerySchema,
   createBookmarkRequestSchema,
   updateBookmarkRequestSchema,
   uuidSchema,
 } from "@my-bookmark/shared";
 import { Router } from "express";
-import { mapBookmark } from "../lib/db-mappers";
+import { type BookmarkDbRow, mapBookmark } from "../lib/db-mappers";
 import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
@@ -14,7 +15,16 @@ import { HttpError } from "../middleware/error";
 import { getAiProvider } from "../services/ai-provider";
 import { createAiUsageRecorder } from "../services/ai-usage";
 import { categorizeBookmark } from "../services/categorize";
+import { processImage } from "../services/image-processing";
+import {
+  type ImageStorageBucket,
+  loadImageForAnalysis,
+  removeImage,
+  signImage,
+} from "../services/image-storage";
 import { fetchMetadata, type PageMetadata } from "../services/metadata";
+
+const IMAGE_BUCKET = "bookmark-images";
 
 interface DbError {
   code?: string;
@@ -140,7 +150,7 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
-  const bookmark = mapBookmark(data);
+  const bookmark = await mapBookmarkWithSignedMedia(data, false);
   void categorizeBookmarkForUser({
     db,
     userId,
@@ -156,25 +166,21 @@ bookmarksRouter.get("/bookmarks", async (request, response) => {
   const query = bookmarkListQuerySchema.parse(request.query);
   const db = getDb();
   const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-  const { data, error } = await db.rpc("search_bookmarks", {
-    p_user_id: userId,
-    p_query: query.q ?? null,
-    p_category_id:
-      query.categoryId && query.categoryId !== "none" ? query.categoryId : null,
-    p_uncategorized: query.categoryId === "none",
-    p_cursor_created_at: cursor?.createdAt ?? null,
-    p_cursor_id: cursor?.id ?? null,
-    p_limit: query.limit + 1,
-  });
+  const { data, error } = await db.rpc(
+    "search_bookmarks",
+    buildBookmarkSearchParams(userId, query, cursor),
+  );
   if (error) {
     throw error;
   }
 
-  const rows = data ?? [];
+  const rows: BookmarkDbRow[] = data ?? [];
   const pageRows = rows.slice(0, query.limit);
   const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
   response.json({
-    items: pageRows.map(mapBookmark),
+    items: await Promise.all(
+      pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
+    ),
     nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
   });
 });
@@ -194,7 +200,9 @@ bookmarksRouter.get("/bookmarks/:id", async (request, response) => {
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
-  response.json({ bookmark: mapBookmark(data) });
+  response.json({
+    bookmark: await mapBookmarkWithSignedMedia(data, true),
+  });
 });
 
 bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
@@ -202,7 +210,27 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   const id = uuidSchema.parse(request.params.id);
   const body = updateBookmarkRequestSchema.parse(request.body);
   const updates: BookmarkUpdate = {};
+  const db = getDb();
   if (body.url !== undefined) {
+    const { data: current, error: currentError } = await db
+      .from("bookmarks")
+      .select("kind")
+      .eq("user_id", userId)
+      .eq("id", id)
+      .maybeSingle();
+    if (currentError) {
+      throw currentError;
+    }
+    if (!current) {
+      throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
+    }
+    if (current.kind === "image") {
+      throw new HttpError(
+        400,
+        API_ERROR_CODES.VALIDATION_ERROR,
+        "이미지 항목의 URL은 변경할 수 없습니다",
+      );
+    }
     updates.url = normalizeBookmarkUrl(body.url);
   }
   if (body.title !== undefined) {
@@ -214,7 +242,6 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   if (body.tags !== undefined) {
     updates.tags = body.tags;
   }
-  const db = getDb();
   if (body.categoryId !== undefined) {
     if (body.categoryId !== null) {
       await assertCategoryBelongsToUser(db, userId, body.categoryId);
@@ -236,13 +263,29 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
-  response.json({ bookmark: mapBookmark(data) });
+  response.json({
+    bookmark: await mapBookmarkWithSignedMedia(data, true),
+  });
 });
 
 bookmarksRouter.delete("/bookmarks/:id", async (request, response) => {
   const userId = getUserId(request);
   const id = uuidSchema.parse(request.params.id);
-  const { error } = await getDb()
+  const db = getDb();
+  const { data, error: selectError } = await db
+    .from("bookmarks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", id)
+    .maybeSingle();
+  if (selectError) {
+    throw selectError;
+  }
+  if (!data) {
+    throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
+  }
+  await removeBookmarkMedia(data, getImageStorage());
+  const { error } = await db
     .from("bookmarks")
     .delete()
     .eq("user_id", userId)
@@ -262,6 +305,23 @@ function getDb() {
     );
   }
   return supabaseAdmin;
+}
+
+function getImageStorage(): ImageStorageBucket {
+  return getDb().storage.from(IMAGE_BUCKET);
+}
+
+async function mapBookmarkWithSignedMedia(
+  row: BookmarkDbRow,
+  includeOriginal: boolean,
+) {
+  if (row.kind !== "image") {
+    return mapBookmark(row);
+  }
+  return mapBookmark(
+    row,
+    await signBookmarkMedia(row, getImageStorage(), includeOriginal),
+  );
 }
 
 async function handleBookmarkInsertError(
@@ -289,6 +349,10 @@ interface CategorizeBookmarkForUserOptions {
   bookmarkId: string;
   providerResolver?: typeof getAiProvider;
   categorize?: typeof categorizeBookmark;
+  imageInput?: {
+    mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+    base64: string;
+  };
 }
 
 export async function categorizeBookmarkForUser({
@@ -297,6 +361,7 @@ export async function categorizeBookmarkForUser({
   bookmarkId,
   providerResolver = getAiProvider,
   categorize = categorizeBookmark,
+  imageInput,
 }: CategorizeBookmarkForUserOptions): Promise<void> {
   await categorize({
     db,
@@ -304,6 +369,45 @@ export async function categorizeBookmarkForUser({
     bookmarkId,
     provider: providerResolver(),
     recordUsage: createAiUsageRecorder(db, userId),
+    imageLoader: imageInput
+      ? async () => imageInput
+      : ({ originalPath }) =>
+          loadImageForAnalysis(getImageStorage(), originalPath, processImage),
+  });
+}
+
+export async function signBookmarkMedia(
+  row: BookmarkDbRow,
+  storage: ImageStorageBucket,
+  includeOriginal: boolean,
+): Promise<{ thumbnailUrl?: string | null; originalUrl?: string | null }> {
+  if (row.kind !== "image") {
+    return {};
+  }
+  if (!row.image_thumbnail_path || !row.image_original_path) {
+    throw new Error("Image bookmark is missing Storage paths");
+  }
+  return {
+    thumbnailUrl: await signImage(storage, row.image_thumbnail_path),
+    originalUrl: includeOriginal
+      ? await signImage(storage, row.image_original_path)
+      : null,
+  };
+}
+
+export async function removeBookmarkMedia(
+  row: BookmarkDbRow,
+  storage: ImageStorageBucket,
+): Promise<void> {
+  if (row.kind !== "image") {
+    return;
+  }
+  if (!row.image_original_path || !row.image_thumbnail_path) {
+    throw new Error("Image bookmark is missing Storage paths");
+  }
+  await removeImage(storage, {
+    originalPath: row.image_original_path,
+    thumbnailPath: row.image_thumbnail_path,
   });
 }
 
@@ -365,6 +469,24 @@ function encodeCursor(createdAt: string, id: string): string {
   return Buffer.from(JSON.stringify({ createdAt, id }), "utf8").toString(
     "base64url",
   );
+}
+
+export function buildBookmarkSearchParams(
+  userId: string,
+  query: BookmarkListQuery,
+  cursor: { createdAt: string; id: string } | null,
+) {
+  return {
+    p_user_id: userId,
+    p_query: query.q ?? null,
+    p_category_id:
+      query.categoryId && query.categoryId !== "none" ? query.categoryId : null,
+    p_uncategorized: query.categoryId === "none",
+    p_kind: query.kind ?? null,
+    p_cursor_created_at: cursor?.createdAt ?? null,
+    p_cursor_id: cursor?.id ?? null,
+    p_limit: query.limit + 1,
+  };
 }
 
 function decodeCursor(cursor: string): { createdAt: string; id: string } {

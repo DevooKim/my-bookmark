@@ -11,7 +11,9 @@ interface DbError {
 interface BookmarkRow {
   id: string;
   user_id: string;
-  url: string;
+  kind: "link" | "image";
+  url: string | null;
+  image_original_path: string | null;
   title: string | null;
   description: string | null;
   site_name: string | null;
@@ -44,6 +46,10 @@ interface CategorizeOptions {
   provider: AiProvider | null;
   recordUsage?: (event: AiUsageEventInput) => Promise<void>;
   metadataFetcher?: (url: string) => Promise<PageMetadata>;
+  imageLoader?: (input: { originalPath: string }) => Promise<{
+    mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+    base64: string;
+  }>;
 }
 
 // 성공한 모델 id의 vendor prefix를 provider 컬럼에 기록한다
@@ -60,6 +66,7 @@ export async function categorizeBookmark({
   provider,
   recordUsage,
   metadataFetcher = fetchMetadata,
+  imageLoader,
 }: CategorizeOptions): Promise<void> {
   try {
     const bookmark = await loadBookmark(db, userId, bookmarkId);
@@ -67,18 +74,27 @@ export async function categorizeBookmark({
       return;
     }
 
-    const metadata = await metadataFetcher(bookmark.url);
-    const title =
-      bookmark.title ?? metadata.title ?? domainFromUrl(bookmark.url);
-    const description = metadata.description ?? bookmark.description;
-    const siteName = metadata.siteName ?? bookmark.site_name;
-    await updateMetadata(db, userId, bookmarkId, {
-      title,
-      description,
-      site_name: siteName,
-      favicon_url: metadata.faviconUrl,
-      og_image_url: metadata.ogImageUrl,
-    });
+    let linkMetadata:
+      | { title: string; description: string | null; siteName: string | null }
+      | undefined;
+    if (bookmark.kind === "link") {
+      if (!bookmark.url) {
+        throw new Error("Link bookmark is missing its URL");
+      }
+      const metadata = await metadataFetcher(bookmark.url);
+      linkMetadata = {
+        title: bookmark.title ?? metadata.title ?? domainFromUrl(bookmark.url),
+        description: metadata.description ?? bookmark.description,
+        siteName: metadata.siteName ?? bookmark.site_name,
+      };
+      await updateMetadata(db, userId, bookmarkId, {
+        title: linkMetadata.title,
+        description: linkMetadata.description,
+        site_name: linkMetadata.siteName,
+        favicon_url: metadata.faviconUrl,
+        og_image_url: metadata.ogImageUrl,
+      });
+    }
 
     if (!provider) {
       await markFailed(db, userId, bookmarkId);
@@ -86,13 +102,33 @@ export async function categorizeBookmark({
     }
 
     const categories = await loadCategories(db, userId);
-    const input = {
-      url: bookmark.url,
-      title,
-      ...(description ? { description } : {}),
-      ...(siteName ? { siteName } : {}),
-      existingCategories: categories,
-    };
+    let input: Parameters<AiProvider["categorize"]>[0];
+    if (bookmark.kind === "image") {
+      if (!bookmark.image_original_path || !imageLoader) {
+        throw new Error("Image bookmark cannot be loaded for analysis");
+      }
+      input = {
+        kind: "image",
+        image: await imageLoader({
+          originalPath: bookmark.image_original_path,
+        }),
+        existingCategories: categories,
+      };
+    } else {
+      if (!bookmark.url || !linkMetadata) {
+        throw new Error("Link bookmark metadata is missing");
+      }
+      input = {
+        kind: "link",
+        url: bookmark.url,
+        title: linkMetadata.title,
+        ...(linkMetadata.description
+          ? { description: linkMetadata.description }
+          : {}),
+        ...(linkMetadata.siteName ? { siteName: linkMetadata.siteName } : {}),
+        existingCategories: categories,
+      };
+    }
 
     const startedAt = Date.now();
     try {
@@ -180,7 +216,9 @@ async function loadBookmark(
   bookmarkId: string,
 ): Promise<BookmarkRow | null> {
   const { data, error } = await (db.from("bookmarks") as BookmarkSelectTable)
-    .select("id,user_id,url,title,description,site_name,ai_status")
+    .select(
+      "id,user_id,kind,url,image_original_path,title,description,site_name,ai_status",
+    )
     .eq("user_id", userId)
     .eq("id", bookmarkId)
     .maybeSingle();

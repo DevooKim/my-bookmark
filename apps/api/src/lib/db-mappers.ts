@@ -11,10 +11,11 @@ import {
 
 const dbCategorySchema = categorySchema.transform((category) => category);
 
-interface BookmarkDbRow {
+export interface BookmarkDbRow {
   id: string;
   user_id: string;
-  url: string;
+  kind: "link" | "image";
+  url: string | null;
   title: string | null;
   description: string | null;
   site_name: string | null;
@@ -24,6 +25,13 @@ interface BookmarkDbRow {
   tags: string[];
   ai_status: "idle" | "pending" | "done" | "failed";
   ai_model: string | null;
+  image_original_path: string | null;
+  image_thumbnail_path: string | null;
+  image_mime_type: string | null;
+  image_file_size: number | null;
+  image_width: number | null;
+  image_height: number | null;
+  image_filename: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,14 +54,30 @@ interface ReminderWithBookmarkDbRow {
   status: "pending" | "sent" | "cancelled";
   sent_at: string | null;
   created_at: string;
-  bookmarks: Pick<BookmarkDbRow, "id" | "url" | "title"> | null;
+  bookmarks: Pick<BookmarkDbRow, "id" | "kind" | "url" | "title"> | null;
 }
 
-export function mapBookmark(row: BookmarkDbRow): Bookmark {
+export function mapBookmark(
+  row: BookmarkDbRow,
+  media: { thumbnailUrl?: string | null; originalUrl?: string | null } = {},
+): Bookmark {
   return bookmarkSchema.parse({
     id: row.id,
     userId: row.user_id,
+    kind: row.kind,
     url: row.url,
+    image:
+      row.kind === "image"
+        ? {
+            thumbnailUrl: media.thumbnailUrl ?? null,
+            originalUrl: media.originalUrl ?? null,
+            mimeType: row.image_mime_type,
+            fileSize: row.image_file_size,
+            width: row.image_width,
+            height: row.image_height,
+            filename: row.image_filename,
+          }
+        : null,
     title: row.title,
     description: row.description,
     siteName: row.site_name,

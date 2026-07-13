@@ -11,6 +11,8 @@ const reminder = {
   remind_at: "2026-07-10T12:00:00.000Z",
   note: "Read this later",
   bookmark: {
+    id: "bookmark-1",
+    kind: "link" as const,
     url: "https://example.com/article",
     title: "Example article",
   },
@@ -74,5 +76,37 @@ describe("reminder cron", () => {
 
     expect(result).toEqual({ scanned: 1, claimed: 0, sent: 0, failed: 0 });
     expect(pushSender.send).not.toHaveBeenCalled();
+  });
+
+  it("opens an image reminder in the internal detail page", async () => {
+    const db = createDb();
+    db.dueReminders.mockResolvedValue([
+      {
+        ...reminder,
+        note: null,
+        bookmark: {
+          id: "bookmark-1",
+          kind: "image",
+          url: null,
+          title: "전시 포스터",
+        },
+      },
+    ]);
+    const pushSender = { send: vi.fn().mockResolvedValue({ ok: true }) };
+
+    await processDueReminders({
+      db,
+      pushSender,
+      webOrigin: "https://bookmark.example",
+    });
+
+    expect(pushSender.send).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: "🔖 전시 포스터",
+        body: "이미지",
+        url: "https://bookmark.example/images/bookmark-1",
+      }),
+    );
   });
 });
