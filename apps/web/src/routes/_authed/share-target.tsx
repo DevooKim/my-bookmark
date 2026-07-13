@@ -25,6 +25,7 @@ function ShareTargetPage() {
   const [files, setFiles] = useState<File[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -54,6 +55,9 @@ function ShareTargetPage() {
   }, [id]);
 
   async function discardAndLeave() {
+    if (busy) {
+      return;
+    }
     if (id) {
       await deleteSharedImages(id);
     }
@@ -92,6 +96,7 @@ function ShareTargetPage() {
               }
               setSettled(true);
             }}
+            onBusyChange={setBusy}
             onUploaded={() => {
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
               void queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -100,6 +105,7 @@ function ShareTargetPage() {
           <div className="mt-4 flex justify-end gap-2">
             <button
               className="btn-secondary"
+              disabled={busy}
               onClick={() => void discardAndLeave()}
               type="button"
             >

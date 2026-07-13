@@ -1,12 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bookmark, LockKeyhole } from "lucide-react";
 import { useState } from "react";
+import { parsePostLoginRedirect } from "../lib/auth-redirect";
 import { getSupabase } from "../lib/supabase";
 
-export const Route = createFileRoute("/login")({ component: LoginPage });
+export const Route = createFileRoute("/login")({
+  validateSearch: (search) => ({
+    redirect: parsePostLoginRedirect(Reflect.get(search, "redirect")),
+  }),
+  component: LoginPage,
+});
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -29,7 +36,11 @@ function LoginPage() {
         return;
       }
 
-      await navigate({ to: "/" });
+      if (redirect === "/") {
+        await navigate({ to: "/" });
+      } else {
+        window.location.assign(redirect);
+      }
     } catch {
       setErrorMessage(
         "로그인 처리를 시작하지 못했어요. 네트워크 상태를 확인하고 다시 시도해주세요.",

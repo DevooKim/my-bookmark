@@ -2,7 +2,7 @@ import type { Bookmark } from "@my-bookmark/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Download, Edit, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   deleteBookmark,
@@ -18,9 +18,15 @@ export const Route = createFileRoute("/_authed/images/$id")({
 
 function ImageDetailPage() {
   const { id } = Route.useParams();
+  return <ImageDetailPageForId id={id} key={id} />;
+}
+
+function ImageDetailPageForId({ id }: { id: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [mediaBroken, setMediaBroken] = useState(false);
+  const mediaRetryAttempted = useRef(false);
   const bookmarkQuery = useQuery({
     queryKey: ["bookmark", id],
     queryFn: () => getBookmark(id),
@@ -78,13 +84,21 @@ function ImageDetailPage() {
       <ImageDetailView
         bookmark={bookmark}
         categoryName={categoryName}
+        mediaBroken={mediaBroken}
         onDelete={() => {
           if (window.confirm("원본 이미지를 포함해 이 항목을 삭제할까요?")) {
             deleteMutation.mutate();
           }
         }}
         onEdit={() => setIsEditing(true)}
-        onMediaError={() => void bookmarkQuery.refetch()}
+        onMediaError={() => {
+          if (mediaRetryAttempted.current) {
+            setMediaBroken(true);
+            return;
+          }
+          mediaRetryAttempted.current = true;
+          void bookmarkQuery.refetch();
+        }}
         onRecategorize={() => recategorizeMutation.mutate()}
       />
       {isEditing ? (
@@ -104,6 +118,7 @@ function ImageDetailPage() {
 export function ImageDetailView({
   bookmark,
   categoryName,
+  mediaBroken = false,
   onDelete,
   onEdit,
   onMediaError,
@@ -111,6 +126,7 @@ export function ImageDetailView({
 }: {
   bookmark: Extract<Bookmark, { kind: "image" }>;
   categoryName: string | null;
+  mediaBroken?: boolean;
   onDelete: () => void;
   onEdit: () => void;
   onMediaError: () => void;
@@ -147,7 +163,7 @@ export function ImageDetailView({
       </header>
 
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-950 dark:border-zinc-800">
-        {bookmark.image.originalUrl ? (
+        {bookmark.image.originalUrl && !mediaBroken ? (
           <img
             alt={title}
             className="mx-auto max-h-[70vh] w-full object-contain"
@@ -169,7 +185,7 @@ export function ImageDetailView({
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">{title}</h1>
           </div>
-          {bookmark.image.originalUrl ? (
+          {bookmark.image.originalUrl && !mediaBroken ? (
             <a
               className="btn-secondary"
               download={bookmark.image.filename ?? "image"}

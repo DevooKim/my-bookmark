@@ -151,6 +151,22 @@ describe("image routes", () => {
     expect(deps.storage.upload).not.toHaveBeenCalled();
   });
 
+  it("returns a common 400 error for an unexpected multipart field", async () => {
+    const { app } = createTestApp();
+    const response = await request(app)
+      .post("/api/images")
+      .set("Authorization", "Bearer test")
+      .attach("wrong", Buffer.from("file"), "sample.png");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "이미지 업로드 형식이 올바르지 않습니다",
+      },
+    });
+  });
+
   it("returns the common 413 error for files over 20MB", async () => {
     const { app } = createTestApp();
     const response = await request(app)
@@ -182,5 +198,24 @@ describe("image routes", () => {
       `${userId}/${bookmarkId}/original.png`,
       `${userId}/${bookmarkId}/thumbnail.webp`,
     ]);
+  });
+
+  it("keeps the durable item and starts analysis when thumbnail signing fails", async () => {
+    const deps = createDeps();
+    vi.mocked(deps.storage.createSignedUrl).mockResolvedValue({
+      data: null,
+      error: { message: "temporary signing failure" },
+    });
+    const { app } = createTestApp(deps);
+
+    const response = await request(app)
+      .post("/api/images")
+      .set("Authorization", "Bearer test")
+      .attach("image", Buffer.from("file"), "sample.png");
+
+    expect(response.status).toBe(201);
+    expect(response.body.bookmark.image.thumbnailUrl).toBeNull();
+    await vi.waitFor(() => expect(deps.categorize).toHaveBeenCalledOnce());
+    expect(deps.storage.remove).not.toHaveBeenCalled();
   });
 });

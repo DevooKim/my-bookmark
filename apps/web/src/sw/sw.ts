@@ -71,7 +71,11 @@ export function classifyRequest(request: Request): CacheStrategy {
     return "asset-cache-first";
   }
 
-  if (url.pathname === "/api/bookmarks" || url.pathname === "/api/categories") {
+  if (
+    (url.pathname === "/api/bookmarks" &&
+      url.searchParams.get("kind") === "link") ||
+    url.pathname === "/api/categories"
+  ) {
     return "api-network-first";
   }
 

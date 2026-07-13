@@ -242,6 +242,14 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   if (body.tags !== undefined) {
     updates.tags = body.tags;
   }
+  if (
+    body.url !== undefined ||
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.tags !== undefined
+  ) {
+    updates.ai_status = "idle";
+  }
   if (body.categoryId !== undefined) {
     if (body.categoryId !== null) {
       await assertCategoryBelongsToUser(db, userId, body.categoryId);

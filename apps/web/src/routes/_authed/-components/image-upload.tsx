@@ -27,16 +27,26 @@ export function ImageUpload({
   const [items, setItems] = useState<UploadItem[]>([]);
   const previewUrls = useRef(new Set<string>());
   const initialFilesQueued = useRef(false);
+  const wasBusy = useRef(false);
   const busy = items.some(
     (item) => item.status === "queued" || item.status === "uploading",
   );
 
-  useEffect(() => onBusyChange?.(busy), [busy, onBusyChange]);
-  useEffect(() => () => {
-    for (const url of previewUrls.current) {
-      URL.revokeObjectURL(url);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    if (wasBusy.current && !busy) {
+      onAllSettled?.();
     }
-  });
+    wasBusy.current = busy;
+  }, [busy, onAllSettled, onBusyChange]);
+  useEffect(
+    () => () => {
+      for (const url of previewUrls.current) {
+        URL.revokeObjectURL(url);
+      }
+    },
+    [],
+  );
 
   const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
     setItems((current) =>
@@ -61,49 +71,37 @@ export function ImageUpload({
     [onUploaded, updateItem],
   );
 
-  const uploadQueue = useCallback(
-    async (entries: UploadItem[]) => {
-      let cursor = 0;
-      const worker = async () => {
-        while (cursor < entries.length) {
-          const item = entries[cursor];
-          cursor += 1;
-          if (item) {
-            await uploadItem(item);
-          }
-        }
-      };
-      await Promise.all(
-        Array.from({ length: Math.min(2, entries.length) }, () => worker()),
-      );
-      onAllSettled?.();
-    },
-    [onAllSettled, uploadItem],
-  );
+  useEffect(() => {
+    const activeCount = items.filter(
+      (item) => item.status === "uploading",
+    ).length;
+    const available = Math.max(0, 2 - activeCount);
+    for (const item of items
+      .filter((candidate) => candidate.status === "queued")
+      .slice(0, available)) {
+      void uploadItem(item);
+    }
+  }, [items, uploadItem]);
 
-  const enqueue = useCallback(
-    (files: File[]) => {
-      const entries = files
-        .filter((file) => file.type.startsWith("image/"))
-        .map((file, index) => {
-          const previewUrl = URL.createObjectURL(file);
-          previewUrls.current.add(previewUrl);
-          return {
-            id: `${Date.now()}-${index}-${file.name}`,
-            file,
-            previewUrl,
-            status: "queued" as const,
-            error: null,
-          };
-        });
-      if (entries.length === 0) {
-        return;
-      }
-      setItems((current) => [...current, ...entries]);
-      void uploadQueue(entries);
-    },
-    [uploadQueue],
-  );
+  const enqueue = useCallback((files: File[]) => {
+    const entries = files
+      .filter((file) => file.type.startsWith("image/"))
+      .map((file) => {
+        const previewUrl = URL.createObjectURL(file);
+        previewUrls.current.add(previewUrl);
+        return {
+          id: crypto.randomUUID(),
+          file,
+          previewUrl,
+          status: "queued" as const,
+          error: null,
+        };
+      });
+    if (entries.length === 0) {
+      return;
+    }
+    setItems((current) => [...current, ...entries]);
+  }, []);
 
   useEffect(() => {
     if (initialFilesQueued.current || !initialFiles?.length) {
@@ -174,7 +172,9 @@ export function ImageUpload({
               {item.status === "failed" ? (
                 <button
                   className="icon-button"
-                  onClick={() => void uploadItem(item)}
+                  onClick={() =>
+                    updateItem(item.id, { status: "queued", error: null })
+                  }
                   type="button"
                 >
                   <RefreshCcw className="h-4 w-4" />

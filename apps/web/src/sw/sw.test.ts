@@ -94,10 +94,10 @@ describe("service worker cache strategy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("uses network-first for bookmark and category GET requests", () => {
+  it("uses network-first only for link-only bookmark and category GET requests", () => {
     expect(
       classifyRequest(
-        new Request("https://app.test/api/bookmarks?cursor=next"),
+        new Request("https://app.test/api/bookmarks?kind=link&cursor=next"),
       ),
     ).toBe("api-network-first");
     expect(
@@ -105,6 +105,15 @@ describe("service worker cache strategy", () => {
         new Request("https://app.test/api/categories?withCounts=true"),
       ),
     ).toBe("api-network-first");
+  });
+
+  it("never caches bookmark lists that may contain signed image URLs", () => {
+    expect(classifyRequest(new Request("https://app.test/api/bookmarks"))).toBe(
+      "network-only",
+    );
+    expect(
+      classifyRequest(new Request("https://app.test/api/bookmarks?kind=image")),
+    ).toBe("network-only");
   });
 
   it("never caches API mutations or unrelated API reads", () => {
@@ -168,7 +177,7 @@ describe("service worker cache strategy", () => {
       .mockRejectedValueOnce(new TypeError("offline"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const request = new Request("https://app.test/api/bookmarks");
+    const request = new Request("https://app.test/api/bookmarks?kind=link");
     await handleFetch(request);
     const offlineResponse = await handleFetch(request);
 

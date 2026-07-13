@@ -26,6 +26,7 @@ export function BookmarkDialog({
 }) {
   const queryClient = useQueryClient();
   const [contentKind, setContentKind] = useState<"link" | "image">("link");
+  const [imageBusy, setImageBusy] = useState(false);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<"ai" | "manual" | "none">(() => {
@@ -72,11 +73,17 @@ export function BookmarkDialog({
   }
 
   return (
-    <Dialog opaque title="북마크 추가" onClose={onClose}>
+    <Dialog
+      closeDisabled={contentKind === "image" && imageBusy}
+      opaque
+      title="북마크 추가"
+      onClose={onClose}
+    >
       <fieldset className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <legend className="sr-only">항목 유형</legend>
         <button
           className={contentKind === "link" ? "chip-active" : "chip"}
+          disabled={imageBusy}
           onClick={() => setContentKind("link")}
           type="button"
         >
@@ -96,6 +103,7 @@ export function BookmarkDialog({
             이미지마다 별도 항목으로 저장하고 AI가 자동으로 분석합니다.
           </p>
           <ImageUpload
+            onBusyChange={setImageBusy}
             onUploaded={() => {
               toast.success("이미지를 저장했어요");
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
@@ -361,11 +369,13 @@ function Dialog({
   title,
   children,
   onClose,
+  closeDisabled = false,
   opaque = false,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  closeDisabled?: boolean;
   opaque?: boolean;
 }) {
   const titleId = `dialog-${title.replaceAll(" ", "-")}`;
@@ -389,7 +399,7 @@ function Dialog({
   }, []);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && !closeDisabled) {
       event.preventDefault();
       onClose();
       return;
@@ -422,7 +432,7 @@ function Dialog({
     <div
       className="dialog-scrim dialog-scrim-blur"
       onPointerDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !closeDisabled) {
           onClose();
         }
       }}
@@ -442,6 +452,7 @@ function Dialog({
           </h2>
           <button
             className="min-h-11 rounded-xl px-2 text-sm font-medium text-blue-600"
+            disabled={closeDisabled}
             onClick={onClose}
             type="button"
           >

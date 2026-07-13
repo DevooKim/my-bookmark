@@ -31,11 +31,14 @@ export const errorMiddleware: ErrorRequestHandler = (
     return;
   }
 
-  if (error instanceof MulterError && error.code === "LIMIT_FILE_SIZE") {
-    response.status(413).json({
+  if (error instanceof MulterError) {
+    const tooLarge = error.code === "LIMIT_FILE_SIZE";
+    response.status(tooLarge ? 413 : 400).json({
       error: {
         code: API_ERROR_CODES.VALIDATION_ERROR,
-        message: "이미지는 20MB 이하여야 합니다",
+        message: tooLarge
+          ? "이미지는 20MB 이하여야 합니다"
+          : "이미지 업로드 형식이 올바르지 않습니다",
       },
     });
     return;

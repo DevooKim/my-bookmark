@@ -131,7 +131,6 @@ export function createImagesRouter(
       throw error;
     }
 
-    const thumbnailUrl = await signImage(deps.storage, paths.thumbnailPath);
     void deps
       .categorize({
         userId,
@@ -142,6 +141,16 @@ export function createImagesRouter(
         },
       })
       .catch((error) => console.warn("image AI analysis task failed", error));
+    const thumbnailUrl = await signImage(
+      deps.storage,
+      paths.thumbnailPath,
+    ).catch(() => {
+      console.warn("image thumbnail signing failed", {
+        userId,
+        bookmarkId,
+      });
+      return null;
+    });
     response.status(201).json({
       bookmark: mapBookmark(row, { thumbnailUrl, originalUrl: null }),
     });

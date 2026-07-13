@@ -3,6 +3,26 @@ import { describe, expect, it } from "vitest";
 import { MAX_IMAGE_BYTES, processImage } from "../services/image-processing";
 
 describe("image processing", () => {
+  it("decodes a real HEIC with the portable decoder", async () => {
+    const heic = Buffer.from(
+      "AAAAJGZ0eXBoZWljAAAAAG1pZjFNaVBybWlhZk1pSEJoZWljAAABhm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAHBpY3QAAAAAAAAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAAADnBpdG0AAAAAAAEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABodmMxAAAAAOZpcHJwAAAAxWlwY28AAAATY29scm5jbHgAAgACAAaAAAAADGNsbGkAywBAAAAAFGlzcGUAAAAAAAAAEAAAABAAAAAJaXJvdAAAAAAQcGl4aQAAAAADCAgIAAAAcWh2Y0MBA3AAAACwAAAAAAAe8AD8/fj4AAALA6AAAQAXQAEMAf//A3AAAAMAsAAAAwAAAwAecCShAAEAI0IBAQNwAAADALAAAAMAAAMAHqAUIEHAkwziHuRZVNwICBgCogABAAlEAcBhcshAUyQAAAAZaXBtYQAAAAAAAAABAAEGgQIDBYaEAAAAHmlsb2MAAAAARAAAAQABAAAAAQAAAboAAADIAAAAAW1kYXQAAAAAAAAA2AAAAMQoAa+hFbALoF9s2SZe+7Tvdr6eVFsRGbtk5mfwQbP2vj31zWWV9aOO8SwBgx1PxhMVQ7fL3qVYpi4ZR3TD84Ki8I7LbJzDAHRDqYQa1JRBrO7+qduwyB6pm4AHIHE8hkXrbOsTPy995kA5jPWzO7AHfTA1r0WnNqxrMid+VrSjJlJ6AgmfSJxYltnVmphqkwfr4rm6vs6FuBBsORLBHlY1H4prIQMkh5DwnfLfzFyr8E8VnoAbR9DnH7obQf/rxILjxqrY",
+      "base64",
+    );
+
+    const result = await processImage(heic, "iphone.heic");
+    const thumbnail = await sharp(result.thumbnail).metadata();
+
+    expect(result).toMatchObject({
+      original: heic,
+      extension: "heic",
+      mimeType: "image/heic",
+      width: 16,
+      height: 16,
+      filename: "iphone.heic",
+    });
+    expect(thumbnail.format).toBe("webp");
+  });
+
   it("preserves the original and creates bounded thumbnail and analysis images", async () => {
     const original = await sharp({
       create: {

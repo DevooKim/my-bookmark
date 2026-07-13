@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getMe } from "../../lib/api-client";
+import { loginUrlForLocation } from "../../lib/auth-redirect";
 import { requestBookmarkDialog } from "../../lib/bookmark-dialog";
 import { performLogout } from "../../lib/logout";
 import { getSupabase } from "../../lib/supabase";
@@ -44,7 +45,7 @@ function AuthedLayout() {
           return;
         }
         if (!data.session) {
-          window.location.assign("/login");
+          window.location.assign(loginUrlForLocation(window.location));
           return;
         }
         setIsCheckingSession(false);

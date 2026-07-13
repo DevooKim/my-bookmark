@@ -83,4 +83,22 @@ describe("ImageDetailView", () => {
 
     expect(screen.getByText("원본 이미지를 불러오지 못했어요.")).toBeTruthy();
   });
+
+  it("shows the fallback after the one-shot media refresh also fails", () => {
+    render(
+      <ImageDetailView
+        bookmark={imageBookmark}
+        categoryName={null}
+        mediaBroken
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onMediaError={vi.fn()}
+        onRecategorize={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("원본 이미지를 불러오지 못했어요.")).toBeTruthy();
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
+  });
 });

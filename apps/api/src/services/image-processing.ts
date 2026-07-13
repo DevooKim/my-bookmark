@@ -1,4 +1,5 @@
 import path from "node:path";
+import decodeHeic from "heic-decode";
 import sharp from "sharp";
 
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -47,23 +48,8 @@ export async function processImage(
   }
 
   try {
-    const image = sharp(bytes, {
-      animated: false,
-      failOn: "error",
-      limitInputPixels: 64_000_000,
-    });
-    const metadata = await image.metadata();
-    if (!metadata.format || !metadata.width || !metadata.height) {
-      throw new ImageProcessingError(
-        "이미지 정보를 읽을 수 없습니다",
-        "invalid",
-      );
-    }
-
-    const format = imageFormat(metadata.format, filename);
-    const rotated = metadata.orientation && metadata.orientation >= 5;
-    const width = rotated ? metadata.height : metadata.width;
-    const height = rotated ? metadata.width : metadata.height;
+    const decoded = await decodeImage(bytes, filename);
+    const { image, format, width, height } = decoded;
     const normalizedName = normalizeFilename(filename, format.extension);
     const thumbnail = await image
       .clone()
@@ -111,10 +97,78 @@ export async function processImage(
   }
 }
 
-function imageFormat(
-  format: string,
-  filename: string,
-): { extension: string; mimeType: string } {
+async function decodeImage(bytes: Buffer, filename: string) {
+  if (isHeif(bytes, filename)) {
+    const decoded = await decodeHeic({ buffer: bytes });
+    if (
+      decoded.width <= 0 ||
+      decoded.height <= 0 ||
+      decoded.width * decoded.height > 64_000_000
+    ) {
+      throw new ImageProcessingError(
+        "이미지 크기를 처리할 수 없습니다",
+        "invalid",
+      );
+    }
+    const extension =
+      path.extname(filename).toLowerCase() === ".heif" ? "heif" : "heic";
+    return {
+      image: sharp(Buffer.from(decoded.data), {
+        raw: {
+          width: decoded.width,
+          height: decoded.height,
+          channels: 4,
+        },
+      }),
+      format: { extension, mimeType: `image/${extension}` },
+      width: decoded.width,
+      height: decoded.height,
+    };
+  }
+
+  const image = sharp(bytes, {
+    animated: false,
+    failOn: "error",
+    limitInputPixels: 64_000_000,
+  });
+  const metadata = await image.metadata();
+  if (!metadata.format || !metadata.width || !metadata.height) {
+    throw new ImageProcessingError("이미지 정보를 읽을 수 없습니다", "invalid");
+  }
+  const format = imageFormat(metadata.format);
+  const rotated = metadata.orientation && metadata.orientation >= 5;
+  return {
+    image,
+    format,
+    width: rotated ? metadata.height : metadata.width,
+    height: rotated ? metadata.width : metadata.height,
+  };
+}
+
+function isHeif(bytes: Buffer, filename: string): boolean {
+  const extension = path.extname(filename).toLowerCase();
+  if (extension === ".heic" || extension === ".heif") {
+    return true;
+  }
+  if (
+    bytes.byteLength < 12 ||
+    bytes.subarray(4, 8).toString("ascii") !== "ftyp"
+  ) {
+    return false;
+  }
+  return [
+    "heic",
+    "heix",
+    "hevc",
+    "hevx",
+    "heim",
+    "heis",
+    "mif1",
+    "msf1",
+  ].includes(bytes.subarray(8, 12).toString("ascii"));
+}
+
+function imageFormat(format: string): { extension: string; mimeType: string } {
   if (format === "gif") {
     return FORMAT_INFO.gif;
   }
@@ -126,12 +180,6 @@ function imageFormat(
   }
   if (format === "webp") {
     return FORMAT_INFO.webp;
-  }
-  if (format === "heif") {
-    const isHeic = path.extname(filename).toLowerCase() === ".heic";
-    return isHeic
-      ? { extension: "heic", mimeType: "image/heic" }
-      : { extension: "heif", mimeType: "image/heif" };
   }
   throw new ImageProcessingError(
     "지원하지 않는 이미지 형식입니다",

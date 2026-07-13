@@ -39,6 +39,7 @@ vi.mock("../../lib/api-client", () => ({
 afterEach(() => cleanup());
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubGlobal("localStorage", {
     getItem: vi.fn(() => null),
     setItem: vi.fn(),
@@ -353,6 +354,33 @@ describe("BookmarkDialog", () => {
     });
 
     await waitFor(() => expect(createImage).toHaveBeenCalledTimes(1));
+  });
+
+  it("prevents closing the add dialog while an image upload is active", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:sample");
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(createImage).mockImplementation(() => new Promise(() => {}));
+    const onClose = vi.fn();
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BookmarkDialog categories={[]} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이미지" }));
+    fireEvent.change(screen.getByLabelText("이미지 선택"), {
+      target: {
+        files: [new File(["file"], "sample.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() => expect(createImage).toHaveBeenCalledOnce());
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "닫기" }).disabled,
+    ).toBe(true);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("renders the add dialog with an opaque surface", () => {

@@ -83,7 +83,7 @@ beforeEach(() => {
 describe("bookmark tags API", () => {
   it("updates normalized bookmark tags", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
-      data: bookmarkRow(),
+      data: bookmarkRow({ ai_status: "idle" }),
       error: null,
     });
     const select = vi.fn(() => ({ maybeSingle }));
@@ -96,7 +96,10 @@ describe("bookmark tags API", () => {
       .send({ tags: [" React ", "개발", "React"] });
 
     expect(response.status).toBe(200);
-    expect(mocks.update).toHaveBeenCalledWith({ tags: ["React", "개발"] });
+    expect(mocks.update).toHaveBeenCalledWith({
+      tags: ["React", "개발"],
+      ai_status: "idle",
+    });
     expect(response.body.bookmark.tags).toEqual(["React", "개발"]);
   });
 
