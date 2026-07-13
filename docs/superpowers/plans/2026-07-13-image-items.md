@@ -619,3 +619,41 @@ bun run typecheck && bun run lint && bun run test && bun run build
 ```
 
 Update `PROGRESS.md` with the explicit-save behavior and remote migration status, then commit the implementation and documentation with a Korean conventional commit message.
+
+### Task 11: Clickable image card and large detail canvas
+
+**Files:**
+- Modify: `apps/web/src/routes/_authed/index.tsx`
+- Modify: `apps/web/src/routes/_authed/-index.test.tsx`
+- Modify: `apps/web/src/routes/_authed/images.$id.tsx`
+- Modify: `apps/web/src/routes/_authed/-image-detail.test.tsx`
+
+- [ ] **Step 1: Write failing card-link tests**
+
+Assert an image card exposes a primary internal link named `<title> 크게 보기` with `href=/images/<id>` and a full-card absolute hit area. Keep tag-search and menu controls above that link so their existing actions do not navigate. Assert link cards retain their external title link and `_blank` target.
+
+- [ ] **Step 2: Write a failing detail-size test**
+
+Assert the original image uses a fixed `70dvh` viewing canvas with `object-contain`, so small and wide originals are displayed in a visibly large area instead of only at intrinsic height.
+
+- [ ] **Step 3: Confirm RED**
+
+Run:
+
+```bash
+bun run --cwd apps/web test -- src/routes/_authed/-index.test.tsx src/routes/_authed/-image-detail.test.tsx
+```
+
+Expected: FAIL because the current image card links only its title and the detail image has only `max-h-[70vh]`.
+
+- [ ] **Step 4: Implement the primary image-card link**
+
+Make the image article `relative`, add an absolute internal anchor covering the card, and make the visual content pointer-transparent while restoring pointer events and a higher stacking layer on the tag buttons and overflow menu. Render the image title as text to avoid duplicate links; preserve the existing external anchor for link items.
+
+- [ ] **Step 5: Enlarge the original-image view**
+
+Change the detail image to `h-[70dvh] max-h-[48rem] w-full object-contain`. Keep signed-URL refresh, missing-media fallback, download, and metadata behavior unchanged.
+
+- [ ] **Step 6: Verify with Task 10 and commit**
+
+Run both focused suites, web typecheck/lint, and the repository-wide verification loop before updating `PROGRESS.md` and committing.
