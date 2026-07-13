@@ -46,10 +46,21 @@ export const bookmarkTagsSchema = z
   .max(5)
   .transform((tags) => [...new Set(tags)]);
 
-export const bookmarkSchema = z.object({
+export const bookmarkKindSchema = z.enum(["link", "image"]);
+
+export const imageMetadataSchema = z.object({
+  thumbnailUrl: z.url().nullable(),
+  originalUrl: z.url().nullable(),
+  mimeType: z.string().startsWith("image/"),
+  fileSize: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  filename: z.string().min(1),
+});
+
+const bookmarkCommonSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
-  url: z.url(),
   title: z.string().nullable(),
   description: z.string().nullable(),
   siteName: z.string().nullable(),
@@ -62,6 +73,19 @@ export const bookmarkSchema = z.object({
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
+
+export const bookmarkSchema = z.discriminatedUnion("kind", [
+  bookmarkCommonSchema.extend({
+    kind: z.literal("link"),
+    url: z.url(),
+    image: z.null(),
+  }),
+  bookmarkCommonSchema.extend({
+    kind: z.literal("image"),
+    url: z.null(),
+    image: imageMetadataSchema,
+  }),
+]);
 
 export const reminderStatusSchema = z.enum(["pending", "sent", "cancelled"]);
 
@@ -76,8 +100,23 @@ export const reminderSchema = z.object({
   createdAt: isoDateTimeSchema,
 });
 
+const reminderBookmarkSchema = z.discriminatedUnion("kind", [
+  z.object({
+    id: uuidSchema,
+    kind: z.literal("link"),
+    url: z.url(),
+    title: z.string().nullable(),
+  }),
+  z.object({
+    id: uuidSchema,
+    kind: z.literal("image"),
+    url: z.null(),
+    title: z.string().nullable(),
+  }),
+]);
+
 export const reminderWithBookmarkSchema = reminderSchema.extend({
-  bookmark: bookmarkSchema.pick({ id: true, url: true, title: true }),
+  bookmark: reminderBookmarkSchema,
 });
 
 export const pushSubscriptionRequestSchema = z.object({
@@ -128,6 +167,7 @@ export const updateBookmarkRequestSchema = z
 
 export const bookmarkListQuerySchema = z.object({
   categoryId: z.union([uuidSchema, z.literal("none")]).optional(),
+  kind: bookmarkKindSchema.optional(),
   q: z.string().trim().min(1).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),

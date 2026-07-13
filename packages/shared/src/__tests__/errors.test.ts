@@ -42,7 +42,9 @@ describe("domain schemas", () => {
       bookmarkSchema.parse({
         id: "11111111-1111-4111-8111-111111111111",
         userId: "22222222-2222-4222-8222-222222222222",
+        kind: "link",
         url: "https://example.com",
+        image: null,
         title: null,
         description: null,
         siteName: null,
@@ -55,6 +57,10 @@ describe("domain schemas", () => {
         createdAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
       }),
-    ).toMatchObject({ url: "https://example.com", aiStatus: "idle" });
+    ).toMatchObject({
+      kind: "link",
+      url: "https://example.com",
+      aiStatus: "idle",
+    });
   });
 });
