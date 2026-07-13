@@ -64,11 +64,22 @@ function RemindersPage() {
               <div className="min-w-0 flex-1">
                 <a
                   className="font-semibold tracking-[-0.01em] hover:text-blue-600"
-                  href={reminder.bookmark.url}
-                  rel="noreferrer"
-                  target="_blank"
+                  href={
+                    reminder.bookmark.kind === "image"
+                      ? `/images/${reminder.bookmark.id}`
+                      : reminder.bookmark.url
+                  }
+                  rel={
+                    reminder.bookmark.kind === "link" ? "noreferrer" : undefined
+                  }
+                  target={
+                    reminder.bookmark.kind === "link" ? "_blank" : undefined
+                  }
                 >
-                  {reminder.bookmark.title ?? reminder.bookmark.url}
+                  {reminder.bookmark.title ??
+                    (reminder.bookmark.kind === "image"
+                      ? "이미지"
+                      : reminder.bookmark.url)}
                 </a>
                 <p className="mt-1 text-sm font-medium text-blue-600 dark:text-blue-400">
                   {new Date(reminder.remindAt).toLocaleString()}

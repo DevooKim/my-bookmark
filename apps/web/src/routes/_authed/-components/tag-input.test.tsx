@@ -92,7 +92,9 @@ describe("EditBookmarkDialog", () => {
     const bookmark: Bookmark = {
       id: "00000000-0000-4000-8000-000000000001",
       userId: "00000000-0000-4000-8000-000000000002",
+      kind: "link",
       url: "https://example.com/",
+      image: null,
       title: "예제",
       description: null,
       siteName: null,

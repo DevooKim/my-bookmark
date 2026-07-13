@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createImage,
   listBookmarks,
   listCategories,
   recategorizeBookmark,
@@ -27,6 +28,7 @@ vi.mock("../../lib/api-client", () => ({
   },
   createBookmark: vi.fn(),
   createCategory: vi.fn(),
+  createImage: vi.fn(),
   deleteBookmark: vi.fn(),
   listBookmarks: vi.fn(),
   listCategories: vi.fn(),
@@ -60,7 +62,9 @@ vi.mock("@tanstack/react-virtual", () => ({
 const bookmark: Bookmark = {
   id: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000002",
+  kind: "link",
   url: "https://example.com/react",
+  image: null,
   title: "React 19 핵심 변경 사항",
   description: null,
   siteName: null,
@@ -72,6 +76,23 @@ const bookmark: Bookmark = {
   aiModel: null,
   createdAt: "2026-07-12T00:00:00.000Z",
   updatedAt: "2026-07-12T00:00:00.000Z",
+};
+
+const imageBookmark: Bookmark = {
+  ...bookmark,
+  id: "00000000-0000-4000-8000-000000000004",
+  kind: "image",
+  url: null,
+  image: {
+    thumbnailUrl: "https://signed.example/thumbnail",
+    originalUrl: null,
+    mimeType: "image/png",
+    fileSize: 4,
+    width: 2,
+    height: 2,
+    filename: "sample.png",
+  },
+  title: "푸른 바다 풍경",
 };
 
 const category: CategoryWithCount = {
@@ -272,9 +293,68 @@ describe("HomePage", () => {
     );
     expect(summary.className).toContain("line-clamp-3");
   });
+
+  it("filters image items and opens image cards internally", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [imageBookmark],
+      nextCursor: null,
+    });
+
+    renderHome();
+
+    const imageFilter = screen.getByRole("button", { name: "이미지" });
+    fireEvent.click(imageFilter);
+
+    await waitFor(() =>
+      expect(listBookmarks).toHaveBeenLastCalledWith({ kind: "image" }),
+    );
+    const title = await screen.findByRole("link", { name: "푸른 바다 풍경" });
+    expect(title.getAttribute("href")).toBe(`/images/${imageBookmark.id}`);
+    expect(title.getAttribute("target")).toBeNull();
+    expect(screen.getByRole("img", { name: "푸른 바다 풍경" })).toHaveProperty(
+      "src",
+      imageBookmark.image.thumbnailUrl,
+    );
+  });
 });
 
 describe("BookmarkDialog", () => {
+  it("switches to automatic image upload mode", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:sample");
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(createImage).mockResolvedValue({
+      ...bookmark,
+      kind: "image",
+      url: null,
+      image: {
+        thumbnailUrl: "https://signed.example/thumbnail",
+        originalUrl: null,
+        mimeType: "image/png",
+        fileSize: 4,
+        width: 2,
+        height: 2,
+        filename: "sample.png",
+      },
+    });
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BookmarkDialog categories={[]} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이미지" }));
+    expect(screen.getByText("이미지를 선택하거나 놓으세요")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("이미지 선택"), {
+      target: {
+        files: [new File(["file"], "sample.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() => expect(createImage).toHaveBeenCalledTimes(1));
+  });
+
   it("renders the add dialog with an opaque surface", () => {
     const queryClient = new QueryClient();
 

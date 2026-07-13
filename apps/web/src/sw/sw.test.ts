@@ -4,10 +4,51 @@ import {
   clearApiCache,
   handleFetch,
   handleMessage,
+  handleShareTarget,
   shouldCacheResponse,
 } from "./sw";
 
 describe("service worker cache strategy", () => {
+  it("stages image share POSTs and redirects to the authenticated upload page", async () => {
+    const form = new FormData();
+    form.append(
+      "images",
+      new File(["image"], "photo.png", { type: "image/png" }),
+    );
+    const stage = vi.fn().mockResolvedValue("batch-id");
+    const request = new Request("https://app.test/share-target", {
+      method: "POST",
+      body: form,
+    });
+    vi.spyOn(request, "formData").mockResolvedValue(form);
+
+    const response = await handleShareTarget(request, stage);
+
+    expect(stage).toHaveBeenCalledOnce();
+    expect(stage.mock.calls[0]?.[0][0]).toMatchObject({
+      name: "photo.png",
+      type: "image/png",
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://app.test/share-target?id=batch-id",
+    );
+  });
+
+  it("does not intercept ordinary API mutations as share targets", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new Request("https://app.test/api/images", {
+      method: "POST",
+    });
+
+    await handleFetch(request);
+
+    expect(fetchMock).toHaveBeenCalledWith(request);
+  });
+
   it("uses cache-first only for hashed static assets", () => {
     expect(
       classifyRequest(new Request("https://app.test/assets/app.abc.js")),

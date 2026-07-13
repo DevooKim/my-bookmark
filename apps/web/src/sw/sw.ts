@@ -1,3 +1,5 @@
+import { stageSharedImages } from "../lib/share-target";
+
 const VERSION = "v1";
 const ASSET_CACHE = `my-bookmark-assets-${VERSION}`;
 const API_CACHE = `my-bookmark-api-${VERSION}`;
@@ -136,6 +138,9 @@ export function handleMessage(event: MessageEventLike): void {
 }
 
 export async function handleFetch(request: Request): Promise<Response> {
+  if (isShareTargetRequest(request)) {
+    return handleShareTarget(request);
+  }
   switch (classifyRequest(request)) {
     case "asset-cache-first":
       return cacheFirst(request);
@@ -145,6 +150,34 @@ export async function handleFetch(request: Request): Promise<Response> {
       return networkFirst(request, API_CACHE);
     case "network-only":
       return fetch(request);
+  }
+}
+
+function isShareTargetRequest(request: Request): boolean {
+  return (
+    request.method === "POST" &&
+    new URL(request.url).pathname === "/share-target"
+  );
+}
+
+export async function handleShareTarget(
+  request: Request,
+  stage: (files: File[]) => Promise<string> = stageSharedImages,
+): Promise<Response> {
+  try {
+    const form = await request.formData();
+    const images = form
+      .getAll("images")
+      .filter(
+        (value): value is File =>
+          typeof value !== "string" && value.type.startsWith("image/"),
+      );
+    const id = await stage(images);
+    const redirect = new URL("/share-target", request.url);
+    redirect.searchParams.set("id", id);
+    return Response.redirect(redirect, 303);
+  } catch {
+    return new Response("공유된 이미지를 처리하지 못했어요", { status: 400 });
   }
 }
 

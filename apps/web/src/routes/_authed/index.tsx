@@ -59,6 +59,7 @@ export const Route = createFileRoute("/_authed/")({ component: HomePage });
 export function HomePage() {
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [kind, setKind] = useState<Bookmark["kind"] | undefined>();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -94,14 +95,22 @@ export function HomePage() {
   });
 
   const bookmarksQuery = useInfiniteQuery({
-    queryKey: ["bookmarks", { categoryId, q: debouncedSearch }],
+    queryKey: ["bookmarks", { categoryId, kind, q: debouncedSearch }],
     queryFn: ({ pageParam }) => {
-      const params: { categoryId?: string; q?: string; cursor?: string } = {};
+      const params: {
+        categoryId?: string;
+        kind?: Bookmark["kind"];
+        q?: string;
+        cursor?: string;
+      } = {};
       if (categoryId) {
         params.categoryId = categoryId;
       }
       if (debouncedSearch) {
         params.q = debouncedSearch;
+      }
+      if (kind) {
+        params.kind = kind;
       }
       if (pageParam) {
         params.cursor = pageParam;
@@ -181,9 +190,29 @@ export function HomePage() {
           />
         </label>
 
+        <fieldset className="grid grid-cols-3 gap-2">
+          <legend className="sr-only">항목 유형 필터</legend>
+          <CategoryChip
+            active={!kind}
+            label="전체"
+            onClick={() => setKind(undefined)}
+          />
+          <CategoryChip
+            active={kind === "link"}
+            label="링크"
+            onClick={() => setKind("link")}
+          />
+          <CategoryChip
+            active={kind === "image"}
+            label="이미지"
+            onClick={() => setKind("image")}
+          />
+        </fieldset>
+
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           <CategoryChip
             active={!categoryId}
+            ariaLabel="전체 카테고리"
             label="전체"
             onClick={() => setCategoryId(undefined)}
           />
@@ -309,15 +338,18 @@ export function HomePage() {
 
 function CategoryChip({
   active,
+  ariaLabel,
   label,
   onClick,
 }: {
   active: boolean;
+  ariaLabel?: string;
   label: string;
   onClick: () => void;
 }) {
   return (
     <button
+      aria-label={ariaLabel}
       className={active ? "chip-active" : "chip"}
       onClick={onClick}
       type="button"
@@ -348,7 +380,13 @@ function BookmarkCard({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const category = categories.find((item) => item.id === bookmark.categoryId);
-  const title = bookmark.title ?? new URL(bookmark.url).hostname;
+  const hostname =
+    bookmark.kind === "link" ? new URL(bookmark.url).hostname : null;
+  const title =
+    bookmark.title ??
+    (bookmark.kind === "link"
+      ? (hostname ?? "제목 없는 링크")
+      : (bookmark.image.filename ?? "분석 중인 이미지"));
 
   useEffect(() => {
     if (!menuOpen) {
@@ -385,21 +423,34 @@ function BookmarkCard({
   return (
     <article className="bookmark-card">
       <div className="flex gap-3">
-        <img
-          alt=""
-          className="mt-1 h-8 w-8 rounded-lg bg-zinc-100"
-          loading="lazy"
-          src={
-            bookmark.faviconUrl ??
-            `https://www.google.com/s2/favicons?domain=${new URL(bookmark.url).hostname}&sz=64`
-          }
-        />
+        {bookmark.kind === "image" ? (
+          <img
+            alt={title}
+            className="h-20 w-20 shrink-0 rounded-xl bg-zinc-100 object-cover"
+            loading="lazy"
+            src={bookmark.image.thumbnailUrl ?? undefined}
+          />
+        ) : (
+          <img
+            alt=""
+            className="mt-1 h-8 w-8 rounded-lg bg-zinc-100"
+            loading="lazy"
+            src={
+              bookmark.faviconUrl ??
+              `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`
+            }
+          />
+        )}
         <div className="min-w-0 flex-1">
           <a
             className="text-[1.02rem] font-semibold leading-snug tracking-[-0.01em] hover:text-blue-600"
-            href={bookmark.url}
-            rel="noreferrer"
-            target="_blank"
+            href={
+              bookmark.kind === "image"
+                ? `/images/${bookmark.id}`
+                : bookmark.url
+            }
+            rel={bookmark.kind === "link" ? "noreferrer" : undefined}
+            target={bookmark.kind === "link" ? "_blank" : undefined}
           >
             {title}
           </a>
@@ -409,7 +460,10 @@ function BookmarkCard({
             </p>
           ) : null}
           <p className="mt-2 truncate text-sm text-zinc-500">
-            {new URL(bookmark.url).hostname.replace(/^www\./, "")} ·{" "}
+            {bookmark.kind === "image"
+              ? "이미지"
+              : hostname?.replace(/^www\./, "")}{" "}
+            {" · "}
             {category?.name ?? "미분류"}
           </p>
           {bookmark.tags.length > 0 ? (

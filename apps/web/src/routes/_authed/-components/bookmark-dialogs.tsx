@@ -14,6 +14,7 @@ import {
   updateBookmark,
 } from "../../../lib/api-client";
 import { toDatetimeLocalValue } from "../../../lib/datetime";
+import { ImageUpload } from "./image-upload";
 import { TagInput } from "./tag-input";
 
 export function BookmarkDialog({
@@ -24,6 +25,7 @@ export function BookmarkDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [contentKind, setContentKind] = useState<"link" | "image">("link");
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<"ai" | "manual" | "none">(() => {
@@ -71,95 +73,127 @@ export function BookmarkDialog({
 
   return (
     <Dialog opaque title="북마크 추가" onClose={onClose}>
-      <form className="space-y-4" onSubmit={submit}>
-        <Field label="URL">
-          <input
-            className="input"
-            onChange={(e) => setUrl(e.target.value)}
-            required
-            type="url"
-            value={url}
-          />
-        </Field>
-        <Field label="제목(선택)">
-          <input
-            className="input"
-            onChange={(e) => setTitle(e.target.value)}
-            value={title}
-          />
-        </Field>
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <button
-            className={mode === "ai" ? "chip-active" : "chip"}
-            onClick={() => setMode("ai")}
-            type="button"
-          >
-            AI 자동
-          </button>
-          <button
-            className={mode === "manual" ? "chip-active" : "chip"}
-            onClick={() => setMode("manual")}
-            type="button"
-          >
-            직접 선택
-          </button>
-          <button
-            className={mode === "none" ? "chip-active" : "chip"}
-            onClick={() => setMode("none")}
-            type="button"
-          >
-            미지정
-          </button>
-        </div>
-        {mode === "manual" ? (
-          <div className="space-y-3">
-            <Field label="카테고리">
-              <select
-                className="input"
-                onChange={(e) => setCategoryId(e.target.value)}
-                required
-                value={categoryId}
-              >
-                <option value="" disabled>
-                  카테고리를 선택하세요
-                </option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex gap-2">
-              <input
-                className="input"
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="새 카테고리 (예: 💻 개발)"
-                value={newCategoryName}
-              />
-              <button
-                className="btn-secondary shrink-0"
-                disabled={
-                  createCategoryMutation.isPending || !newCategoryName.trim()
-                }
-                onClick={() =>
-                  createCategoryMutation.mutate({ name: newCategoryName })
-                }
-                type="button"
-              >
-                새 카테고리
-              </button>
-            </div>
-          </div>
-        ) : null}
+      <fieldset className="mb-4 grid grid-cols-2 gap-2 text-sm">
+        <legend className="sr-only">항목 유형</legend>
         <button
-          className="btn-primary w-full justify-center"
-          disabled={mutation.isPending || (mode === "manual" && !categoryId)}
-          type="submit"
+          className={contentKind === "link" ? "chip-active" : "chip"}
+          onClick={() => setContentKind("link")}
+          type="button"
         >
-          저장
+          링크
         </button>
-      </form>
+        <button
+          className={contentKind === "image" ? "chip-active" : "chip"}
+          onClick={() => setContentKind("image")}
+          type="button"
+        >
+          이미지
+        </button>
+      </fieldset>
+      {contentKind === "image" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-500">
+            이미지마다 별도 항목으로 저장하고 AI가 자동으로 분석합니다.
+          </p>
+          <ImageUpload
+            onUploaded={() => {
+              toast.success("이미지를 저장했어요");
+              void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+              void queryClient.invalidateQueries({ queryKey: ["categories"] });
+            }}
+          />
+        </div>
+      ) : (
+        <form className="space-y-4" onSubmit={submit}>
+          <Field label="URL">
+            <input
+              className="input"
+              onChange={(e) => setUrl(e.target.value)}
+              required
+              type="url"
+              value={url}
+            />
+          </Field>
+          <Field label="제목(선택)">
+            <input
+              className="input"
+              onChange={(e) => setTitle(e.target.value)}
+              value={title}
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <button
+              className={mode === "ai" ? "chip-active" : "chip"}
+              onClick={() => setMode("ai")}
+              type="button"
+            >
+              AI 자동
+            </button>
+            <button
+              className={mode === "manual" ? "chip-active" : "chip"}
+              onClick={() => setMode("manual")}
+              type="button"
+            >
+              직접 선택
+            </button>
+            <button
+              className={mode === "none" ? "chip-active" : "chip"}
+              onClick={() => setMode("none")}
+              type="button"
+            >
+              미지정
+            </button>
+          </div>
+          {mode === "manual" ? (
+            <div className="space-y-3">
+              <Field label="카테고리">
+                <select
+                  className="input"
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  required
+                  value={categoryId}
+                >
+                  <option value="" disabled>
+                    카테고리를 선택하세요
+                  </option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="새 카테고리 (예: 💻 개발)"
+                  value={newCategoryName}
+                />
+                <button
+                  className="btn-secondary shrink-0"
+                  disabled={
+                    createCategoryMutation.isPending || !newCategoryName.trim()
+                  }
+                  onClick={() =>
+                    createCategoryMutation.mutate({ name: newCategoryName })
+                  }
+                  type="button"
+                >
+                  새 카테고리
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <button
+            className="btn-primary w-full justify-center"
+            disabled={mutation.isPending || (mode === "manual" && !categoryId)}
+            type="submit"
+          >
+            저장
+          </button>
+        </form>
+      )}
     </Dialog>
   );
 }

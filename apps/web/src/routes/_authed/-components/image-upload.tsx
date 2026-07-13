@@ -1,0 +1,200 @@
+import type { Bookmark } from "@my-bookmark/shared";
+import { ImagePlus, RefreshCcw, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createImage } from "../../../lib/api-client";
+
+type UploadStatus = "queued" | "uploading" | "success" | "failed";
+
+interface UploadItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  status: UploadStatus;
+  error: string | null;
+}
+
+export function ImageUpload({
+  initialFiles,
+  onAllSettled,
+  onUploaded,
+  onBusyChange,
+}: {
+  initialFiles?: File[];
+  onAllSettled?: () => void;
+  onUploaded: (bookmark: Bookmark) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
+  const [items, setItems] = useState<UploadItem[]>([]);
+  const previewUrls = useRef(new Set<string>());
+  const initialFilesQueued = useRef(false);
+  const busy = items.some(
+    (item) => item.status === "queued" || item.status === "uploading",
+  );
+
+  useEffect(() => onBusyChange?.(busy), [busy, onBusyChange]);
+  useEffect(() => () => {
+    for (const url of previewUrls.current) {
+      URL.revokeObjectURL(url);
+    }
+  });
+
+  const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
+    setItems((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+    );
+  }, []);
+
+  const uploadItem = useCallback(
+    async (item: UploadItem) => {
+      updateItem(item.id, { status: "uploading", error: null });
+      try {
+        const bookmark = await createImage(item.file);
+        updateItem(item.id, { status: "success" });
+        onUploaded(bookmark);
+      } catch (error) {
+        updateItem(item.id, {
+          status: "failed",
+          error: error instanceof Error ? error.message : "업로드하지 못했어요",
+        });
+      }
+    },
+    [onUploaded, updateItem],
+  );
+
+  const uploadQueue = useCallback(
+    async (entries: UploadItem[]) => {
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < entries.length) {
+          const item = entries[cursor];
+          cursor += 1;
+          if (item) {
+            await uploadItem(item);
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(2, entries.length) }, () => worker()),
+      );
+      onAllSettled?.();
+    },
+    [onAllSettled, uploadItem],
+  );
+
+  const enqueue = useCallback(
+    (files: File[]) => {
+      const entries = files
+        .filter((file) => file.type.startsWith("image/"))
+        .map((file, index) => {
+          const previewUrl = URL.createObjectURL(file);
+          previewUrls.current.add(previewUrl);
+          return {
+            id: `${Date.now()}-${index}-${file.name}`,
+            file,
+            previewUrl,
+            status: "queued" as const,
+            error: null,
+          };
+        });
+      if (entries.length === 0) {
+        return;
+      }
+      setItems((current) => [...current, ...entries]);
+      void uploadQueue(entries);
+    },
+    [uploadQueue],
+  );
+
+  useEffect(() => {
+    if (initialFilesQueued.current || !initialFiles?.length) {
+      return;
+    }
+    initialFilesQueued.current = true;
+    enqueue(initialFiles);
+  }, [enqueue, initialFiles]);
+
+  function removeItem(item: UploadItem) {
+    URL.revokeObjectURL(item.previewUrl);
+    previewUrls.current.delete(item.previewUrl);
+    setItems((current) =>
+      current.filter((candidate) => candidate.id !== item.id),
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <label
+        className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 px-5 text-center transition hover:border-blue-400 hover:bg-blue-50/40 dark:border-zinc-700 dark:bg-zinc-900/60"
+        data-testid="image-drop-zone"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          enqueue(Array.from(event.dataTransfer.files));
+        }}
+        onPaste={(event) => enqueue(Array.from(event.clipboardData.files))}
+      >
+        <ImagePlus className="h-8 w-8 text-blue-500" />
+        <span className="mt-3 text-sm font-semibold">
+          이미지를 선택하거나 놓으세요
+        </span>
+        <span className="mt-1 text-xs text-zinc-500">
+          클립보드 붙여넣기 가능 · 파일당 최대 20MB
+        </span>
+        <input
+          accept="image/*"
+          aria-label="이미지 선택"
+          className="sr-only"
+          multiple
+          onChange={(event) => enqueue(Array.from(event.target.files ?? []))}
+          type="file"
+        />
+      </label>
+
+      {items.length > 0 ? (
+        <ul className="space-y-2" aria-label="이미지 업로드 목록">
+          {items.map((item) => (
+            <li
+              className="flex items-center gap-3 rounded-xl border border-zinc-200 p-2 dark:border-zinc-800"
+              key={item.id}
+            >
+              <img
+                alt=""
+                className="h-12 w-12 rounded-lg object-cover"
+                src={item.previewUrl}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{item.file.name}</p>
+                <p className="text-xs text-zinc-500">
+                  {item.status === "queued" ? "대기 중" : null}
+                  {item.status === "uploading" ? "업로드 중…" : null}
+                  {item.status === "success" ? "완료" : null}
+                  {item.status === "failed" ? item.error : null}
+                </p>
+              </div>
+              {item.status === "failed" ? (
+                <button
+                  className="icon-button"
+                  onClick={() => void uploadItem(item)}
+                  type="button"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  <span className="sr-only">다시 시도</span>
+                </button>
+              ) : null}
+              {item.status !== "uploading" ? (
+                <button
+                  aria-label={`${item.file.name} 제거`}
+                  className="icon-button"
+                  onClick={() => removeItem(item)}
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

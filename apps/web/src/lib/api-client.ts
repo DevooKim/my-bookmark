@@ -76,7 +76,11 @@ async function apiFetch(path: string, init: RequestInit = {}, retry = true) {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
-  if (init.body && !headers.has("Content-Type")) {
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -243,12 +247,16 @@ export async function reorderCategories(
 
 export async function listBookmarks(params: {
   categoryId?: string;
+  kind?: Bookmark["kind"];
   q?: string;
   cursor?: string;
 }): Promise<BookmarksResponse> {
   const search = new URLSearchParams();
   if (params.categoryId) {
     search.set("categoryId", params.categoryId);
+  }
+  if (params.kind) {
+    search.set("kind", params.kind);
   }
   if (params.q) {
     search.set("q", params.q);
@@ -269,6 +277,25 @@ export async function createBookmark(
     method: "POST",
     body: JSON.stringify(body),
   });
+  return parseJsonResponse(response, (json) =>
+    bookmarkSchema.parse((json as { bookmark?: unknown }).bookmark),
+  );
+}
+
+export async function createImage(file: File): Promise<Bookmark> {
+  const form = new FormData();
+  form.set("image", file, file.name);
+  const response = await apiFetch("/api/images", {
+    method: "POST",
+    body: form,
+  });
+  return parseJsonResponse(response, (json) =>
+    bookmarkSchema.parse((json as { bookmark?: unknown }).bookmark),
+  );
+}
+
+export async function getBookmark(id: string): Promise<Bookmark> {
+  const response = await apiFetch(`/api/bookmarks/${id}`);
   return parseJsonResponse(response, (json) =>
     bookmarkSchema.parse((json as { bookmark?: unknown }).bookmark),
   );

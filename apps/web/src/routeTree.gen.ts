@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteRouteImport } from './routes/_authed/route'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
+import { Route as AuthedShareTargetRouteImport } from './routes/_authed/share-target'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedRemindersRouteImport } from './routes/_authed/reminders'
 import { Route as AuthedAiUsageRouteImport } from './routes/_authed/ai-usage'
+import { Route as AuthedImagesIdRouteImport } from './routes/_authed/images.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -28,6 +30,11 @@ const AuthedRouteRoute = AuthedRouteRouteImport.update({
 const AuthedIndexRoute = AuthedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthedRouteRoute,
+} as any)
+const AuthedShareTargetRoute = AuthedShareTargetRouteImport.update({
+  id: '/share-target',
+  path: '/share-target',
   getParentRoute: () => AuthedRouteRoute,
 } as any)
 const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
@@ -45,6 +52,11 @@ const AuthedAiUsageRoute = AuthedAiUsageRouteImport.update({
   path: '/ai-usage',
   getParentRoute: () => AuthedRouteRoute,
 } as any)
+const AuthedImagesIdRoute = AuthedImagesIdRouteImport.update({
+  id: '/images/$id',
+  path: '/images/$id',
+  getParentRoute: () => AuthedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -52,13 +64,17 @@ export interface FileRoutesByFullPath {
   '/ai-usage': typeof AuthedAiUsageRoute
   '/reminders': typeof AuthedRemindersRoute
   '/settings': typeof AuthedSettingsRoute
+  '/share-target': typeof AuthedShareTargetRoute
+  '/images/$id': typeof AuthedImagesIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/ai-usage': typeof AuthedAiUsageRoute
   '/reminders': typeof AuthedRemindersRoute
   '/settings': typeof AuthedSettingsRoute
+  '/share-target': typeof AuthedShareTargetRoute
   '/': typeof AuthedIndexRoute
+  '/images/$id': typeof AuthedImagesIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -67,13 +83,29 @@ export interface FileRoutesById {
   '/_authed/ai-usage': typeof AuthedAiUsageRoute
   '/_authed/reminders': typeof AuthedRemindersRoute
   '/_authed/settings': typeof AuthedSettingsRoute
+  '/_authed/share-target': typeof AuthedShareTargetRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/images/$id': typeof AuthedImagesIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/ai-usage' | '/reminders' | '/settings'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/ai-usage'
+    | '/reminders'
+    | '/settings'
+    | '/share-target'
+    | '/images/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/ai-usage' | '/reminders' | '/settings' | '/'
+  to:
+    | '/login'
+    | '/ai-usage'
+    | '/reminders'
+    | '/settings'
+    | '/share-target'
+    | '/'
+    | '/images/$id'
   id:
     | '__root__'
     | '/_authed'
@@ -81,7 +113,9 @@ export interface FileRouteTypes {
     | '/_authed/ai-usage'
     | '/_authed/reminders'
     | '/_authed/settings'
+    | '/_authed/share-target'
     | '/_authed/'
+    | '/_authed/images/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -112,6 +146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedIndexRouteImport
       parentRoute: typeof AuthedRouteRoute
     }
+    '/_authed/share-target': {
+      id: '/_authed/share-target'
+      path: '/share-target'
+      fullPath: '/share-target'
+      preLoaderRoute: typeof AuthedShareTargetRouteImport
+      parentRoute: typeof AuthedRouteRoute
+    }
     '/_authed/settings': {
       id: '/_authed/settings'
       path: '/settings'
@@ -133,6 +174,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAiUsageRouteImport
       parentRoute: typeof AuthedRouteRoute
     }
+    '/_authed/images/$id': {
+      id: '/_authed/images/$id'
+      path: '/images/$id'
+      fullPath: '/images/$id'
+      preLoaderRoute: typeof AuthedImagesIdRouteImport
+      parentRoute: typeof AuthedRouteRoute
+    }
   }
 }
 
@@ -140,14 +188,18 @@ interface AuthedRouteRouteChildren {
   AuthedAiUsageRoute: typeof AuthedAiUsageRoute
   AuthedRemindersRoute: typeof AuthedRemindersRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
+  AuthedShareTargetRoute: typeof AuthedShareTargetRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedImagesIdRoute: typeof AuthedImagesIdRoute
 }
 
 const AuthedRouteRouteChildren: AuthedRouteRouteChildren = {
   AuthedAiUsageRoute: AuthedAiUsageRoute,
   AuthedRemindersRoute: AuthedRemindersRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
+  AuthedShareTargetRoute: AuthedShareTargetRoute,
   AuthedIndexRoute: AuthedIndexRoute,
+  AuthedImagesIdRoute: AuthedImagesIdRoute,
 }
 
 const AuthedRouteRouteWithChildren = AuthedRouteRoute._addFileChildren(
