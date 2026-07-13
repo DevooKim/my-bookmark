@@ -18,6 +18,7 @@ class FakeDb {
     site_name: null as string | null,
     category_id: null as string | null,
     tags: ["기존 태그"],
+    metadata: { 예약메모: "창가 자리" } as Record<string, string>,
     ai_status: "pending" as "idle" | "pending" | "done" | "failed",
     ai_model: null as string | null,
   };
@@ -88,6 +89,56 @@ const successResult: AnalyzeResult = {
 };
 
 describe("applyCategorizeResult", () => {
+  it("adds a server-built Naver Map link for a confident place", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        ...analysis({ type: "none" }),
+        place: {
+          name: "호랑이식당 성수점",
+          locality: "서울 성동구",
+          confidence: 0.85,
+        },
+      },
+      "google/gemini-3.1-flash-lite-20260507",
+      db.bookmark.metadata,
+    );
+
+    expect(db.bookmarkUpdates.at(-1)).toMatchObject({
+      metadata: {
+        예약메모: "창가 자리",
+        네이버지도:
+          "https://map.naver.com/p/search/%ED%98%B8%EB%9E%91%EC%9D%B4%EC%8B%9D%EB%8B%B9%20%EC%84%B1%EC%88%98%EC%A0%90%20%EC%84%9C%EC%9A%B8%20%EC%84%B1%EB%8F%99%EA%B5%AC",
+      },
+    });
+  });
+
+  it("leaves metadata unchanged below the place confidence threshold", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        ...analysis({ type: "none" }),
+        place: {
+          name: "아마도 식당",
+          locality: null,
+          confidence: 0.849,
+        },
+      },
+      "google/gemini-3.1-flash-lite-20260507",
+      db.bookmark.metadata,
+    );
+
+    expect(db.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
+  });
+
   it("applies category, summary title, and tags in one pending-guarded update", async () => {
     const db = new FakeDb();
     await applyCategorizeResult(

@@ -34,6 +34,7 @@ const uploadedBookmark: Bookmark = {
   ogImageUrl: null,
   categoryId: null,
   tags: [],
+  metadata: {},
   aiStatus: "pending",
   aiModel: null,
   createdAt: "2026-07-13T00:00:00.000Z",

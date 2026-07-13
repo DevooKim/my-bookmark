@@ -43,7 +43,7 @@ metadata jsonb not null default '{}'::jsonb
 
 DB에는 JSON object 제약을 추가한다. 항목 개수와 문자열 길이 검증은 API 경계와 AI 적용 경계에서 수행한다. 현재 서비스의 모든 데이터 쓰기가 Express를 거치므로 복잡한 JSON 순회 check function은 추가하지 않는다.
 
-기존 행은 기본값 `{}`를 사용한다. `search_bookmarks` 반환 타입과 목록·상세 DB mapper에 `metadata`를 추가한다. 메타데이터는 이번 범위에서 검색 대상에 포함하지 않는다.
+기존 행은 기본값 `{}`를 사용한다. `search_bookmarks`는 `SETOF public.bookmarks`를 반환하므로 테이블에 추가된 `metadata`를 함수 재생성 없이 포함하며, 목록·상세 DB mapper에서 공유 스키마로 검증한다. 메타데이터는 이번 범위에서 검색 대상에 포함하지 않는다.
 
 ## AI 분석과 지도 링크 생성
 

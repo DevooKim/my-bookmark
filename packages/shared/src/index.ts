@@ -46,6 +46,36 @@ export const bookmarkTagsSchema = z
   .max(5)
   .transform((tags) => [...new Set(tags)]);
 
+const reservedMetadataKeys = new Set(["__proto__", "prototype", "constructor"]);
+
+const bookmarkMetadataKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .refine((key) => !reservedMetadataKeys.has(key), {
+    message: "Reserved metadata key",
+  });
+
+const bookmarkMetadataRecordSchema = z
+  .record(bookmarkMetadataKeySchema, z.string().trim().min(1).max(2048))
+  .refine((metadata) => Object.keys(metadata).length <= 10, {
+    message: "Metadata must have at most 10 entries",
+  });
+
+export const bookmarkMetadataSchema = z
+  .unknown()
+  .superRefine((value, context) => {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      Object.keys(value).some((key) => reservedMetadataKeys.has(key.trim()))
+    ) {
+      context.addIssue({ code: "custom", message: "Reserved metadata key" });
+    }
+  })
+  .pipe(bookmarkMetadataRecordSchema);
+
 export const bookmarkKindSchema = z.enum(["link", "image"]);
 
 export const imageMetadataSchema = z.object({
@@ -68,6 +98,7 @@ const bookmarkCommonSchema = z.object({
   ogImageUrl: z.url().nullable(),
   categoryId: uuidSchema.nullable(),
   tags: bookmarkTagsSchema,
+  metadata: bookmarkMetadataSchema.default({}),
   aiStatus: aiStatusSchema,
   aiModel: z.string().nullable(),
   createdAt: isoDateTimeSchema,
@@ -160,6 +191,7 @@ export const updateBookmarkRequestSchema = z
     description: z.string().nullable().optional(),
     categoryId: uuidSchema.nullable().optional(),
     tags: bookmarkTagsSchema.optional(),
+    metadata: bookmarkMetadataSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",

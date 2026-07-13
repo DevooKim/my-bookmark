@@ -14,6 +14,11 @@ import {
   updateBookmark,
 } from "../../../lib/api-client";
 import { toDatetimeLocalValue } from "../../../lib/datetime";
+import {
+  BookmarkMetadataEditor,
+  metadataRows,
+  normalizeMetadataRows,
+} from "./bookmark-metadata";
 import { ImageUpload } from "./image-upload";
 import { TagInput } from "./tag-input";
 
@@ -220,14 +225,19 @@ export function EditBookmarkDialog({
   const [title, setTitle] = useState(bookmark.title ?? "");
   const [description, setDescription] = useState(bookmark.description ?? "");
   const [tags, setTags] = useState(bookmark.tags);
+  const [metadata, setMetadata] = useState(() =>
+    metadataRows(bookmark.metadata),
+  );
+  const [metadataError, setMetadataError] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState(bookmark.categoryId ?? "");
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (normalizedMetadata: Record<string, string>) =>
       updateBookmark(bookmark.id, {
         title: title || null,
         description: description || null,
         tags,
         categoryId: categoryId || null,
+        metadata: normalizedMetadata,
       }),
     onSuccess: () => {
       toast.success("수정했어요");
@@ -243,7 +253,13 @@ export function EditBookmarkDialog({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
-          mutation.mutate();
+          const normalized = normalizeMetadataRows(metadata);
+          if (!normalized.success) {
+            setMetadataError(normalized.message);
+            return;
+          }
+          setMetadataError(null);
+          mutation.mutate(normalized.metadata);
         }}
       >
         <Field label="제목">
@@ -275,6 +291,14 @@ export function EditBookmarkDialog({
           </select>
         </Field>
         <TagInput value={tags} onChange={setTags} />
+        <BookmarkMetadataEditor
+          error={metadataError}
+          rows={metadata}
+          onChange={(rows) => {
+            setMetadata(rows);
+            setMetadataError(null);
+          }}
+        />
         {bookmark.aiModel ? (
           <p className="text-xs text-zinc-500">
             AI 분류 모델: {bookmark.aiModel}

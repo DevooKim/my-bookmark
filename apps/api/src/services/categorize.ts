@@ -1,5 +1,6 @@
 import type { AiProvider, AnalyzeResult } from "@my-bookmark/ai";
 import { PRESET_MODEL } from "@my-bookmark/ai";
+import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
 import { fetchMetadata, type PageMetadata } from "./metadata";
 
@@ -17,6 +18,7 @@ interface BookmarkRow {
   title: string | null;
   description: string | null;
   site_name: string | null;
+  metadata: unknown;
   ai_status: "idle" | "pending" | "done" | "failed";
 }
 
@@ -149,6 +151,7 @@ export async function categorizeBookmark({
         categories,
         outcome.analysis,
         outcome.model,
+        bookmarkMetadataSchema.parse(bookmark.metadata ?? {}),
       );
     } catch (error) {
       console.warn("AI categorization request failed", error);
@@ -191,6 +194,7 @@ export async function applyCategorizeResult(
   categories: CategoryRow[],
   result: AnalyzeResult,
   aiModel: string,
+  currentMetadata: Record<string, string> = {},
 ): Promise<void> {
   let categoryId: string | null = null;
 
@@ -207,7 +211,27 @@ export async function applyCategorizeResult(
     categoryId = current?.id ?? (await createCategory(db, userId, name));
   }
 
-  await markDone(db, userId, bookmarkId, categoryId, result, aiModel);
+  let metadata: Record<string, string> | undefined;
+  if (result.place && result.place.confidence >= 0.85) {
+    try {
+      const query = [result.place.name.trim(), result.place.locality?.trim()]
+        .filter((part): part is string => Boolean(part))
+        .join(" ");
+      if (query.length > 0) {
+        metadata = bookmarkMetadataSchema.parse({
+          ...currentMetadata,
+          네이버지도: `https://map.naver.com/p/search/${encodeURIComponent(query)}`,
+        });
+      }
+    } catch (error) {
+      console.warn("Naver Map metadata creation failed", {
+        bookmarkId,
+        cause: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }
+
+  await markDone(db, userId, bookmarkId, categoryId, result, aiModel, metadata);
 }
 
 async function loadBookmark(
@@ -217,7 +241,7 @@ async function loadBookmark(
 ): Promise<BookmarkRow | null> {
   const { data, error } = await (db.from("bookmarks") as BookmarkSelectTable)
     .select(
-      "id,user_id,kind,url,image_original_path,title,description,site_name,ai_status",
+      "id,user_id,kind,url,image_original_path,title,description,site_name,metadata,ai_status",
     )
     .eq("user_id", userId)
     .eq("id", bookmarkId)
@@ -270,6 +294,7 @@ async function markDone(
   categoryId: string | null,
   result: AnalyzeResult,
   aiModel: string,
+  metadata?: Record<string, string>,
 ): Promise<void> {
   const { error } = await (db.from("bookmarks") as BookmarkUpdateTable)
     .update({
@@ -277,6 +302,7 @@ async function markDone(
       title: result.summaryTitle,
       ...(result.summary ? { description: result.summary } : {}),
       tags: result.tags,
+      ...(metadata ? { metadata } : {}),
       ai_status: "done",
       ai_model: aiModel,
     })

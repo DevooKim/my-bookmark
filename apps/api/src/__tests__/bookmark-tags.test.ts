@@ -52,6 +52,7 @@ function bookmarkRow(overrides: Record<string, unknown> = {}) {
     og_image_url: null,
     category_id: null,
     tags: ["React", "개발"],
+    metadata: { 지역: "서울" },
     ai_status: "idle",
     ai_model: null,
     image_original_path: null,
@@ -81,6 +82,65 @@ beforeEach(() => {
 });
 
 describe("bookmark tags API", () => {
+  it("replaces normalized bookmark metadata and cancels pending AI", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: bookmarkRow({
+        metadata: {
+          네이버지도: "https://map.naver.com/p/search/test",
+          메모: "예약",
+        },
+        ai_status: "idle",
+      }),
+      error: null,
+    });
+    const select = vi.fn(() => ({ maybeSingle }));
+    const secondEq = vi.fn(() => ({ select }));
+    const firstEq = vi.fn(() => ({ eq: secondEq }));
+    mocks.update.mockReturnValue({ eq: firstEq });
+
+    const response = await request(createTestApp())
+      .patch(`/api/bookmarks/${bookmarkId}`)
+      .send({
+        metadata: {
+          " 네이버지도 ": " https://map.naver.com/p/search/test ",
+          메모: " 예약 ",
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({
+      metadata: {
+        네이버지도: "https://map.naver.com/p/search/test",
+        메모: "예약",
+      },
+      ai_status: "idle",
+    });
+    expect(response.body.bookmark.metadata).toEqual({
+      네이버지도: "https://map.naver.com/p/search/test",
+      메모: "예약",
+    });
+  });
+
+  it("clears bookmark metadata with an empty object", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: bookmarkRow({ metadata: {}, ai_status: "idle" }),
+      error: null,
+    });
+    const select = vi.fn(() => ({ maybeSingle }));
+    const secondEq = vi.fn(() => ({ select }));
+    const firstEq = vi.fn(() => ({ eq: secondEq }));
+    mocks.update.mockReturnValue({ eq: firstEq });
+
+    const response = await request(createTestApp())
+      .patch(`/api/bookmarks/${bookmarkId}`)
+      .send({ metadata: {} });
+
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({
+      metadata: {},
+      ai_status: "idle",
+    });
+  });
   it("updates normalized bookmark tags", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: bookmarkRow({ ai_status: "idle" }),
@@ -144,6 +204,7 @@ describe("bookmark tags API", () => {
       p_limit: 2,
     });
     expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].metadata).toEqual({ 지역: "서울" });
     expect(response.body.nextCursor).toBe(
       Buffer.from(
         JSON.stringify({ createdAt, id: bookmarkId }),

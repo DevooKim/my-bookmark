@@ -37,6 +37,7 @@ import {
   consumeBookmarkDialogRequest,
   OPEN_BOOKMARK_DIALOG_EVENT,
 } from "../../lib/bookmark-dialog";
+import { BookmarkMetadata } from "./-components/bookmark-metadata";
 
 const BookmarkDialog = lazy(() =>
   import("./-components/bookmark-dialogs").then((module) => ({
@@ -473,6 +474,11 @@ function BookmarkCard({
               {bookmark.description}
             </p>
           ) : null}
+          <BookmarkMetadata
+            compact
+            interactive={bookmark.kind === "image"}
+            metadata={bookmark.metadata}
+          />
           <p className="mt-2 truncate text-sm text-zinc-500">
             {bookmark.kind === "image"
               ? "이미지"
@@ -547,7 +553,7 @@ function BookmarkCard({
                     runMenuAction(() => {
                       if (
                         window.confirm(
-                          "AI가 제목, 요약, 태그, 카테고리를 다시 생성합니다. 계속할까요?",
+                          "AI가 제목, 요약, 태그, 카테고리와 자동 메타데이터를 다시 생성합니다. 계속할까요?",
                         )
                       ) {
                         onRecategorize();

@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAiProvider, PRESET_MODEL } from "../index";
-import { parseAnalyzeResponse } from "../schema";
+import { parseAnalyzeResponse, systemPrompt } from "../schema";
 
 const analysis = {
   category: { type: "new" as const, name: "💻 개발", confidence: 0.9 },
   summaryTitle: "React 19 핵심 변경 사항",
   summary: "React 19의 핵심 변경을 정리한다.",
   tags: ["React", "프론트엔드", "자바스크립트"],
+  place: {
+    name: "호랑이식당 성수점",
+    locality: "서울 성동구",
+    confidence: 0.92,
+  },
 };
 
 function completionResponse(
@@ -59,6 +64,10 @@ describe("OpenRouter preset provider", () => {
     expect(
       body.response_format.json_schema.schema.properties.category.required,
     ).toEqual(["type", "categoryId", "name", "confidence"]);
+    expect(body.response_format.json_schema.schema.required).toContain("place");
+    expect(
+      body.response_format.json_schema.schema.properties.place.type,
+    ).toEqual(["object", "null"]);
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -165,5 +174,27 @@ describe("AI analysis response parsing", () => {
       parseAnalyzeResponse({ ...analysis, summary: "가".repeat(301) }),
     ).toBeNull();
     warn.mockRestore();
+  });
+
+  it("parses a nullable, validated place candidate", () => {
+    expect(parseAnalyzeResponse({ ...analysis, place: null })).toMatchObject({
+      place: null,
+    });
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        place: { ...analysis.place, confidence: 1.1 },
+      }),
+    ).toBeNull();
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        place: { ...analysis.place, name: " " },
+      }),
+    ).toBeNull();
+  });
+
+  it("forbids guessing a restaurant from food alone", () => {
+    expect(systemPrompt()).toContain("음식 사진만으로 상호를 추측하지 않는다");
   });
 });

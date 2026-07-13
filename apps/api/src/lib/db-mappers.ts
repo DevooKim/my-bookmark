@@ -23,6 +23,7 @@ export interface BookmarkDbRow {
   og_image_url: string | null;
   category_id: string | null;
   tags: string[];
+  metadata?: unknown;
   ai_status: "idle" | "pending" | "done" | "failed";
   ai_model: string | null;
   image_original_path: string | null;
@@ -85,6 +86,7 @@ export function mapBookmark(
     ogImageUrl: row.og_image_url,
     categoryId: row.category_id,
     tags: row.tags,
+    metadata: row.metadata ?? {},
     aiStatus: row.ai_status,
     aiModel: row.ai_model,
     createdAt: row.created_at,

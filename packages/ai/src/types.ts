@@ -28,11 +28,18 @@ export type CategorizeResult =
   | { type: "new"; name: string; confidence: number }
   | { type: "none" };
 
+export interface PlaceCandidate {
+  name: string;
+  locality: string | null;
+  confidence: number;
+}
+
 export interface AnalyzeResult {
   category: CategorizeResult;
   summaryTitle: string;
   summary?: string | null | undefined;
   tags: string[];
+  place?: PlaceCandidate | null | undefined;
 }
 
 export interface AiProviderConfig {

@@ -26,6 +26,10 @@ const imageBookmark: Extract<Bookmark, { kind: "image" }> = {
   ogImageUrl: null,
   categoryId: null,
   tags: ["바다", "여행"],
+  metadata: {
+    네이버지도: "https://map.naver.com/p/search/sample",
+    지역: "강원도 강릉",
+  },
   aiStatus: "done",
   aiModel: "openrouter/test",
   createdAt: "2026-07-12T00:00:00.000Z",
@@ -58,6 +62,12 @@ describe("ImageDetailView", () => {
     expect(image.className).toContain("max-h-[48rem]");
     expect(image.className).toContain("object-contain");
     expect(screen.getByText(/5\.5 MB/)).toBeTruthy();
+    const mapLink = screen.getByRole("link", { name: "네이버지도" });
+    expect(mapLink.getAttribute("target")).toBe("_blank");
+    expect(mapLink.getAttribute("rel")).toBe("noreferrer");
+    const locality = screen.getByText("지역: 강원도 강릉");
+    expect(locality).toBeTruthy();
+    expect(locality.parentElement?.className).not.toContain("truncate");
     expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "원본 보기" }));

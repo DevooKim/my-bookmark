@@ -43,6 +43,14 @@ export const analyzeResponseSchema = z.object({
     .min(3)
     .max(5)
     .refine((tags) => new Set(tags).size === tags.length),
+  place: z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      locality: z.string().trim().min(1).max(120).nullable(),
+      confidence: z.number().min(0).max(1),
+    })
+    .nullable()
+    .optional(),
 });
 
 export function parseAnalyzeResponse(value: unknown): AnalyzeResult | null {
@@ -74,8 +82,18 @@ export const jsonSchema = {
     summaryTitle: { type: "string" as const },
     summary: { type: "string" as const },
     tags: { type: "array" as const, items: { type: "string" as const } },
+    place: {
+      type: ["object", "null"] as const,
+      properties: {
+        name: { type: "string" as const },
+        locality: { type: ["string", "null"] as const },
+        confidence: { type: "number" as const, minimum: 0, maximum: 1 },
+      },
+      required: ["name", "locality", "confidence"],
+      additionalProperties: false,
+    },
   },
-  required: ["category", "summaryTitle", "summary", "tags"],
+  required: ["category", "summaryTitle", "summary", "tags", "place"],
   additionalProperties: false,
 };
 
@@ -101,6 +119,9 @@ export function systemPrompt(): string {
     "7. tags는 중복 없는 한국어 태그 3~5개로 작성하며 각 태그는 최대 20자다. 고유 기술명은 원문을 허용한다.",
     "8. summary는 원문의 핵심을 한국어 1~3문장으로 요약한다. 불필요한 수식 없이 정보만 담고, 전체 300자 이내로 한다.",
     "9. 해당 없는 필드(categoryId, name)는 null로 채운다.",
+    "10. 식당·카페·주점 등 방문 가능한 음식점의 상호가 본문이나 이미지에 직접 확인될 때만 place를 반환한다.",
+    "11. 음식 사진만으로 상호를 추측하지 않는다. 상호가 불명확하거나 여러 장소가 섞이면 place는 null이다.",
+    "12. 지점명은 place.name에 포함하고 확인 가능한 동네·도시·주소 단서는 place.locality에 넣는다.",
   ].join("\n");
 }
 

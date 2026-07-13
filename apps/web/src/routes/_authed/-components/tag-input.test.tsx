@@ -102,6 +102,7 @@ describe("EditBookmarkDialog", () => {
       ogImageUrl: null,
       categoryId: null,
       tags: ["개발"],
+      metadata: { 지역: " 서울 " },
       aiStatus: "done",
       aiModel: null,
       createdAt: "2026-07-12T00:00:00.000Z",
@@ -132,7 +133,65 @@ describe("EditBookmarkDialog", () => {
         description: null,
         tags: ["개발", "React"],
         categoryId: null,
+        metadata: { 지역: "서울" },
       }),
+    );
+  });
+
+  it("adds and removes editable metadata rows", async () => {
+    vi.mocked(updateBookmark).mockResolvedValue({} as Bookmark);
+    const bookmark: Bookmark = {
+      id: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000002",
+      kind: "link",
+      url: "https://example.com/",
+      image: null,
+      title: "예제",
+      description: null,
+      siteName: null,
+      faviconUrl: null,
+      ogImageUrl: null,
+      categoryId: null,
+      tags: [],
+      metadata: { 지역: "서울" },
+      aiStatus: "done",
+      aiModel: null,
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z",
+    };
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EditBookmarkDialog
+          bookmark={bookmark}
+          categories={[]}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByDisplayValue("지역")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "메타데이터 항목 추가" }),
+    );
+    const keys = screen.getAllByLabelText("메타데이터 키");
+    const values = screen.getAllByLabelText("메타데이터 값");
+    fireEvent.change(keys[1] as HTMLInputElement, {
+      target: { value: " 예약 " },
+    });
+    fireEvent.change(values[1] as HTMLInputElement, {
+      target: { value: " 창가 자리 " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() =>
+      expect(updateBookmark).toHaveBeenCalledWith(
+        bookmark.id,
+        expect.objectContaining({
+          metadata: { 지역: "서울", 예약: "창가 자리" },
+        }),
+      ),
     );
   });
 });

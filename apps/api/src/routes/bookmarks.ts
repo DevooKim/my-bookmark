@@ -80,6 +80,7 @@ interface BookmarkUpdate {
   description?: string | null;
   category_id?: string | null;
   tags?: string[];
+  metadata?: Record<string, string>;
   ai_status?: "idle";
 }
 
@@ -242,11 +243,15 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
   if (body.tags !== undefined) {
     updates.tags = body.tags;
   }
+  if (body.metadata !== undefined) {
+    updates.metadata = body.metadata;
+  }
   if (
     body.url !== undefined ||
     body.title !== undefined ||
     body.description !== undefined ||
-    body.tags !== undefined
+    body.tags !== undefined ||
+    body.metadata !== undefined
   ) {
     updates.ai_status = "idle";
   }

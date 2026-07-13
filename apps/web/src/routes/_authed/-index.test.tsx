@@ -73,6 +73,7 @@ const bookmark: Bookmark = {
   ogImageUrl: null,
   categoryId: null,
   tags: ["React", "프론트엔드", "웹 개발"],
+  metadata: {},
   aiStatus: "done",
   aiModel: null,
   createdAt: "2026-07-12T00:00:00.000Z",
@@ -94,6 +95,10 @@ const imageBookmark: Bookmark = {
     filename: "sample.png",
   },
   title: "푸른 바다 풍경",
+  metadata: {
+    네이버지도: "https://map.naver.com/p/search/sample",
+    지역: "서울 성수동",
+  },
 };
 
 const category: CategoryWithCount = {
@@ -118,6 +123,36 @@ function renderHome() {
 }
 
 describe("HomePage", () => {
+  it("renders generic text and URL metadata on link and image cards", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [
+        {
+          ...bookmark,
+          metadata: {
+            네이버지도: "https://map.naver.com/p/search/react",
+            지역: "서울 성수동",
+          },
+        },
+        imageBookmark,
+      ],
+      nextCursor: null,
+    });
+
+    renderHome();
+
+    const mapLinks = await screen.findAllByRole("link", {
+      name: "네이버지도",
+    });
+    expect(mapLinks).toHaveLength(2);
+    expect(mapLinks[0]?.getAttribute("target")).toBe("_blank");
+    expect(mapLinks[0]?.getAttribute("rel")).toBe("noreferrer");
+    const localityLabels = screen.getAllByText("지역: 서울 성수동");
+    expect(localityLabels).toHaveLength(2);
+    expect(localityLabels[0]?.parentElement?.className).toContain("truncate");
+    expect(mapLinks[1]?.className).toContain("pointer-events-auto");
+  });
+
   it("renders search controls without a library hero", async () => {
     vi.mocked(listCategories).mockResolvedValue({ items: [] });
     vi.mocked(listBookmarks).mockResolvedValue({ items: [], nextCursor: null });
@@ -513,6 +548,7 @@ describe("EditBookmarkDialog", () => {
         description: null,
         tags: bookmark.tags,
         categoryId: category.id,
+        metadata: {},
       }),
     );
   });
