@@ -1,0 +1,144 @@
+# 이미지 항목 분석 설계
+
+## 목표
+
+링크뿐 아니라 이미지 자체를 저장하고 OpenRouter vision 모델로 분석해 기존 북마크와 동일한 제목, 요약, 태그, 카테고리를 생성한다. 이미지 한 장은 항목 한 개이며 여러 장을 등록하면 각 항목을 독립적으로 업로드하고 분석한다.
+
+등록 경로는 iOS 단축어, 웹/PWA 업로드, PWA OS 공유 대상 순서로 제공한다. 홈은 링크와 이미지를 함께 표시하되 `전체`, `링크`, `이미지` 유형 필터를 제공한다.
+
+## 범위
+
+### 포함
+
+- 이미지 원본과 썸네일의 비공개 Supabase Storage 보관
+- 이미지 등록 즉시 AI 자동 분석
+- JPEG, PNG, WebP, GIF, HEIC 입력과 20MB 제한
+- 웹 파일 선택, 드래그앤드롭, 클립보드 붙여넣기, 다중 선택
+- API Key 기반 iOS 단축어 등록
+- PWA 파일 공유 대상 등록
+- 이미지 상세 보기, 다운로드, 재분석, 편집, 삭제
+- 기존 카테고리, 검색, 태그, 리마인더, AI 사용량 집계 재사용
+
+### 제외
+
+- OCR 원문 저장과 OCR 전용 검색
+- 여러 이미지를 하나의 항목으로 묶기
+- 이미지 편집, 주석, 앨범
+- 중복 이미지 탐지
+- 공개 이미지 공유 링크
+
+## 데이터 모델
+
+기존 `bookmarks` 테이블을 링크와 이미지를 담는 통합 항목으로 확장한다.
+
+- `kind text not null default 'link'`: `link` 또는 `image`
+- `url text`: 링크는 필수, 이미지는 null
+- `image_original_path text`: 이미지 원본 Storage 경로
+- `image_thumbnail_path text`: WebP 썸네일 Storage 경로
+- `image_mime_type text`: 원본 MIME 타입
+- `image_file_size bigint`: 원본 바이트 크기
+- `image_width integer`, `image_height integer`: 원본 픽셀 크기
+- `image_filename text`: 다운로드에 사용할 원본 파일명
+
+체크 제약으로 `link`에는 URL만, `image`에는 원본·썸네일 경로와 유효한 이미지 메타데이터만 존재하도록 강제한다. 기존 행은 기본값 `link`로 마이그레이션한다. 카테고리 외래 키, 태그, AI 상태와 모델, 생성·수정 시각, 리마인더 관계는 공통으로 유지한다.
+
+목록 검색 함수에 선택적 `p_kind`를 추가한다. 유형 필터는 사용자 소유권과 같은 쿼리에서 적용하며 기존 keyset 정렬인 `created_at desc, id desc`를 유지한다. 실제 쿼리 계획을 확인한 뒤 필요하면 `(user_id, kind, created_at desc, id desc)` 인덱스를 추가한다.
+
+## Storage와 접근 제어
+
+`bookmark-images` private bucket에 다음 경로로 저장한다.
+
+```text
+{userId}/{bookmarkId}/original.{ext}
+{userId}/{bookmarkId}/thumbnail.webp
+```
+
+Express만 Supabase secret key로 업로드·삭제·signed URL 생성을 수행한다. 웹 클라이언트에는 Storage 경로나 쓰기 권한을 노출하지 않는다. 목록 응답에는 짧게 만료되는 썸네일 signed URL, 이미지 상세 응답에는 원본 signed URL을 추가한다. 만료된 URL은 관련 TanStack Query를 다시 가져와 갱신한다. 서비스 워커는 private 이미지 응답을 오프라인 캐시하지 않는다.
+
+원본은 바이트를 그대로 보관한다. 썸네일은 방향 정보를 반영하고 최대 변 길이를 제한한 WebP로 생성한다. HEIC처럼 OpenRouter가 직접 지원하지 않는 형식은 분석용 JPEG로 정규화하되 별도 영구 파일로 저장하지 않는다. 애니메이션 이미지는 첫 프레임을 분석·썸네일에 사용하고 원본은 유지한다.
+
+## API
+
+### `POST /api/images`
+
+Bearer JWT 또는 기존 범위 제한 API Key 인증을 허용한다. `multipart/form-data`의 `image` 파일 한 개를 받는다. 서버는 20MB 제한, 실제 파일 시그니처, 허용 MIME 타입, 이미지 디코딩 가능 여부, 양의 가로·세로 크기를 검증한다.
+
+서버가 항목 UUID를 먼저 생성하고 원본과 썸네일을 Storage에 올린 뒤 `ai_status='pending'` 이미지 행을 생성한다. 중간 단계가 실패하면 이미 생성된 Storage 객체를 제거한다. 성공하면 `201`과 pending 항목을 반환하고 AI 분석을 백그라운드로 시작한다.
+
+### 기존 API 변경
+
+- `GET /api/bookmarks`: `kind=link|image` 필터 지원, 이미지 항목에 썸네일 signed URL 포함
+- `GET /api/bookmarks/:id`: 이미지 상세에 원본 signed URL 포함
+- `PATCH /api/bookmarks/:id`: 링크 URL과 이미지 메타데이터 불변 조건 유지
+- `DELETE /api/bookmarks/:id`: 이미지 Storage 객체를 제거한 뒤 DB 행 삭제
+- `POST /api/bookmarks/:id/categorize`: 링크와 이미지 모두 재분석
+
+API 오류는 기존 `{ error: { code, message } }` 형식을 유지한다. 파일 크기 초과는 413, 지원하지 않거나 파일 시그니처가 잘못된 입력은 415, 디코딩할 수 없는 이미지는 400으로 응답한다.
+
+## AI 분석
+
+AI 입력을 `link`와 `image`의 판별 유니온으로 확장한다. 링크는 기존 텍스트 메시지를 유지한다. 이미지는 기존 카테고리 목록을 담은 텍스트를 먼저 보내고 정규화 이미지의 base64 data URL을 같은 user message에 추가한다.
+
+출력은 기존 `AnalyzeResult` zod 스키마를 그대로 사용한다. 따라서 이미지도 `summaryTitle`, `summary`, 3~5개 `tags`, 기존 또는 신규 `category`를 생성한다. OpenRouter preset `@preset/my-bookmark`는 이미지 입력과 strict JSON schema를 모두 지원하는 모델로 라우팅할 수 있어야 한다. vision 미지원이나 업스트림 실패는 기존 AI 사용량 이벤트에 기록하고 항목을 `failed`로 전환한다.
+
+분석 결과는 `ai_status='pending'`인 사용자 소유 행에만 조건부 적용한다. 처리 중 사용자가 직접 수정하면 AI 결과가 덮어쓰지 않는다.
+
+## 웹/PWA UX
+
+추가 다이얼로그 상단에 `링크`와 `이미지` 유형 선택을 둔다. 이미지 모드는 AI 자동 분석만 사용하므로 링크용 `AI 자동`, `직접 지정`, `미분류` 선택을 표시하지 않는다. 파일 선택, 드래그앤드롭, 클립보드 붙여넣기를 지원한다.
+
+여러 이미지는 클라이언트 큐에서 항목별 요청으로 전송하며 각 파일의 진행, 성공, 실패를 독립적으로 표시한다. 성공한 파일 때문에 실패한 파일을 재전송하지 않는다.
+
+홈의 카테고리 필터와 별개로 `전체`, `링크`, `이미지` 유형 필터를 추가한다. 검색과 카테고리 필터는 유형 필터와 동시에 적용된다. 이미지 카드는 썸네일, 이미지 유형 표시, AI 상태, 제목, 요약, 태그를 표시한다. 링크 카드는 현재 외부 URL 열기 동작을 유지한다.
+
+이미지 카드는 앱 내부 상세 화면으로 이동한다. 상세 화면은 원본 이미지, 제목, 요약, 태그, 카테고리, AI 모델, 다운로드, 재분석, 삭제를 제공한다. 이미지 리마인더 알림은 외부 URL 대신 상세 화면을 연다.
+
+## 등록 경로
+
+### iOS 단축어
+
+기존 API Key를 사용해 공유 입력의 이미지를 반복 처리하고 각 파일을 `POST /api/images`에 multipart로 보낸다. HEIC는 원본 파일로 전송하고 서버가 분석용 형식을 만든다. 성공·실패 건수를 최종 알림으로 표시한다. `docs/shortcuts-guide.md`에 설치와 구성 절차를 추가한다.
+
+### 웹/PWA
+
+파일 선택, 드롭, 붙여넣기를 같은 업로드 큐로 정규화한다. 로그인 세션의 Bearer 토큰을 사용한다.
+
+### PWA 공유 대상
+
+manifest에 이미지 파일을 받는 `share_target`을 추가한다. 서비스 워커가 공유 POST를 가로채 파일을 임시 저장하고 앱의 공유 수신 화면으로 이동시킨다. 페이지가 인증 세션을 확인한 뒤 기존 업로드 큐에 전달한다. 인증이 없으면 로그인 후 재개하며, 완료나 취소 뒤 임시 파일을 삭제한다.
+
+## 오류와 정리
+
+- 검증 실패: Storage나 DB를 변경하지 않는다.
+- 원본 업로드 실패: 행을 만들지 않는다.
+- 썸네일 업로드 실패: 업로드된 원본을 제거한다.
+- DB 생성 실패: 원본과 썸네일을 모두 제거한다.
+- AI 실패: 파일과 항목은 유지하고 `failed`와 재분석 액션을 제공한다.
+- 삭제 중 Storage 실패: DB 행을 유지하고 오류를 반환해 재시도할 수 있게 한다.
+- Storage 삭제 후 DB 삭제 실패: 항목은 남지만 재삭제가 가능해야 하며 상세 화면은 원본 누락 상태를 명확히 표시한다.
+- signed URL 만료: 해당 목록 또는 상세 쿼리를 갱신한다.
+
+부분 정리 실패는 경고 로그에 사용자 ID, 항목 ID, 단계만 기록하고 파일 내용이나 signed URL은 기록하지 않는다.
+
+## 테스트와 수용 기준
+
+### 자동 테스트
+
+- shared: link/image 판별 스키마와 조건부 필드
+- 이미지 처리: 파일 시그니처, 크기 제한, 형식 변환, 썸네일
+- API: Bearer/API Key 인증, 소유권, 부분 실패 정리, 삭제, signed URL
+- AI: 멀티모달 요청 본문, 구조화 응답 파싱, vision 실패, 조건부 갱신
+- 목록: 유형·카테고리·검색·커서 페이지네이션 조합
+- 웹: 선택·드롭·붙여넣기·다중 업로드, 필터, 상세, 재분석, 삭제
+- PWA: share target 임시 저장과 인증 후 재개
+
+### 수동 확인
+
+- iOS 단축어에서 JPEG와 HEIC를 각각 등록하고 독립 항목과 AI 결과 확인
+- 웹에서 여러 이미지를 등록하고 일부 실패가 성공 항목에 영향을 주지 않는지 확인
+- private bucket의 비서명 URL이 공개 접근되지 않는지 확인
+- OpenRouter preset이 실제 이미지 분석과 strict JSON 출력을 완료하는지 확인
+- 이미지 리마인더 클릭이 앱 내부 상세 화면을 여는지 확인
+- 모바일 375px과 데스크톱에서 목록, 다이얼로그, 상세 화면 확인
+
+전체 `bun run typecheck && bun run lint && bun run test && bun run build`가 통과해야 완료다. 구현 결과와 스펙에서 벗어난 결정, 남은 수동 확인 항목은 `PROGRESS.md`에 기록한다.
