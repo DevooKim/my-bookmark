@@ -75,15 +75,11 @@ export function BookmarkMetadata({
     >
       {entries.map(([key, value]) => {
         const url = externalUrl(value);
-        const hoverClass =
-          key === "네이버지도"
-            ? "hover:bg-[#03c75a] hover:text-white dark:hover:bg-[#03c75a] dark:hover:text-white"
-            : "hover:bg-blue-100";
         return (
           <div className="min-w-0 max-w-full" key={key}>
             {url ? (
               <a
-                className={`inline-flex max-w-full truncate rounded-lg bg-blue-50 px-2 py-1 font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-200 ${hoverClass}${interactive ? " pointer-events-auto relative z-20" : ""}`}
+                className={`inline-flex max-w-full truncate rounded-lg bg-blue-50 px-2 py-1 font-medium text-blue-700 hover:bg-blue-700 hover:text-white dark:bg-blue-950 dark:text-blue-200 dark:hover:bg-blue-600 dark:hover:text-white${interactive ? " pointer-events-auto relative z-20" : ""}`}
                 href={url}
                 rel="noreferrer"
                 target="_blank"

@@ -296,23 +296,22 @@ function CategoryRow({
   const [name, setName] = useState(category.name);
   return (
     <SortableRow
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 py-3 sm:grid-cols-[auto_1fr_80px_auto] sm:gap-2"
-      handleClassName="row-span-2 sm:row-span-1"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 py-3 sm:gap-2"
       handleLabel={`${category.name} 순서 변경`}
       id={category.id}
     >
       <input
-        className="input col-span-2 min-w-0 sm:col-span-1"
+        className="input min-w-0"
         onBlur={() => name !== category.name && onUpdate({ name })}
         onChange={(e) => setName(e.target.value)}
         value={name}
       />
-      <span className="col-start-2 text-sm text-zinc-500 sm:col-start-auto">
+      <span className="shrink-0 text-sm text-zinc-500">
         {category.bookmarkCount ?? 0}개
       </span>
       <button
         aria-label="카테고리 삭제"
-        className="icon-button col-start-3 row-start-2 text-red-600 sm:col-start-auto sm:row-start-auto"
+        className="icon-button shrink-0 text-red-600"
         onClick={onDelete}
         type="button"
       >

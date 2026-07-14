@@ -222,20 +222,23 @@ describe("category ordering", () => {
     ).toBeTruthy();
   });
 
-  it("uses a two-row mobile category layout and keeps one desktop row", async () => {
+  it("keeps drag handle, title, count, and delete action on one mobile row", async () => {
     vi.mocked(listCategories).mockResolvedValue(categories);
     renderCategorySection();
 
     const input = await screen.findByDisplayValue("💻 개발");
     const row = input.parentElement;
     const handle = screen.getByRole("button", { name: "💻 개발 순서 변경" });
+    const deleteButton = screen.getAllByRole("button", {
+      name: "카테고리 삭제",
+    })[0];
 
-    expect(row?.className).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
-    expect(row?.className).toContain("sm:grid-cols-[auto_1fr_80px_auto]");
-    expect(handle.className).toContain("row-span-2");
-    expect(handle.className).toContain("sm:row-span-1");
-    expect(input.className).toContain("col-span-2");
+    expect(row?.className).toContain(
+      "grid-cols-[auto_minmax(0,1fr)_auto_auto]",
+    );
+    expect(handle.className).not.toContain("row-span-2");
     expect(input.className).toContain("min-w-0");
-    expect(input.className).toContain("sm:col-span-1");
+    expect(input.className).not.toContain("col-span-2");
+    expect(deleteButton?.className).not.toContain("row-start-2");
   });
 });

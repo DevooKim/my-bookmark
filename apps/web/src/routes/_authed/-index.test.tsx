@@ -152,9 +152,12 @@ describe("HomePage", () => {
     expect(localityLabels).toHaveLength(2);
     expect(localityLabels[0]?.parentElement?.className).toContain("truncate");
     expect(mapLinks[1]?.className).toContain("pointer-events-auto");
-    expect(mapLinks[0]?.className).toContain("hover:bg-[#03c75a]");
+    expect(mapLinks[0]?.className).toContain("hover:bg-blue-700");
+    expect(mapLinks[0]?.className).toContain("hover:text-white");
+    expect(mapLinks[0]?.className).not.toContain("hover:bg-[#03c75a]");
     const websiteLink = screen.getByRole("link", { name: "공식사이트" });
-    expect(websiteLink.className).toContain("hover:bg-blue-100");
+    expect(websiteLink.className).toContain("hover:bg-blue-700");
+    expect(websiteLink.className).toContain("hover:text-white");
     expect(websiteLink.className).not.toContain("hover:bg-[#03c75a]");
   });
 
