@@ -56,6 +56,28 @@ describe("image processing", () => {
     expect(analysis.height).toBeLessThanOrEqual(2048);
   });
 
+  it("converts wide-gamut inputs to tagged sRGB derivative images", async () => {
+    const displayP3 = await sharp({
+      create: {
+        width: 32,
+        height: 32,
+        channels: 3,
+        background: "#ff4f40",
+      },
+    })
+      .png()
+      .withIccProfile("p3")
+      .toBuffer();
+
+    const result = await processImage(displayP3, "display-p3.png");
+
+    for (const output of [result.thumbnail, result.analysisImage]) {
+      const metadata = await sharp(output).metadata();
+      expect(metadata.space).toBe("srgb");
+      expect(metadata.icc?.byteLength).toBeGreaterThan(0);
+    }
+  });
+
   it("rejects oversized and undecodable input", async () => {
     await expect(
       processImage(Buffer.alloc(MAX_IMAGE_BYTES + 1), "large.jpg"),

@@ -60,6 +60,7 @@ export async function processImage(
         fit: "inside",
         withoutEnlargement: true,
       })
+      .withIccProfile("srgb")
       .webp({ quality: 78 })
       .toBuffer();
     const analysisImage = await image
@@ -71,6 +72,7 @@ export async function processImage(
         fit: "inside",
         withoutEnlargement: true,
       })
+      .withIccProfile("srgb")
       .jpeg({ quality: 85 })
       .toBuffer();
 
