@@ -27,7 +27,15 @@ interface ShareRouteDeps {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+  limits: {
+    fileSize: MAX_IMAGE_BYTES,
+    fieldSize: 8 * 1024,
+    fields: 1,
+    files: 1,
+    // Busboy raises LIMIT_PART_COUNT when the next part reaches this bound.
+    // Two therefore permits exactly one item and rejects a second part.
+    parts: 2,
+  },
 });
 
 export function createShareRouter(
@@ -41,7 +49,19 @@ export function createShareRouter(
   router.use("/share", auth);
   router.post("/share", upload.single("item"), async (request, response) => {
     const userId = getUserId(request);
-    const rawItem = request.body?.item;
+    const body = request.body ?? {};
+    const bodyKeys = Object.keys(body);
+    const hasValidBodyShape = request.file
+      ? bodyKeys.length === 0
+      : bodyKeys.length === 1 && bodyKeys[0] === "item";
+    if (!hasValidBodyShape) {
+      throw new HttpError(
+        400,
+        API_ERROR_CODES.VALIDATION_ERROR,
+        "링크 또는 이미지 하나가 필요합니다",
+      );
+    }
+    const rawItem = body.item;
     const textItem =
       typeof rawItem === "string" && rawItem.length > 0 ? rawItem : null;
     if (Boolean(request.file) === Boolean(textItem)) {

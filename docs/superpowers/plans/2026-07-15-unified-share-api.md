@@ -33,7 +33,7 @@
 - Test: `apps/api/src/__tests__/images.test.ts`
 - Test: existing bookmark route and categorization tests
 
-- [ ] **Step 1: Run the existing route tests as the refactor baseline**
+- [x] **Step 1: Run the existing route tests as the refactor baseline**
 
 Run:
 
@@ -43,7 +43,7 @@ bun run --cwd apps/api test -- images.test.ts bookmark-tags.test.ts categorize.t
 
 Expected: all selected tests pass before extraction.
 
-- [ ] **Step 2: Extract link creation orchestration**
+- [x] **Step 2: Extract link creation orchestration**
 
 Define a dependency boundary that owns persistence but leaves the sequence testable:
 
@@ -75,7 +75,7 @@ export async function createLinkBookmark(
 
 The function normalizes the URL, checks a manual category, converts database unique error `23505` to the existing `409` shape, returns the mapped bookmark immediately, and starts categorization or metadata work with the existing warning behavior.
 
-- [ ] **Step 3: Extract image creation orchestration**
+- [x] **Step 3: Extract image creation orchestration**
 
 Move the current durable image flow behind this signature:
 
@@ -88,11 +88,11 @@ export async function createImageBookmark(
 
 Keep `processImage`, deterministic paths, Storage cleanup after insert failure, analysis input, thumbnail signing fallback, and response mapping byte-for-byte equivalent to the existing route behavior.
 
-- [ ] **Step 4: Delegate both existing POST routes to the services**
+- [x] **Step 4: Delegate both existing POST routes to the services**
 
 `POST /bookmarks` parses `createBookmarkRequestSchema` and calls `createLinkBookmark`. `POST /images` keeps Multer field parsing and calls `createImageBookmark` with `request.file.buffer` and `request.file.originalname`. Do not change their request or response contracts.
 
-- [ ] **Step 5: Run regression tests**
+- [x] **Step 5: Run regression tests**
 
 Run:
 
@@ -102,7 +102,7 @@ bun run --cwd apps/api test -- images.test.ts bookmark-tags.test.ts categorize.t
 
 Expected: all selected tests pass with unchanged assertions.
 
-- [ ] **Step 6: Commit the extraction**
+- [x] **Step 6: Commit the extraction**
 
 ```bash
 git add apps/api/src/services/bookmark-creation.ts apps/api/src/services/image-bookmark-creation.ts apps/api/src/routes/bookmarks.ts apps/api/src/routes/images.ts
@@ -117,7 +117,7 @@ git commit -m "refactor: 북마크 생성 흐름 공용화"
 - Modify: `apps/api/src/app.ts`
 - Modify: `apps/api/src/__tests__/app-auth-order.test.ts`
 
-- [ ] **Step 1: Write failing HTTP boundary tests**
+- [x] **Step 1: Write failing HTTP boundary tests**
 
 Create an injected test router and assert these exact calls:
 
@@ -135,7 +135,7 @@ expect(createImage).toHaveBeenCalledWith({
 
 Cover Bearer URL text, API Key JPEG/HEIC file, missing item, file plus text item, malformed URL, unexpected multipart field, and more than one file. Successful calls return `201 { bookmark }`; invalid/ambiguous forms return the common `400 VALIDATION_ERROR` format.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -145,7 +145,7 @@ bun run --cwd apps/api test -- share-routes.test.ts
 
 Expected: FAIL because `createShareRouter` and `/api/share` do not exist.
 
-- [ ] **Step 3: Implement the minimal router**
+- [x] **Step 3: Implement the minimal router**
 
 Use Multer memory storage with the existing image byte limit and accept only `item`:
 
@@ -176,7 +176,7 @@ router.post("/share", upload.single("item"), async (request, response) => {
 
 Map Multer limit/unexpected-field errors through the existing common error middleware conventions rather than returning Multer HTML/errors.
 
-- [ ] **Step 4: Mount and rate-limit `/share`**
+- [x] **Step 4: Mount and rate-limit `/share`**
 
 Add `shareRouter` after bookmark/image-compatible authentication routers and extend the allowlist:
 
@@ -191,7 +191,7 @@ path.startsWith("/categories/")
 
 Add a rate-limit regression request using `X-API-Key` against `/api/share` and assert the 61st request is `429 RATE_LIMITED`.
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run:
 
@@ -201,7 +201,7 @@ bun run --cwd apps/api test -- share-routes.test.ts app-auth-order.test.ts image
 
 Expected: all focused tests pass.
 
-- [ ] **Step 6: Commit the endpoint**
+- [x] **Step 6: Commit the endpoint**
 
 ```bash
 git add apps/api/src/routes/share.ts apps/api/src/__tests__/share-routes.test.ts apps/api/src/app.ts apps/api/src/__tests__/app-auth-order.test.ts
@@ -214,7 +214,7 @@ git commit -m "feat: iOS 단축어 통합 공유 API 추가"
 - Modify: `docs/03-api.md`
 - Modify: `docs/shortcuts-guide.md`
 
-- [ ] **Step 1: Add the API contract**
+- [x] **Step 1: Add the API contract**
 
 Document `POST /api/share` immediately after the separate creation endpoints with this request shape:
 
@@ -226,11 +226,11 @@ item: URL text or one image file
 
 State that URL items use AI mode, image items use the existing automatic image analysis, and existing endpoints remain supported.
 
-- [ ] **Step 2: Replace the primary shortcut recipe**
+- [x] **Step 2: Replace the primary shortcut recipe**
 
 Make `북마크 저장` the recommended recipe: share-sheet input types URL/Safari webpage/image, `각 항목 반복`, one form field `item=반복 항목`, no manually set Content-Type, and final success/failure notification. Keep separate recipes in a legacy/advanced subsection for compatibility.
 
-- [ ] **Step 3: Check docs and commit**
+- [x] **Step 3: Check docs and commit**
 
 Run:
 
@@ -250,7 +250,7 @@ git commit -m "docs: 통합 iOS 공유 단축어 안내 추가"
 **Files:**
 - Modify: `PROGRESS.md`
 
-- [ ] **Step 1: Run the repository verification loop**
+- [x] **Step 1: Run the repository verification loop**
 
 Run:
 
@@ -260,7 +260,7 @@ bun run typecheck && bun run lint && bun run test && bun run build
 
 Expected: all commands exit 0. Existing API seed-script info and known web dynamic-import/chunk warnings may remain informational only.
 
-- [ ] **Step 2: Update progress**
+- [x] **Step 2: Update progress**
 
 Add the unified share API to the current state/checklist, record the exact test totals, and leave these manual iPhone checks explicit:
 
@@ -268,7 +268,7 @@ Add the unified share API to the current state/checklist, record the exact test 
 Safari URL, JPEG, HEIC, multiple selected images, and mixed share input through one shortcut.
 ```
 
-- [ ] **Step 3: Inspect scope and commit**
+- [x] **Step 3: Inspect scope and commit**
 
 Run:
 

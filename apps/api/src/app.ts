@@ -103,6 +103,7 @@ export function parseTrustProxy(value: string): boolean | number | string {
 function isApiKeyAllowedPath(path: string): boolean {
   return (
     path === "/share" ||
+    path.startsWith("/share/") ||
     path === "/bookmarks" ||
     path.startsWith("/bookmarks/") ||
     path === "/images" ||

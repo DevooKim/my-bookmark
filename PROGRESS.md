@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: 메타데이터·이미지 색상·리마인더 후속 개선 완료. URL 메타데이터 뱃지는 진한 파란 hover로 통일했고 모바일 카테고리 행은 핸들/이름/개수/삭제 한 줄로 정리했다. 신규 WebP/JPEG 파생본은 sRGB ICC로 정규화한다. 리마인더는 발송 후에도 목록에 남으며 단발 다시 알림, 매일·매주·매월 반복, 비활성화·재활성화와 수동 삭제를 지원한다.
-- **최종 갱신**: 2026-07-15 (메타데이터·카테고리·이미지 sRGB·반복 리마인더 개선)
+- **현재 Phase**: iOS 통합 공유 API 후속 개선 완료. `POST /api/share`가 단일 multipart `item`을 URL 또는 이미지로 판별해 기존 링크·이미지 생성 흐름으로 전달하므로 공유 시트에서 단축어 하나로 두 유형을 저장할 수 있다. 기존 `/api/bookmarks`와 `/api/images`는 그대로 유지한다.
+- **최종 갱신**: 2026-07-15 (iOS 링크·이미지 통합 공유 API)
 
 ## Phase 체크리스트
 
@@ -23,11 +23,13 @@
 - [x] 후속 — 이미지 SNS·GitHub 출처 링크·HEIC 미리보기·모달 자동 종료
 - [x] 후속 — 상세 등록일·지도 호버·모바일 카테고리·세션 만료·태그 품질
 - [x] 후속 — 메타데이터 호버·카테고리 한 줄·이미지 sRGB·반복 리마인더
+- [x] 후속 — iOS 단축어 링크·이미지 통합 공유 API
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
 | 날짜 | 결정 | 이유 |
 |---|---|---|
+| 2026-07-15 | 기존 등록 API를 제거하지 않고 `POST /api/share`를 얇은 multipart 통합 진입점으로 추가했다. 요청당 `item` 하나만 허용하고 URL은 `mode=ai`, 파일은 기존 이미지 분석 흐름으로 전달한다. | 공유 단축어는 하나로 단순화하면서 웹과 기존 단축어의 API 호환성, 저장 검증, 실패 정리 규칙을 유지하기 위함. |
 | 2026-07-06 | TanStack Start CLI가 `@tanstack/create-start` deprecation 경고를 냈지만, 로드맵 요구대로 공식 `pnpm create @tanstack/start@latest`로 스캐폴딩하고 현행 CLI 출력물을 이식했다. | 공식 CLI의 현재 API/구조를 우선한다는 docs/01-architecture 지침 준수. |
 | 2026-07-06 | Phase 0 API env 검증은 `PORT`, `WEB_ORIGIN`, `NODE_ENV` 기본값을 제공하고 Supabase/AI/Push 값은 optional로 두었다. | Phase 1 전에는 Supabase 값이 준비되지 않아도 `/api/health`와 dev 서버 수용 기준을 검증할 수 있어야 함. Phase 1에서 인증 구현 시 필요한 값들을 강화할 예정. |
 | 2026-07-06 | TanStack Router 생성 파일 `**/routeTree.gen.ts`를 Biome 검사에서 제외했다. | 생성 파일에 `any`가 포함되며, 파일 자체 주석도 lint/format 제외를 권장함. |
@@ -169,6 +171,7 @@
 - 상세·모바일 카테고리·세션·태그 후속 자동 검증 완료(2026-07-15): `shared 18 + ai 13 + api 118 + web 107 = 256` 테스트, typecheck, Biome lint, API/web build가 통과했다. 상세 등록일/파일정보 제거, 네이버지도 전용 녹색 hover, 모바일 2단 grid, token 없음·refresh 실패·refresh 빈 세션·재요청 401 로그인 이동, 502 비이동, 태그 2개 허용·한 개 거부, no-padding prompt와 식당명 정규화 제거를 회귀 테스트로 고정했다. production 산출물에서 API health 200·무토큰 `/api/me` 401, 웹·SW·manifest 200을 확인했고, 비로그인 실제 브라우저에서 `/settings`가 `/login?redirect=%2Fsettings`로 이동했다.
 - 메타데이터·카테고리·이미지 색상·리마인더 후속 자동 검증 완료(2026-07-15): `shared 21 + ai 13 + api 132 + web 112 = 278` 테스트와 typecheck, Biome lint, API/web production build가 통과했다. URL 메타데이터 공통 파란 hover, 모바일 카테고리 네 열 한 줄, Display P3 입력의 sRGB ICC WebP/JPEG, timezone 기반 일·주·월 반복과 월말 anchor, 누락 회차 건너뛰기, 조건부 cron claim, sent 목록 유지·다시 알림·반복 활성 토글·모든 표시 상태 수동 삭제를 회귀 테스트로 고정했다. 리뷰에서 발견한 cron과 PATCH의 동시 갱신 충돌은 기존 시각·활성 상태를 조건으로 한 낙관적 잠금과 409 응답으로 막았고, 비활성 단발 상태 금지와 timezone 변경 후 월 반복 anchor 재계산도 테스트로 고정했다. web build의 기존 dynamic import/chunk 경고와 API seed script의 기존 info 1건은 exit 0이다.
 - 반복 리마인더 원격 migration 적용 완료(2026-07-15): dry-run에서 `20260714162924_reminder_recurrence.sql` 하나만 확인한 뒤 push했다. pg-delta catalog cache의 임시 인증서 누락 경고가 재발했지만 local/remote migration 이력 일치, 원격 DB lint `No schema errors found`, `information_schema.columns` 읽기 쿼리에서 recurrence/timezone/day/enabled의 타입·nullable·기본값을 확인해 적용 성공을 별도 검증했다.
+- iOS 통합 공유 API 자동 검증 완료(2026-07-15): `shared 21 + ai 13 + api 140 + web 112 = 286` 테스트와 typecheck, Biome lint, API/web production build가 통과했다. URL 텍스트·HEIC 파일 분기, Bearer/API Key 인증, 누락·동시·잘못된 URL·예상 밖 multipart·복수 파일 거부, `/api/share` API Key rate limit을 RED→GREEN 테스트로 고정했다. 독립 리뷰에서 확인한 trailing slash rate-limit 우회는 `/share/` 하위 경로도 같은 제한에 포함해 막았고, multipart는 8KB 텍스트·필드 1개·파일 1개·단일 part로 제한해 추가/반복 필드를 거부한다. 기존 링크·이미지 API 회귀 테스트도 공용 생성 서비스 분리 후 통과했다. web build의 기존 dynamic import/chunk 경고와 API seed script의 기존 info 1건은 exit 0이다.
 
 ## 사용자 확인 필요
 
@@ -178,6 +181,7 @@
 - **출처 링크·HEIC 실환경 확인**: YouTube·Instagram·Threads·X·TikTok·GitHub handle/게시물/저장소가 선명한 실제 이미지의 재분석 링크와 Chrome의 HEIC 실물 미리보기·저장·모달 종료는 사용자 실데이터로 확인할 항목이다. 표시명·로고만 있는 이미지에 링크가 생기지 않는지도 함께 확인한다.
 - **이번 후속 실환경 확인**: 브라우저 자동화 세션에 인증 상태가 없어 실데이터 카테고리 목록의 375px 시각 확인은 수행하지 못했다. 실제 모바일에서 이름 input·개수·삭제가 겹치지 않는지 1회 확인하고, 신규 식당 이미지 재분류에서 2~5개 태그가 의미 중복 없이 생성되며 상호가 제외되는지 확인한다.
 - **반복 리마인더 실환경 확인**: 실제 OS 알림으로 단발 발송 후 빨간 이력 유지, 다시 알림, 매일·매주·매월 다음 회차 이동과 비활성화 중 미발송은 배포 환경에서 확인해야 한다. 색공간 정규화는 신규 파생본부터 적용되므로 기존 썸네일 중 색이 깨진 항목은 자동으로 바뀌지 않는다.
+- **iOS 통합 단축어 실환경 확인**: 배포 후 공유 시트의 `북마크 저장` 단축어 하나로 Safari URL, JPEG, HEIC, 여러 이미지 선택, 링크·이미지 혼합 입력을 각각 보내고 성공·실패 집계와 AI 분석 시작을 확인해야 한다.
 - **카테고리 순서 변경 DND 실사용 확인**: 데스크톱 dev 브라우저에서 위 방향 드래그(핸들 → 위 항목)는 자동화로 검증 완료(순서 변경 + 서버 저장 + 새로고침 유지). 아래 방향 드래그는 agent-browser의 합성 드래그(중간 pointermove 부족)에서 반영되지 않았는데 앱 버그인지 자동화 한계인지 미확정 — 실제 마우스/터치로 아래 방향 드래그 1회와 iOS Safari/PWA 터치 드래그를 직접 확인 필요(사용자가 추가 자동화 검증은 생략하기로 함, 2026-07-13).
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
 

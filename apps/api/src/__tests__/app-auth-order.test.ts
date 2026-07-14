@@ -57,4 +57,19 @@ describe("app auth routing order", () => {
     expect(response?.status).toBe(429);
     expect(response?.body.error.code).toBe("RATE_LIMITED");
   });
+
+  it("does not bypass the share rate limit with a trailing slash", async () => {
+    const app = createApp();
+    let response: request.Response | undefined;
+
+    for (let i = 0; i < 61; i += 1) {
+      response = await request(app)
+        .post("/api/share/")
+        .set("X-API-Key", "bm_test")
+        .field("item", "https://example.com/post");
+    }
+
+    expect(response?.status).toBe(429);
+    expect(response?.body.error.code).toBe("RATE_LIMITED");
+  });
 });

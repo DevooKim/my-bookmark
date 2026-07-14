@@ -153,4 +153,24 @@ describe("unified share route", () => {
       });
     }
   });
+
+  it("rejects additional multipart text fields", async () => {
+    const { app, createLink } = createTestApp();
+    const extraField = await request(app)
+      .post("/api/share")
+      .set("Authorization", "Bearer test")
+      .field("item", "https://example.com/post")
+      .field("extra", "ignored before validation");
+    const repeatedItem = await request(app)
+      .post("/api/share")
+      .set("Authorization", "Bearer test")
+      .field("item", "https://example.com/one")
+      .field("item", "https://example.com/two");
+
+    for (const response of [extraField, repeatedItem]) {
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("VALIDATION_ERROR");
+    }
+    expect(createLink).not.toHaveBeenCalled();
+  });
 });

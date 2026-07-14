@@ -133,7 +133,7 @@ AI 분류는 OpenRouter preset(`@preset/my-bookmark`) 단일 호출로 동작한
 
 ## 레이트 리밋
 
-API Key 인증 요청(`bookmarks`, `images`, `categories`): 분당 60회/IP. 초과 시 429. Bearer 경로는 리밋 없음(1인 사용).
+API Key 인증 요청(`bookmarks`, `images`, `share`, `categories`): 분당 60회/IP. 초과 시 429. Bearer 경로는 리밋 없음(1인 사용).
 
 ---
 
