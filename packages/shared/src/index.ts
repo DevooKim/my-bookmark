@@ -119,6 +119,13 @@ export const bookmarkSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const reminderStatusSchema = z.enum(["pending", "sent", "cancelled"]);
+export const reminderRecurrenceSchema = z.enum([
+  "none",
+  "daily",
+  "weekly",
+  "monthly",
+]);
+export const reminderTimezoneSchema = z.string().trim().min(1).max(100);
 
 export const reminderSchema = z.object({
   id: uuidSchema,
@@ -128,6 +135,9 @@ export const reminderSchema = z.object({
   note: z.string().nullable(),
   status: reminderStatusSchema,
   sentAt: isoDateTimeSchema.nullable(),
+  recurrence: reminderRecurrenceSchema,
+  recurrenceTimezone: reminderTimezoneSchema,
+  isEnabled: z.boolean(),
   createdAt: isoDateTimeSchema,
 });
 
@@ -225,12 +235,24 @@ export const createReminderRequestSchema = z.object({
   bookmarkId: uuidSchema,
   remindAt: isoDateTimeSchema,
   note: z.string().trim().max(500).nullable().optional(),
+  recurrence: reminderRecurrenceSchema,
+  recurrenceTimezone: reminderTimezoneSchema,
+});
+
+export const rescheduleReminderRequestSchema = z.object({
+  remindAt: isoDateTimeSchema,
+  note: z.string().trim().max(500).nullable().optional(),
+  recurrence: reminderRecurrenceSchema,
+  recurrenceTimezone: reminderTimezoneSchema,
 });
 
 export const updateReminderRequestSchema = z
   .object({
     remindAt: isoDateTimeSchema.optional(),
     note: z.string().trim().max(500).nullable().optional(),
+    recurrence: reminderRecurrenceSchema.optional(),
+    recurrenceTimezone: reminderTimezoneSchema.optional(),
+    isEnabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",
@@ -345,6 +367,7 @@ export type CategoryWithCount = z.infer<typeof categoryWithCountSchema>;
 export type Bookmark = z.infer<typeof bookmarkSchema>;
 export type Reminder = z.infer<typeof reminderSchema>;
 export type ReminderWithBookmark = z.infer<typeof reminderWithBookmarkSchema>;
+export type ReminderRecurrence = z.infer<typeof reminderRecurrenceSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateBookmarkRequest = z.infer<typeof createBookmarkRequestSchema>;
 export type UpdateBookmarkRequest = z.infer<typeof updateBookmarkRequestSchema>;
@@ -355,6 +378,9 @@ export type ReorderCategoriesRequest = z.infer<
   typeof reorderCategoriesRequestSchema
 >;
 export type CreateReminderRequest = z.infer<typeof createReminderRequestSchema>;
+export type RescheduleReminderRequest = z.infer<
+  typeof rescheduleReminderRequestSchema
+>;
 export type UpdateReminderRequest = z.infer<typeof updateReminderRequestSchema>;
 export type PushSubscriptionRequest = z.infer<
   typeof pushSubscriptionRequestSchema

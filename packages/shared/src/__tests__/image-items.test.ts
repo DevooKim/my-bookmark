@@ -86,6 +86,9 @@ describe("image item schemas", () => {
         note: null,
         status: "pending",
         sentAt: null,
+        recurrence: "none",
+        recurrenceTimezone: "UTC",
+        isEnabled: true,
         createdAt: "2026-07-13T10:00:00.000Z",
         bookmark: {
           id: baseBookmark.id,
