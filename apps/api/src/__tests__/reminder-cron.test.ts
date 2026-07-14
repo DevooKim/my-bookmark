@@ -10,6 +10,9 @@ const reminder = {
   bookmark_id: "bookmark-1",
   remind_at: "2026-07-10T12:00:00.000Z",
   note: "Read this later",
+  recurrence: "none" as const,
+  recurrence_timezone: "Asia/Seoul",
+  recurrence_day: null,
   bookmark: {
     id: "bookmark-1",
     kind: "link" as const,
@@ -53,7 +56,12 @@ describe("reminder cron", () => {
     });
 
     expect(result).toEqual({ scanned: 1, claimed: 1, sent: 1, failed: 0 });
-    expect(db.claimReminder).toHaveBeenCalledWith("reminder-1");
+    expect(db.claimReminder).toHaveBeenCalledWith({
+      id: "reminder-1",
+      expectedRemindAt: "2026-07-10T12:00:00.000Z",
+      claimedAt: "2026-07-10T12:01:00.000Z",
+      nextRemindAt: null,
+    });
     expect(pushSender.send).toHaveBeenCalledWith(
       expect.objectContaining({ id: "sub-1" }),
       {
@@ -62,6 +70,31 @@ describe("reminder cron", () => {
         url: "https://example.com/article",
       },
     );
+  });
+
+  it("advances a recurring reminder to its next future occurrence", async () => {
+    const db = createDb();
+    db.dueReminders.mockResolvedValue([
+      {
+        ...reminder,
+        recurrence: "daily",
+      },
+    ]);
+    const pushSender = { send: vi.fn().mockResolvedValue({ ok: true }) };
+
+    await processDueReminders({
+      db,
+      pushSender,
+      now: new Date("2026-07-15T12:01:00.000Z"),
+    });
+
+    expect(db.claimReminder).toHaveBeenCalledWith({
+      id: "reminder-1",
+      expectedRemindAt: "2026-07-10T12:00:00.000Z",
+      claimedAt: "2026-07-15T12:01:00.000Z",
+      nextRemindAt: "2026-07-16T12:00:00.000Z",
+    });
+    expect(pushSender.send).toHaveBeenCalledOnce();
   });
 
   it("does not send when a competing worker already claimed the reminder", async () => {

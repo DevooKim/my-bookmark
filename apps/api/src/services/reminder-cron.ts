@@ -1,4 +1,4 @@
-import { API_ERROR_CODES } from "@my-bookmark/shared";
+import { API_ERROR_CODES, type ReminderRecurrence } from "@my-bookmark/shared";
 import cron, { type ScheduledTask } from "node-cron";
 import { appEnv } from "../lib/env";
 import { supabaseAdmin } from "../lib/supabase";
@@ -7,6 +7,7 @@ import {
   createDefaultPushSender,
   type StoredPushSubscription,
 } from "./push-sender";
+import { nextReminderAt } from "./reminder-recurrence";
 
 interface DueReminderRow {
   id: string;
@@ -14,6 +15,9 @@ interface DueReminderRow {
   bookmark_id: string;
   remind_at: string;
   note: string | null;
+  recurrence: ReminderRecurrence;
+  recurrence_timezone: string;
+  recurrence_day: number | null;
   bookmark: {
     id: string;
     kind: "link" | "image";
@@ -24,7 +28,12 @@ interface DueReminderRow {
 
 interface ReminderCronDb {
   dueReminders(now: Date, limit: number): Promise<DueReminderRow[]>;
-  claimReminder(id: string): Promise<boolean>;
+  claimReminder(input: {
+    id: string;
+    expectedRemindAt: string;
+    claimedAt: string;
+    nextRemindAt: string | null;
+  }): Promise<boolean>;
   subscriptionsForUser(userId: string): Promise<StoredPushSubscription[]>;
 }
 
@@ -61,7 +70,22 @@ export async function processDueReminders({
   let failed = 0;
 
   for (const reminder of reminders) {
-    const didClaim = await db.claimReminder(reminder.id);
+    const nextRemindAt =
+      reminder.recurrence === "none"
+        ? null
+        : nextReminderAt({
+            scheduledAt: new Date(reminder.remind_at),
+            recurrence: reminder.recurrence,
+            timeZone: reminder.recurrence_timezone,
+            now,
+            recurrenceDay: reminder.recurrence_day,
+          }).toISOString();
+    const didClaim = await db.claimReminder({
+      id: reminder.id,
+      expectedRemindAt: reminder.remind_at,
+      claimedAt: now.toISOString(),
+      nextRemindAt,
+    });
     if (!didClaim) {
       continue;
     }
@@ -131,9 +155,10 @@ export function createSupabaseReminderCronDb(): ReminderCronDb {
       const { data, error } = await db
         .from("reminders")
         .select(
-          "id,user_id,bookmark_id,remind_at,note,bookmarks!inner(id,kind,url,title)",
+          "id,user_id,bookmark_id,remind_at,note,recurrence,recurrence_timezone,recurrence_day,bookmarks!inner(id,kind,url,title)",
         )
         .eq("status", "pending")
+        .eq("is_enabled", true)
         .lte("remind_at", now.toISOString())
         .order("remind_at", { ascending: true })
         .limit(limit);
@@ -157,16 +182,29 @@ export function createSupabaseReminderCronDb(): ReminderCronDb {
           bookmark_id: row.bookmark_id,
           remind_at: row.remind_at,
           note: row.note,
+          recurrence: row.recurrence,
+          recurrence_timezone: row.recurrence_timezone,
+          recurrence_day: row.recurrence_day,
           bookmark,
         };
       });
     },
-    async claimReminder(id) {
+    async claimReminder(input) {
+      const updates =
+        input.nextRemindAt === null
+          ? { status: "sent", sent_at: input.claimedAt }
+          : {
+              status: "pending",
+              sent_at: input.claimedAt,
+              remind_at: input.nextRemindAt,
+            };
       const { data, error } = await db
         .from("reminders")
-        .update({ status: "sent", sent_at: new Date().toISOString() })
-        .eq("id", id)
+        .update(updates)
+        .eq("id", input.id)
         .eq("status", "pending")
+        .eq("is_enabled", true)
+        .eq("remind_at", input.expectedRemindAt)
         .select("id")
         .maybeSingle();
       if (error) {
