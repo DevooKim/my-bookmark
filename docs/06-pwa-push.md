@@ -19,6 +19,7 @@
 [등록]  웹앱: 권한 요청 → pushManager.subscribe(VAPID 공개키)
         → 구독 객체(endpoint+키)를 서버에 저장
 [발송]  node-cron이 도래한 리마인더 발견
+        → 단발은 sent 전이, 반복은 다음 실행 시각으로 조건부 갱신
         → web-push.sendNotification(구독, payload)   ← 서버는 푸시 서비스로 보낼 뿐
         → 푸시 서비스(APNs/FCM/Mozilla)가 기기로 전달
 [수신]  SW 'push' 이벤트 → showNotification(제목, 본문, 아이콘, data)
@@ -115,16 +116,18 @@ self.addEventListener('notificationclick', (event) => {
 
 ```
 node-cron '* * * * *' (매분):
-1. select * from reminders where status='pending' and remind_at <= now() limit 20
-2. 각 건: update … set status='sent', sent_at=now()
-          where id=? and status='pending' 조건부 업데이트로 클레임
+1. select * from reminders where status='pending' and is_enabled=true and remind_at <= now() limit 20
+2. 단발: status='sent', sent_at=now()
+   반복: remind_at=다음 미래 회차, sent_at=now(), status='pending' 유지
+          where id=? and status='pending' and is_enabled=true and remind_at=? 조건부 업데이트로 클레임
           (영향 행 0이면 skip — 중복 발송 방지)
 3. 클레임 성공 건만 해당 user의 전체 구독에 발송
 4. 전 구독 발송 실패 시: 로그 남기고 그대로 둔다 (단순화 — 재시도 큐 없음, 결정 로그 참조)
 ```
 
 - cron 시작은 서버 리슨 후, SIGTERM 시 중지.
-- 서버가 꺼져 있던 동안 지난 리마인더는 재기동 후 첫 tick에서 발송된다 (`remind_at <= now()` 조건이라 자연 처리).
+- 서버가 꺼져 있던 동안 지난 리마인더는 재기동 후 첫 tick에서 한 번 발송된다. 반복 알림은 누락 회차를 모두 재발송하지 않고 사용자 timezone 기준 가장 가까운 미래 회차로 이동한다.
+- 단발은 발송 후 목록에 빨간 지난 일정으로 남으며 `다시 알림`으로 같은 행을 재사용할 수 있다. 반복은 매일·매주·매월을 지원하고 목록에서 비활성화·재활성화할 수 있다.
 
 ## 로컬 개발/테스트
 

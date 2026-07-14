@@ -69,7 +69,8 @@ describe("ImageDetailView", () => {
     const mapLink = screen.getByRole("link", { name: "네이버지도" });
     expect(mapLink.getAttribute("target")).toBe("_blank");
     expect(mapLink.getAttribute("rel")).toBe("noreferrer");
-    expect(mapLink.className).toContain("hover:bg-[#03c75a]");
+    expect(mapLink.className).toContain("hover:bg-blue-700");
+    expect(mapLink.className).not.toContain("hover:bg-[#03c75a]");
     expect(mapLink.className).toContain("hover:text-white");
     const locality = screen.getByText("지역: 강원도 강릉");
     expect(locality).toBeTruthy();

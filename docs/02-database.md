@@ -116,10 +116,18 @@ create table public.reminders (
   status      text not null default 'pending'
               check (status in ('pending','sent','cancelled')),
   sent_at     timestamptz,
+  recurrence  text not null default 'none'
+              check (recurrence in ('none','daily','weekly','monthly')),
+  recurrence_timezone text not null default 'UTC',
+  recurrence_day smallint check (recurrence_day between 1 and 31),
+  is_enabled  boolean not null default true,
   created_at  timestamptz not null default now()
 );
-create index reminders_due_idx on public.reminders (status, remind_at);
+create index reminders_due_idx
+  on public.reminders (status, is_enabled, remind_at);
 ```
+
+단발 알림은 발송 후 `sent`로 남고, 반복 알림은 `pending` 상태에서 `remind_at`을 다음 실행 시각으로 갱신한다. `recurrence_day`는 매월 반복의 최초 로컬 날짜를 보존해 31일이 짧은 달을 지난 뒤에도 다음 긴 달의 31일로 복귀하게 한다. `is_enabled=false`인 반복 알림은 목록에는 남지만 cron 조회에서 제외된다.
 
 ## RLS (같은 마이그레이션에 포함)
 

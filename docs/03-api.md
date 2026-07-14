@@ -91,10 +91,11 @@ keyset 페이지네이션: `(created_at, id) < cursor` order by `created_at desc
 
 ## Reminders (Bearer 전용)
 
-- `POST /api/reminders` `{ bookmarkId, remindAt, note? }` → 201. `remindAt`이 과거면 400
-- `GET /api/reminders?status=pending` → `{ items: [ …, bookmark: { id, kind, title, url } 조인 포함 ] }` (remind_at asc). 이미지 알림은 웹 내부 `/images/:id` 상세 화면을 연다.
-- `PATCH /api/reminders/:id` `{ remindAt?, note? }` — pending만 수정 가능
-- `DELETE /api/reminders/:id` — 실삭제 대신 `status='cancelled'` → 204
+- `POST /api/reminders` `{ bookmarkId, remindAt, note?, recurrence, recurrenceTimezone }` → 201. 반복은 `none | daily | weekly | monthly`; 과거 시각이나 잘못된 IANA timezone은 400
+- `GET /api/reminders` → `{ items: [ …, recurrence, recurrenceTimezone, isEnabled, bookmark: { id, kind, title, url } ] }` (`cancelled` 제외, `remind_at` asc). 발송된 단발과 비활성 반복도 이력으로 반환하며 이미지 알림은 웹 내부 `/images/:id` 상세 화면을 연다.
+- `PATCH /api/reminders/:id` `{ remindAt?, note?, recurrence?, recurrenceTimezone?, isEnabled? }` — pending만 수정 가능. 반복 재활성화 시 지난 회차를 건너뛰고 다음 미래 시각으로 이동
+- `POST /api/reminders/:id/reschedule` `{ remindAt, note?, recurrence, recurrenceTimezone }` — 발송된 단발 행을 같은 id의 pending 일정으로 다시 설정
+- `DELETE /api/reminders/:id` — pending/sent 모두 실삭제 대신 `status='cancelled'` → 204
 
 ## Push (Bearer 전용)
 
