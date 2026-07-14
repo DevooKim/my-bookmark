@@ -54,6 +54,9 @@ interface ReminderWithBookmarkDbRow {
   note: string | null;
   status: "pending" | "sent" | "cancelled";
   sent_at: string | null;
+  recurrence: "none" | "daily" | "weekly" | "monthly";
+  recurrence_timezone: string;
+  is_enabled: boolean;
   created_at: string;
   bookmarks: Pick<BookmarkDbRow, "id" | "kind" | "url" | "title"> | null;
 }
@@ -122,6 +125,9 @@ export function mapReminderWithBookmark(
     note: row.note,
     status: row.status,
     sentAt: row.sent_at,
+    recurrence: row.recurrence,
+    recurrenceTimezone: row.recurrence_timezone,
+    isEnabled: row.is_enabled,
     createdAt: row.created_at,
     bookmark: row.bookmarks,
   });
