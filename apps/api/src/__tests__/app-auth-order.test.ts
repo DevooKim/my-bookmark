@@ -42,4 +42,19 @@ describe("app auth routing order", () => {
       error: { code: "RATE_LIMITED", message: "Too many requests" },
     });
   });
+
+  it("rate limits API-key requests to the unified share endpoint", async () => {
+    const app = createApp();
+    let response: request.Response | undefined;
+
+    for (let i = 0; i < 61; i += 1) {
+      response = await request(app)
+        .post("/api/share")
+        .set("X-API-Key", "bm_test")
+        .field("item", "https://example.com/post");
+    }
+
+    expect(response?.status).toBe(429);
+    expect(response?.body.error.code).toBe("RATE_LIMITED");
+  });
 });

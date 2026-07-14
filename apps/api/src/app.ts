@@ -17,6 +17,7 @@ import { keysRouter } from "./routes/keys";
 import { meRouter } from "./routes/me";
 import { pushRouter } from "./routes/push";
 import { remindersRouter } from "./routes/reminders";
+import { shareRouter } from "./routes/share";
 
 interface HttpLoggerOptions extends PinoHttpOptions {
   stream?: pino.DestinationStream;
@@ -79,6 +80,7 @@ export function createApp(): express.Express {
   app.use("/api", categoriesRouter);
   app.use("/api", bookmarksRouter);
   app.use("/api", imagesRouter);
+  app.use("/api", shareRouter);
   app.use("/api", remindersRouter);
   app.use("/api", pushRouter);
   app.use("/api", aiRouter);
@@ -100,6 +102,7 @@ export function parseTrustProxy(value: string): boolean | number | string {
 
 function isApiKeyAllowedPath(path: string): boolean {
   return (
+    path === "/share" ||
     path === "/bookmarks" ||
     path.startsWith("/bookmarks/") ||
     path === "/images" ||

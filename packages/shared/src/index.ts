@@ -194,6 +194,10 @@ export const createBookmarkRequestSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
+export const shareUrlItemSchema = z.object({
+  item: z.url(),
+});
+
 export const updateBookmarkRequestSchema = z
   .object({
     url: z.url().optional(),
