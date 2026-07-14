@@ -2,6 +2,7 @@ import {
   API_ERROR_CODES,
   type BookmarkListQuery,
   bookmarkListQuerySchema,
+  type CreateBookmarkRequest,
   createBookmarkRequestSchema,
   updateBookmarkRequestSchema,
   uuidSchema,
@@ -14,6 +15,10 @@ import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
 import { getAiProvider } from "../services/ai-provider";
 import { createAiUsageRecorder } from "../services/ai-usage";
+import {
+  createLinkBookmark,
+  type LinkBookmarkCreationDeps,
+} from "../services/bookmark-creation";
 import { categorizeBookmark } from "../services/categorize";
 import { processImage } from "../services/image-processing";
 import {
@@ -91,46 +96,7 @@ bookmarksRouter.use("/bookmarks", requireAuth({ apiKey: true }));
 bookmarksRouter.post("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
   const body = createBookmarkRequestSchema.parse(request.body);
-  const url = normalizeBookmarkUrl(body.url);
-  const db = getDb();
-  if (body.mode === "manual") {
-    await assertCategoryBelongsToUser(db, userId, body.categoryId);
-  }
-
-  const insert = {
-    user_id: userId,
-    url,
-    title: body.title ?? null,
-    category_id: body.mode === "manual" ? body.categoryId : null,
-    ai_status: body.mode === "ai" ? "pending" : "idle",
-  };
-
-  const { data, error } = await db
-    .from("bookmarks")
-    .insert(insert)
-    .select("*")
-    .single();
-
-  if (error) {
-    await handleBookmarkInsertError(error, userId, url);
-  }
-
-  const bookmark = mapBookmark(data);
-  if (body.mode === "ai") {
-    void categorizeBookmarkForUser({
-      db,
-      userId,
-      bookmarkId: bookmark.id,
-    }).catch((error) => console.warn("AI categorization task failed", error));
-  } else {
-    void updateBookmarkMetadata(
-      db,
-      userId,
-      bookmark.id,
-      url,
-      body.title ?? null,
-    );
-  }
+  const bookmark = await createLinkBookmarkForUser({ userId, request: body });
   response.status(201).json({ bookmark });
 });
 
@@ -337,8 +303,50 @@ async function mapBookmarkWithSignedMedia(
   );
 }
 
+export async function createLinkBookmarkForUser(input: {
+  userId: string;
+  request: CreateBookmarkRequest;
+}) {
+  const db = getDb();
+  const deps: LinkBookmarkCreationDeps = {
+    assertCategory: (userId, categoryId) =>
+      assertCategoryBelongsToUser(db, userId, categoryId),
+    async insert({ userId, url, title, categoryId, aiStatus }) {
+      const { data, error } = await db
+        .from("bookmarks")
+        .insert({
+          user_id: userId,
+          url,
+          title,
+          category_id: categoryId,
+          ai_status: aiStatus,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        throw error;
+      }
+      return data;
+    },
+    async existingId(userId, url) {
+      const { data } = await db
+        .from("bookmarks")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("url", url)
+        .maybeSingle();
+      return data?.id;
+    },
+    categorize: (userId, bookmarkId) =>
+      categorizeBookmarkForUser({ db, userId, bookmarkId }),
+    updateMetadata: ({ userId, bookmarkId, url, title }) =>
+      updateBookmarkMetadata(db, userId, bookmarkId, url, title),
+  };
+  return createLinkBookmark(input, deps);
+}
+
 async function handleBookmarkInsertError(
-  error: { code?: string; message?: string },
+  error: DbError,
   userId: string,
   url: string,
 ): Promise<never> {
