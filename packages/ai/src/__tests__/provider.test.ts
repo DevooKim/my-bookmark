@@ -12,6 +12,7 @@ const analysis = {
     locality: "서울 성동구",
     confidence: 0.92,
   },
+  source: null,
 };
 
 function completionResponse(
@@ -68,6 +69,12 @@ describe("OpenRouter preset provider", () => {
     expect(
       body.response_format.json_schema.schema.properties.place.type,
     ).toEqual(["object", "null"]);
+    expect(body.response_format.json_schema.schema.required).toContain(
+      "source",
+    );
+    expect(
+      body.response_format.json_schema.schema.properties.source.required,
+    ).toEqual(["platform", "handle", "postUrl", "repository", "confidence"]);
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -194,7 +201,80 @@ describe("AI analysis response parsing", () => {
     ).toBeNull();
   });
 
+  it("parses directly evidenced social and GitHub source candidates", () => {
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        source: {
+          platform: "instagram",
+          handle: "my.bookmark",
+          postUrl: null,
+          repository: null,
+          confidence: 0.9,
+        },
+      }),
+    ).toMatchObject({
+      source: { platform: "instagram", handle: "my.bookmark" },
+    });
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        source: {
+          platform: "github",
+          handle: "DevooKim",
+          postUrl: null,
+          repository: "DevooKim/my-bookmark",
+          confidence: 0.95,
+        },
+      }),
+    ).toMatchObject({
+      source: {
+        platform: "github",
+        repository: "DevooKim/my-bookmark",
+      },
+    });
+    expect(parseAnalyzeResponse({ ...analysis, source: null })).toMatchObject({
+      source: null,
+    });
+  });
+
+  it("rejects malformed source candidates", () => {
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        source: {
+          platform: "facebook",
+          handle: "account",
+          postUrl: null,
+          repository: null,
+          confidence: 0.9,
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseAnalyzeResponse({
+        ...analysis,
+        source: {
+          platform: "youtube",
+          handle: "channel",
+          postUrl: null,
+          repository: null,
+          confidence: 1.1,
+        },
+      }),
+    ).toBeNull();
+  });
+
   it("forbids guessing a restaurant from food alone", () => {
     expect(systemPrompt()).toContain("음식 사진만으로 상호를 추측하지 않는다");
+  });
+
+  it("forbids guessing source accounts from names or logos", () => {
+    expect(systemPrompt()).toContain(
+      "handle, 게시물 URL·ID, GitHub owner/repository가 이미지에 직접 보일 때만 source를 반환한다",
+    );
+    expect(systemPrompt()).toContain(
+      "표시명이나 로고만으로 계정을 추측하지 않는다",
+    );
   });
 });

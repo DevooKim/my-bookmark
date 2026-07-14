@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AnalyzeResult, CategorizeInput, CategorizeResult } from "./types";
+import { sourcePlatforms } from "./types";
 
 export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({
@@ -51,6 +52,16 @@ export const analyzeResponseSchema = z.object({
     })
     .nullable()
     .optional(),
+  source: z
+    .object({
+      platform: z.enum(sourcePlatforms),
+      handle: z.string().trim().min(1).max(100).nullable(),
+      postUrl: z.string().trim().min(1).max(2048).nullable(),
+      repository: z.string().trim().min(1).max(201).nullable(),
+      confidence: z.number().min(0).max(1),
+    })
+    .nullable()
+    .optional(),
 });
 
 export function parseAnalyzeResponse(value: unknown): AnalyzeResult | null {
@@ -92,8 +103,20 @@ export const jsonSchema = {
       required: ["name", "locality", "confidence"],
       additionalProperties: false,
     },
+    source: {
+      type: ["object", "null"] as const,
+      properties: {
+        platform: { type: "string" as const, enum: sourcePlatforms },
+        handle: { type: ["string", "null"] as const },
+        postUrl: { type: ["string", "null"] as const },
+        repository: { type: ["string", "null"] as const },
+        confidence: { type: "number" as const, minimum: 0, maximum: 1 },
+      },
+      required: ["platform", "handle", "postUrl", "repository", "confidence"],
+      additionalProperties: false,
+    },
   },
-  required: ["category", "summaryTitle", "summary", "tags", "place"],
+  required: ["category", "summaryTitle", "summary", "tags", "place", "source"],
   additionalProperties: false,
 };
 
@@ -122,6 +145,9 @@ export function systemPrompt(): string {
     "10. 식당·카페·주점 등 방문 가능한 음식점의 상호가 본문이나 이미지에 직접 확인될 때만 place를 반환한다.",
     "11. 음식 사진만으로 상호를 추측하지 않는다. 상호가 불명확하거나 여러 장소가 섞이면 place는 null이다.",
     "12. 지점명은 place.name에 포함하고 확인 가능한 동네·도시·주소 단서는 place.locality에 넣는다.",
+    "13. YouTube, Instagram, Threads, X, TikTok, GitHub의 handle, 게시물 URL·ID, GitHub owner/repository가 이미지에 직접 보일 때만 source를 반환한다.",
+    "14. 표시명이나 로고만으로 계정을 추측하지 않는다. 직접 확인할 수 없으면 source는 null이다.",
+    "15. source.postUrl은 게시물 URL이나 ID가 직접 보일 때만 넣고, GitHub 저장소는 source.repository에 owner/repository로 넣는다.",
   ].join("\n");
 }
 

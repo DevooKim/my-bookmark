@@ -139,6 +139,108 @@ describe("applyCategorizeResult", () => {
     expect(db.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
   });
 
+  it("adds a verified GitHub source only for image bookmarks", async () => {
+    const source: AnalyzeResult["source"] = {
+      platform: "github",
+      handle: "DevooKim",
+      postUrl: null,
+      repository: "DevooKim/my-bookmark",
+      confidence: 0.9,
+    };
+    const imageDb = new FakeDb();
+    await applyCategorizeResult(
+      imageDb,
+      "user",
+      "bookmark",
+      imageDb.categories,
+      { ...analysis({ type: "none" }), source },
+      "google/gemini-3.1-flash-lite-20260507",
+      imageDb.bookmark.metadata,
+      "image",
+    );
+    expect(imageDb.bookmarkUpdates.at(-1)).toMatchObject({
+      metadata: {
+        예약메모: "창가 자리",
+        GitHub: "https://github.com/DevooKim/my-bookmark",
+      },
+    });
+
+    const linkDb = new FakeDb();
+    await applyCategorizeResult(
+      linkDb,
+      "user",
+      "bookmark",
+      linkDb.categories,
+      { ...analysis({ type: "none" }), source },
+      "google/gemini-3.1-flash-lite-20260507",
+      linkDb.bookmark.metadata,
+      "link",
+    );
+    expect(linkDb.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
+  });
+
+  it("preserves both place and source metadata for an image", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        ...analysis({ type: "none" }),
+        place: {
+          name: "호랑이식당",
+          locality: "서울",
+          confidence: 0.9,
+        },
+        source: {
+          platform: "instagram",
+          handle: "tiger.restaurant",
+          postUrl: null,
+          repository: null,
+          confidence: 0.9,
+        },
+      },
+      "google/gemini-3.1-flash-lite-20260507",
+      db.bookmark.metadata,
+      "image",
+    );
+
+    expect(db.bookmarkUpdates.at(-1)).toMatchObject({
+      metadata: {
+        예약메모: "창가 자리",
+        네이버지도: expect.stringContaining("map.naver.com"),
+        인스타그램: "https://www.instagram.com/tiger.restaurant/",
+      },
+    });
+  });
+
+  it("finishes analysis while omitting an invalid source", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        ...analysis({ type: "none" }),
+        source: {
+          platform: "github",
+          handle: null,
+          postUrl: "https://github.com.evil.test/owner/repo",
+          repository: null,
+          confidence: 0.99,
+        },
+      },
+      "google/gemini-3.1-flash-lite-20260507",
+      db.bookmark.metadata,
+      "image",
+    );
+
+    expect(db.bookmarkUpdates.at(-1)).toMatchObject({ ai_status: "done" });
+    expect(db.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
+  });
+
   it("applies category, summary title, and tags in one pending-guarded update", async () => {
     const db = new FakeDb();
     await applyCategorizeResult(

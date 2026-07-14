@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: 이미지 항목 후속 구현과 범용 북마크 메타데이터 후속 구현 완료. 링크·이미지 모두 `metadata` JSON key-value를 편집·표시하고, AI가 식당·지점·지역을 충분히 확신할 때(`confidence >= 0.85`)만 서버가 `네이버지도` 검색 URL을 병합한다. 메타데이터는 지도 전용 UI 없이 URL은 외부 링크, 나머지는 `key: value`로 카드와 이미지 상세에 렌더링한다. **마이그레이션 `20260713155145_bookmark_metadata.sql`은 2026-07-14 원격 적용 완료**다.
-- **최종 갱신**: 2026-07-14 (범용 메타데이터·식당 네이버지도 검색 링크 반영)
+- **현재 Phase**: 이미지·범용 메타데이터 후속 구현 완료. AI가 직접 확인한 식당은 `네이버지도`, 이미지의 YouTube·Instagram·Threads·X·TikTok·GitHub 출처는 검증된 게시물·저장소·프로필 URL을 범용 `metadata`에 병합한다. 모든 자동 링크는 `confidence >= 0.85`와 서버 allowlist/경로 검증을 통과해야 한다. HEIC/HEIF 선택 시 브라우저에서 지연 로딩한 decoder로 로컬 JPEG 미리보기를 만들되 원본 `File`을 업로드하며, 추가 모달은 모든 항목이 성공할 때만 자동으로 닫힌다.
+- **최종 갱신**: 2026-07-15 (SNS·GitHub 출처 링크·HEIC 미리보기·저장 완료 모달 종료)
 
 ## Phase 체크리스트
 
@@ -20,6 +20,7 @@
 - [x] Phase 8 후속 — 설정 기반 AI provider/API 키 관리
 - [x] 후속 — 이미지 항목 저장·AI 분석·iOS 단축어/PWA 공유
 - [x] 후속 — 범용 북마크 메타데이터·식당 네이버지도 검색 링크
+- [x] 후속 — 이미지 SNS·GitHub 출처 링크·HEIC 미리보기·모달 자동 종료
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
@@ -90,6 +91,8 @@
 | 2026-07-14 | 수동으로 제목·요약·태그·URL·카테고리를 수정하면 `ai_status='idle'`로 전이해 대기 중 AI 결과의 조건부 UPDATE가 사용자 편집을 덮어쓰지 못하게 한다. 이미지 signed URL 발급 실패는 항목 생성/AI 분석과 분리해 201 + nullable URL로 복구한다. | 사용자 입력 우선 원칙과 private Storage 일시 장애 시 데이터 유실 방지. |
 | 2026-07-14 | 웹/PWA 이미지 선택은 로컬 `selected` 상태에만 추가하고 `이미지 저장` 클릭 시에만 전역 동시성 2 큐를 시작한다. 이미지 카드 본문 전체를 내부 상세 링크로 만들고, 상세는 70dvh 썸네일 미리보기와 원본 파일 크기를 먼저 표시한 뒤 명시적 `원본 보기`에서만 원본과 다운로드를 표시한다. | 사용자가 저장 시점과 원본 노출 시점을 직접 결정하고, 썸네일/카드 클릭으로 큰 상세 화면에 바로 진입하며 원본 용량을 확인하도록 한 요청 반영. |
 | 2026-07-14 | 북마크 부가정보는 지도 전용 컬럼 대신 `metadata jsonb` 문자열 key-value로 저장한다. AI는 직접 확인된 음식점 장소 후보만 반환하고 `confidence >= 0.85`일 때 서버가 상호·지역으로 네이버지도 검색 URL을 만들어 `네이버지도` key에 병합한다. | 사용자가 임의의 부가정보를 같은 UI에서 편집할 수 있게 하고, AI가 임의 URL을 만들거나 음식 사진만으로 상호를 추측하는 경로를 차단하기 위함. |
+| 2026-07-15 | 이미지 출처는 AI의 nullable `source` 후보로 받되 YouTube·Instagram·Threads·X·TikTok·GitHub 여섯 플랫폼만 서버가 URL을 확정한다. 직접 확인된 HTTPS 게시물 URL을 우선하고, GitHub은 `owner/repository`, 나머지는 검증된 handle 프로필로 fallback한다. | 쇼핑 상품과 표시명·로고만으로 추측한 계정은 오탐 위험이 커서 제외하고, AI가 임의 도메인을 저장하지 못하게 하기 위함. |
+| 2026-07-15 | HEIC/HEIF 로컬 미리보기는 `heic-decode`를 해당 파일 선택 시에만 dynamic import해 최대 320px JPEG blob을 파생한다. 디코딩 실패는 플레이스홀더로 복구하고 원본 업로드는 허용한다. 추가 모달은 성공 1건 이상·실패 0건일 때만 닫는다. | Chrome은 원본 HEIC blob URL을 `<img>`로 디코딩하지 못하고, 부분 실패 시 모달을 닫으면 재시도 경로가 사라지기 때문. |
 
 ## 알려진 이슈 / 기술 부채
 
@@ -154,12 +157,14 @@
 - Supabase 이미지 migration 적용 및 500 복구 완료(2026-07-14): 원격에 누락된 `0009_usage_byok.sql`, `20260713141607_image_items.sql` 때문에 API가 존재하지 않는 `search_bookmarks(..., p_kind)` 시그니처를 호출해 `GET /api/bookmarks` 500이 발생했다. 두 migration을 `bun x supabase db push --linked --yes`로 적용하고 migration list의 local/remote 일치, 원격 DB lint `No schema errors found`, 테스트 계정의 실제 `GET /api/bookmarks` 200과 link/image 통합 응답을 확인했다. push 후 pg-delta catalog cache의 임시 인증서 경고가 있었으나 migration 이력·스키마·API를 별도 검증해 적용 성공을 확인했다.
 - 이미지 UI 수동 확인 완료(사용자, 2026-07-14): 명시적 저장·카드 전체 클릭·미리보기/원본 전환과 원본 파일 크기 표시를 확인했다. 자동 회귀는 웹 테스트와 프로덕션 build로 고정한다.
 - 범용 메타데이터·식당 지도 링크 검증 완료(2026-07-14): `shared 18 + ai 8 + api 107 + web 93 = 226` 테스트와 typecheck, Biome lint, API/web build가 통과했다. 원격에 `20260713155145_bookmark_metadata.sql`을 적용했고 local/remote migration 이력 일치와 DB lint `No schema errors found`를 확인했다. 기존 식당 이미지 2건(`방이동 돈까스 오마카세 신죠오 사사게요`, `대전 이키야 나고야식 미소카츠`)을 재분석해 모두 `aiStatus='done'`, `네이버지도` URL host `map.naver.com`을 확인했다.
+- 이미지 출처·HEIC·모달 후속 자동 검증 완료(2026-07-15): `shared 18 + ai 11 + api 117 + web 100 = 246` 테스트, typecheck, Biome lint, API/web build가 통과했다. 여섯 플랫폼 URL 정책, 이미지에만 출처 병합, 사용자 metadata 보존, HEIC 파생 preview URL·원본 File 업로드·실패 placeholder·URL revoke, 전체 성공/부분 실패/재시도 모달 전이를 회귀 테스트로 고정했다. 프로덕션 client build에서 `heic-decode` 1.46MB는 초기 index가 아닌 별도 lazy chunk로 분리됐다. 빌드 산출물을 임시 포트에서 기동해 API health 200·무토큰 `/api/me` 401, 웹 HTML·`sw.js`·manifest 200도 확인했다.
 
 ## 사용자 확인 필요
 
 - (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
 - (해소 2026-07-14) 마이그레이션 0009 + 이미지 항목 원격 적용 완료. 원격 migration list, DB lint, 실제 인증 API 200으로 확인했다.
 - **이미지 실환경 확인**: 원격의 기존 식당 JPEG 이미지 2건을 재분석해 두 건 모두 `aiStatus='done'`과 서버가 만든 `map.naver.com` 검색 링크를 확인했다. 남은 확인은 식당명 단서가 없는 음식 사진에 지도 링크가 생기지 않는 실호출, 공개 인스타그램/스레드 식당 링크, HEIC 신규 등록, 여러 장 동시 저장, unsigned Storage URL 403/404, iOS 단축어와 PWA 공유 시트, 이미지 리마인더 클릭이다.
+- **출처 링크·HEIC 실환경 확인**: YouTube·Instagram·Threads·X·TikTok·GitHub handle/게시물/저장소가 선명한 실제 이미지의 재분석 링크와 Chrome의 HEIC 실물 미리보기·저장·모달 종료는 사용자 실데이터로 확인할 항목이다. 표시명·로고만 있는 이미지에 링크가 생기지 않는지도 함께 확인한다.
 - **카테고리 순서 변경 DND 실사용 확인**: 데스크톱 dev 브라우저에서 위 방향 드래그(핸들 → 위 항목)는 자동화로 검증 완료(순서 변경 + 서버 저장 + 새로고침 유지). 아래 방향 드래그는 agent-browser의 합성 드래그(중간 pointermove 부족)에서 반영되지 않았는데 앱 버그인지 자동화 한계인지 미확정 — 실제 마우스/터치로 아래 방향 드래그 1회와 iOS Safari/PWA 터치 드래그를 직접 확인 필요(사용자가 추가 자동화 검증은 생략하기로 함, 2026-07-13).
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
 

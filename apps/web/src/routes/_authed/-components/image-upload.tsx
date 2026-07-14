@@ -2,15 +2,22 @@ import type { Bookmark } from "@my-bookmark/shared";
 import { ImagePlus, RefreshCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createImage } from "../../../lib/api-client";
+import { createHeicPreviewBlob, isHeicFile } from "./heic-preview";
 
 type UploadStatus = "selected" | "queued" | "uploading" | "success" | "failed";
 
 interface UploadItem {
   id: string;
   file: File;
-  previewUrl: string;
+  previewUrl: string | null;
+  previewStatus: "loading" | "ready" | "failed";
   status: UploadStatus;
   error: string | null;
+}
+
+export interface UploadSummary {
+  successCount: number;
+  failureCount: number;
 }
 
 export function ImageUpload({
@@ -21,13 +28,14 @@ export function ImageUpload({
   onSelectionChange,
 }: {
   initialFiles?: File[];
-  onAllSettled?: () => void;
+  onAllSettled?: (summary: UploadSummary) => void;
   onUploaded: (bookmark: Bookmark) => void;
   onBusyChange?: (busy: boolean) => void;
   onSelectionChange?: () => void;
 }) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const previewUrls = useRef(new Set<string>());
+  const activeItemIds = useRef(new Set<string>());
   const initialFilesQueued = useRef(false);
   const wasBusy = useRef(false);
   const busy = items.some(
@@ -37,16 +45,20 @@ export function ImageUpload({
 
   useEffect(() => {
     onBusyChange?.(busy);
-    if (wasBusy.current && !busy) {
-      onAllSettled?.();
+    if (wasBusy.current && !busy && !hasSelected) {
+      onAllSettled?.({
+        successCount: items.filter((item) => item.status === "success").length,
+        failureCount: items.filter((item) => item.status === "failed").length,
+      });
     }
     wasBusy.current = busy;
-  }, [busy, onAllSettled, onBusyChange]);
+  }, [busy, hasSelected, items, onAllSettled, onBusyChange]);
   useEffect(
     () => () => {
       for (const url of previewUrls.current) {
         URL.revokeObjectURL(url);
       }
+      activeItemIds.current.clear();
     },
     [],
   );
@@ -56,6 +68,25 @@ export function ImageUpload({
       current.map((item) => (item.id === id ? { ...item, ...updates } : item)),
     );
   }, []);
+
+  const prepareHeicPreview = useCallback(
+    async (id: string, file: File) => {
+      try {
+        const blob = await createHeicPreviewBlob(file);
+        if (!activeItemIds.current.has(id)) {
+          return;
+        }
+        const previewUrl = URL.createObjectURL(blob);
+        previewUrls.current.add(previewUrl);
+        updateItem(id, { previewUrl, previewStatus: "ready" });
+      } catch {
+        if (activeItemIds.current.has(id)) {
+          updateItem(id, { previewStatus: "failed" });
+        }
+      }
+    },
+    [updateItem],
+  );
 
   const uploadItem = useCallback(
     async (item: UploadItem) => {
@@ -89,17 +120,27 @@ export function ImageUpload({
   const enqueue = useCallback(
     (files: File[]) => {
       const entries = files
-        .filter((file) => file.type.startsWith("image/"))
+        .filter((file) => file.type.startsWith("image/") || isHeicFile(file))
         .map((file) => {
-          const previewUrl = URL.createObjectURL(file);
-          previewUrls.current.add(previewUrl);
-          return {
-            id: crypto.randomUUID(),
+          const id = crypto.randomUUID();
+          const heic = isHeicFile(file);
+          const previewUrl = heic ? null : URL.createObjectURL(file);
+          if (previewUrl) {
+            previewUrls.current.add(previewUrl);
+          }
+          activeItemIds.current.add(id);
+          const entry = {
+            id,
             file,
             previewUrl,
+            previewStatus: heic ? ("loading" as const) : ("ready" as const),
             status: "selected" as const,
             error: null,
           };
+          if (heic) {
+            void prepareHeicPreview(id, file);
+          }
+          return entry;
         });
       if (entries.length === 0) {
         return;
@@ -107,7 +148,7 @@ export function ImageUpload({
       setItems((current) => [...current, ...entries]);
       onSelectionChange?.();
     },
-    [onSelectionChange],
+    [onSelectionChange, prepareHeicPreview],
   );
 
   function startSelectedUploads() {
@@ -127,8 +168,11 @@ export function ImageUpload({
   }, [enqueue, initialFiles]);
 
   function removeItem(item: UploadItem) {
-    URL.revokeObjectURL(item.previewUrl);
-    previewUrls.current.delete(item.previewUrl);
+    activeItemIds.current.delete(item.id);
+    if (item.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl);
+      previewUrls.current.delete(item.previewUrl);
+    }
     setItems((current) =>
       current.filter((candidate) => candidate.id !== item.id),
     );
@@ -170,15 +214,34 @@ export function ImageUpload({
               className="flex items-center gap-3 rounded-xl border border-zinc-200 p-2 dark:border-zinc-800"
               key={item.id}
             >
-              <img
-                alt=""
-                className="h-12 w-12 rounded-lg object-cover"
-                src={item.previewUrl}
-              />
+              {item.previewStatus === "ready" && item.previewUrl ? (
+                <img
+                  alt=""
+                  className="h-12 w-12 rounded-lg object-cover"
+                  src={item.previewUrl}
+                />
+              ) : item.previewStatus === "failed" ? (
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800">
+                  HEIC
+                </div>
+              ) : (
+                <div
+                  aria-label="HEIC 미리보기 준비 중"
+                  className="h-12 w-12 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800"
+                  role="img"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{item.file.name}</p>
                 <p className="text-xs text-zinc-500">
-                  {item.status === "selected" ? "선택됨" : null}
+                  {item.status === "selected" &&
+                  item.previewStatus === "loading"
+                    ? "HEIC 미리보기 준비 중…"
+                    : null}
+                  {item.status === "selected" &&
+                  item.previewStatus !== "loading"
+                    ? "선택됨"
+                    : null}
                   {item.status === "queued" ? "대기 중" : null}
                   {item.status === "uploading" ? "업로드 중…" : null}
                   {item.status === "success" ? "완료" : null}

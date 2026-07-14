@@ -110,11 +110,16 @@ export function BookmarkDialog({
           </p>
           <ImageUpload
             onBusyChange={setImageBusy}
-            onUploaded={() => {
+            onAllSettled={({ successCount, failureCount }) => {
+              if (successCount === 0 || failureCount > 0) {
+                return;
+              }
               toast.success("이미지를 저장했어요");
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
               void queryClient.invalidateQueries({ queryKey: ["categories"] });
+              onClose();
             }}
+            onUploaded={() => undefined}
           />
         </div>
       ) : (

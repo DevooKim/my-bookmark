@@ -377,10 +377,12 @@ describe("BookmarkDialog", () => {
         filename: "sample.png",
       },
     });
+    const onClose = vi.fn();
     const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     render(
       <QueryClientProvider client={queryClient}>
-        <BookmarkDialog categories={[]} onClose={vi.fn()} />
+        <BookmarkDialog categories={[]} onClose={onClose} />
       </QueryClientProvider>,
     );
 
@@ -395,6 +397,44 @@ describe("BookmarkDialog", () => {
     expect(createImage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
     await waitFor(() => expect(createImage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["bookmarks"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["categories"] });
+  });
+
+  it("keeps partial failures open and closes after a successful retry", async () => {
+    URL.createObjectURL = vi.fn((file: File) => `blob:${file.name}`);
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(createImage)
+      .mockResolvedValueOnce(imageBookmark)
+      .mockRejectedValueOnce(new Error("upload failed"));
+    const onClose = vi.fn();
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BookmarkDialog categories={[]} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이미지" }));
+    fireEvent.change(screen.getByLabelText("이미지 선택"), {
+      target: {
+        files: [
+          new File(["one"], "one.png", { type: "image/png" }),
+          new File(["two"], "two.png", { type: "image/png" }),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "이미지 저장" }));
+
+    expect(
+      await screen.findByRole("button", { name: "다시 시도" }),
+    ).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    vi.mocked(createImage).mockResolvedValueOnce(imageBookmark);
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   });
 
   it("allows closing before save and prevents it while upload is active", async () => {

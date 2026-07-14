@@ -3,6 +3,7 @@ import { PRESET_MODEL } from "@my-bookmark/ai";
 import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
 import { fetchMetadata, type PageMetadata } from "./metadata";
+import { buildSourceMetadataEntry } from "./source-link";
 
 interface DbError {
   code?: string;
@@ -152,6 +153,7 @@ export async function categorizeBookmark({
         outcome.analysis,
         outcome.model,
         bookmarkMetadataSchema.parse(bookmark.metadata ?? {}),
+        bookmark.kind,
       );
     } catch (error) {
       console.warn("AI categorization request failed", error);
@@ -195,6 +197,7 @@ export async function applyCategorizeResult(
   result: AnalyzeResult,
   aiModel: string,
   currentMetadata: Record<string, string> = {},
+  bookmarkKind: "link" | "image" = "link",
 ): Promise<void> {
   let categoryId: string | null = null;
 
@@ -212,22 +215,44 @@ export async function applyCategorizeResult(
   }
 
   let metadata: Record<string, string> | undefined;
+  let mergedMetadata = currentMetadata;
   if (result.place && result.place.confidence >= 0.85) {
-    try {
-      const query = [result.place.name.trim(), result.place.locality?.trim()]
-        .filter((part): part is string => Boolean(part))
-        .join(" ");
-      if (query.length > 0) {
-        metadata = bookmarkMetadataSchema.parse({
-          ...currentMetadata,
-          네이버지도: `https://map.naver.com/p/search/${encodeURIComponent(query)}`,
+    const query = [result.place.name.trim(), result.place.locality?.trim()]
+      .filter((part): part is string => Boolean(part))
+      .join(" ");
+    if (query.length > 0) {
+      const parsed = bookmarkMetadataSchema.safeParse({
+        ...mergedMetadata,
+        네이버지도: `https://map.naver.com/p/search/${encodeURIComponent(query)}`,
+      });
+      if (parsed.success) {
+        mergedMetadata = parsed.data;
+        metadata = parsed.data;
+      } else {
+        console.warn("Generated metadata merge failed", {
+          bookmarkId,
+          stage: "naver-map",
         });
       }
-    } catch (error) {
-      console.warn("Naver Map metadata creation failed", {
-        bookmarkId,
-        cause: error instanceof Error ? error.name : "unknown",
+    }
+  }
+
+  if (bookmarkKind === "image") {
+    const source = buildSourceMetadataEntry(result.source);
+    if (source) {
+      const parsed = bookmarkMetadataSchema.safeParse({
+        ...mergedMetadata,
+        [source.key]: source.value,
       });
+      if (parsed.success) {
+        mergedMetadata = parsed.data;
+        metadata = parsed.data;
+      } else {
+        console.warn("Generated metadata merge failed", {
+          bookmarkId,
+          stage: "source-link",
+        });
+      }
     }
   }
 

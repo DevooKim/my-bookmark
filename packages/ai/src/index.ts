@@ -7,4 +7,6 @@ export type {
   AnalyzeResult,
   CategorizeInput,
   CategorizeResult,
+  SourceCandidate,
+  SourcePlatform,
 } from "./types";

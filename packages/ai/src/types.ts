@@ -34,12 +34,32 @@ export interface PlaceCandidate {
   confidence: number;
 }
 
+export const sourcePlatforms = [
+  "youtube",
+  "instagram",
+  "threads",
+  "x",
+  "tiktok",
+  "github",
+] as const;
+
+export type SourcePlatform = (typeof sourcePlatforms)[number];
+
+export interface SourceCandidate {
+  platform: SourcePlatform;
+  handle: string | null;
+  postUrl: string | null;
+  repository: string | null;
+  confidence: number;
+}
+
 export interface AnalyzeResult {
   category: CategorizeResult;
   summaryTitle: string;
   summary?: string | null | undefined;
   tags: string[];
   place?: PlaceCandidate | null | undefined;
+  source?: SourceCandidate | null | undefined;
 }
 
 export interface AiProviderConfig {
