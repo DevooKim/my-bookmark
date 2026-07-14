@@ -2,6 +2,7 @@ import type {
   Bookmark,
   CategoryWithCount,
   CreateBookmarkRequest,
+  ReminderRecurrence,
 } from "@my-bookmark/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cloneElement, useEffect, useId, useRef, useState } from "react";
@@ -11,6 +12,7 @@ import {
   createBookmark,
   createCategory,
   createReminder,
+  rescheduleReminder,
   updateBookmark,
 } from "../../../lib/api-client";
 import { toDatetimeLocalValue } from "../../../lib/datetime";
@@ -324,25 +326,45 @@ export function EditBookmarkDialog({
 export function ReminderDialog({
   bookmark,
   onClose,
+  reminder,
 }: {
-  bookmark: Bookmark;
+  bookmark: Pick<Bookmark, "id" | "title" | "url">;
   onClose: () => void;
+  reminder?: {
+    id: string;
+    note: string | null;
+    recurrence: ReminderRecurrence;
+  };
 }) {
   const queryClient = useQueryClient();
   const defaultDate = toDatetimeLocalValue(
     new Date(Date.now() + 2 * 60 * 1000),
   );
   const [remindAt, setRemindAt] = useState(defaultDate);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(reminder?.note ?? "");
+  const [recurrence, setRecurrence] = useState<ReminderRecurrence>(
+    reminder?.recurrence ?? "none",
+  );
   const mutation = useMutation({
-    mutationFn: () =>
-      createReminder({
-        bookmarkId: bookmark.id,
+    mutationFn: () => {
+      const schedule = {
         remindAt: new Date(remindAt).toISOString(),
         note: note.trim() || null,
-      }),
+        recurrence,
+        recurrenceTimezone:
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      };
+      return reminder
+        ? rescheduleReminder(reminder.id, schedule)
+        : createReminder({
+            bookmarkId: bookmark.id,
+            ...schedule,
+          });
+    },
     onSuccess: () => {
-      toast.success("리마인더를 만들었어요");
+      toast.success(
+        reminder ? "리마인더를 다시 설정했어요" : "리마인더를 만들었어요",
+      );
       void queryClient.invalidateQueries({ queryKey: ["reminders"] });
       onClose();
     },
@@ -375,6 +397,20 @@ export function ReminderDialog({
             type="datetime-local"
             value={remindAt}
           />
+        </Field>
+        <Field label="반복">
+          <select
+            className="input"
+            onChange={(event) =>
+              setRecurrence(event.target.value as ReminderRecurrence)
+            }
+            value={recurrence}
+          >
+            <option value="none">반복 없음</option>
+            <option value="daily">매일</option>
+            <option value="weekly">매주</option>
+            <option value="monthly">매월</option>
+          </select>
         </Field>
         <Field label="메모(선택)">
           <textarea

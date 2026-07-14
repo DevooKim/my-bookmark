@@ -34,10 +34,12 @@ import {
   pushTestResponseSchema,
   type ReminderResponse,
   type RemindersResponse,
+  type RescheduleReminderRequest,
   reminderResponseSchema,
   remindersResponseSchema,
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
+  type UpdateReminderRequest,
 } from "@my-bookmark/shared";
 import { navigateToLogin } from "./auth-redirect";
 import { getSupabase } from "./supabase";
@@ -399,6 +401,32 @@ export async function createReminder(
   body: CreateReminderRequest,
 ): Promise<ReminderResponse> {
   const response = await apiFetch("/api/reminders", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    reminderResponseSchema.parse(json),
+  );
+}
+
+export async function updateReminder(
+  id: string,
+  body: UpdateReminderRequest,
+): Promise<ReminderResponse> {
+  const response = await apiFetch(`/api/reminders/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  return parseJsonResponse(response, (json) =>
+    reminderResponseSchema.parse(json),
+  );
+}
+
+export async function rescheduleReminder(
+  id: string,
+  body: RescheduleReminderRequest,
+): Promise<ReminderResponse> {
+  const response = await apiFetch(`/api/reminders/${id}/reschedule`, {
     method: "POST",
     body: JSON.stringify(body),
   });
