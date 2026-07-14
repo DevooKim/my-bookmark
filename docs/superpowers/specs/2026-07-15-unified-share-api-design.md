@@ -10,7 +10,7 @@ iPhone 공유 시트에는 `북마크 저장` 단축어 하나만 노출한다. 
 
 새 엔드포인트는 `POST /api/share`다. Bearer JWT와 기존 범위 제한 API Key 인증을 모두 허용한다.
 
-요청은 `multipart/form-data`이고 필드 이름은 `item`이다.
+필드 이름은 `item`이다. URL 텍스트는 iOS 단축어의 폼 인코딩인 `application/x-www-form-urlencoded`와 multipart 텍스트를 모두 받고, 이미지 파일은 `multipart/form-data`로 받는다.
 
 - `item`이 텍스트 폼 필드이면 URL로 해석한다.
 - `item`이 파일 폼 필드이면 이미지로 해석한다.
@@ -44,7 +44,7 @@ iPhone 공유 시트에는 `북마크 저장` 단축어 하나만 노출한다. 
 5. `Content-Type`은 직접 설정하지 않고 단축어가 multipart boundary를 생성하게 한다.
 6. 반복 종료 후 성공·실패 건수를 알림으로 표시한다.
 
-서버의 입력 판별 덕분에 단축어 내부에는 URL/이미지 조건 분기가 필요 없다.
+단축어의 폼 필드 유형은 텍스트/파일 중 하나로 고정되므로 URL/이미지 조건 분기는 필요하다. 두 분기 모두 같은 `/api/share`와 같은 `item` 필드를 사용하며, 서버는 요청 인코딩과 part 유형으로 저장 흐름을 판별한다.
 
 ## 오류 처리와 보안
 

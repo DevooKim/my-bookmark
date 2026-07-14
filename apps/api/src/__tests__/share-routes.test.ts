@@ -80,6 +80,21 @@ describe("unified share route", () => {
     expect(createImage).not.toHaveBeenCalled();
   });
 
+  it("accepts a URL-encoded link form from iOS Shortcuts", async () => {
+    const { app, createLink } = createTestApp();
+    const response = await request(app)
+      .post("/api/share")
+      .set("X-API-Key", "bm_test")
+      .type("form")
+      .send({ item: "https://example.com/shortcut" });
+
+    expect(response.status).toBe(201);
+    expect(createLink).toHaveBeenCalledWith({
+      userId,
+      request: { url: "https://example.com/shortcut", mode: "ai" },
+    });
+  });
+
   it("creates an image from an API Key file item", async () => {
     const { app, createLink, createImage } = createTestApp();
     const response = await request(app)

@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: iOS 통합 공유 API 후속 개선 완료. `POST /api/share`가 단일 multipart `item`을 URL 또는 이미지로 판별해 기존 링크·이미지 생성 흐름으로 전달하므로 공유 시트에서 단축어 하나로 두 유형을 저장할 수 있다. 기존 `/api/bookmarks`와 `/api/images`는 그대로 유지한다.
-- **최종 갱신**: 2026-07-15 (iOS 링크·이미지 통합 공유 API)
+- **현재 Phase**: iOS 통합 공유 API 후속 개선 완료. `POST /api/share`가 URL-encoded 또는 multipart 텍스트 `item`과 multipart 이미지 `item`을 판별해 기존 링크·이미지 생성 흐름으로 전달하므로 공유 시트에서 단축어 하나로 두 유형을 저장할 수 있다. 기존 `/api/bookmarks`와 `/api/images`는 그대로 유지한다.
+- **최종 갱신**: 2026-07-15 (iOS 링크 폼 인코딩 호환)
 
 ## Phase 체크리스트
 
@@ -172,6 +172,7 @@
 - 메타데이터·카테고리·이미지 색상·리마인더 후속 자동 검증 완료(2026-07-15): `shared 21 + ai 13 + api 132 + web 112 = 278` 테스트와 typecheck, Biome lint, API/web production build가 통과했다. URL 메타데이터 공통 파란 hover, 모바일 카테고리 네 열 한 줄, Display P3 입력의 sRGB ICC WebP/JPEG, timezone 기반 일·주·월 반복과 월말 anchor, 누락 회차 건너뛰기, 조건부 cron claim, sent 목록 유지·다시 알림·반복 활성 토글·모든 표시 상태 수동 삭제를 회귀 테스트로 고정했다. 리뷰에서 발견한 cron과 PATCH의 동시 갱신 충돌은 기존 시각·활성 상태를 조건으로 한 낙관적 잠금과 409 응답으로 막았고, 비활성 단발 상태 금지와 timezone 변경 후 월 반복 anchor 재계산도 테스트로 고정했다. web build의 기존 dynamic import/chunk 경고와 API seed script의 기존 info 1건은 exit 0이다.
 - 반복 리마인더 원격 migration 적용 완료(2026-07-15): dry-run에서 `20260714162924_reminder_recurrence.sql` 하나만 확인한 뒤 push했다. pg-delta catalog cache의 임시 인증서 누락 경고가 재발했지만 local/remote migration 이력 일치, 원격 DB lint `No schema errors found`, `information_schema.columns` 읽기 쿼리에서 recurrence/timezone/day/enabled의 타입·nullable·기본값을 확인해 적용 성공을 별도 검증했다.
 - iOS 통합 공유 API 자동 검증 완료(2026-07-15): `shared 21 + ai 13 + api 140 + web 112 = 286` 테스트와 typecheck, Biome lint, API/web production build가 통과했다. URL 텍스트·HEIC 파일 분기, Bearer/API Key 인증, 누락·동시·잘못된 URL·예상 밖 multipart·복수 파일 거부, `/api/share` API Key rate limit을 RED→GREEN 테스트로 고정했다. 독립 리뷰에서 확인한 trailing slash rate-limit 우회는 `/share/` 하위 경로도 같은 제한에 포함해 막았고, multipart는 8KB 텍스트·필드 1개·파일 1개·단일 part로 제한해 추가/반복 필드를 거부한다. 기존 링크·이미지 API 회귀 테스트도 공용 생성 서비스 분리 후 통과했다. web build의 기존 dynamic import/chunk 경고와 API seed script의 기존 info 1건은 exit 0이다.
+- iOS 링크 폼 인코딩 호환 수정(2026-07-15): 단축어의 텍스트 폼이 `application/x-www-form-urlencoded`로 전송되어 multipart 전용 파서에서 `item`이 누락되던 400 오류를 재현 테스트로 고정했다. `/api/share`가 8KB 제한의 URL-encoded 폼과 기존 multipart를 모두 파싱하도록 수정했고, 단축어 문서에 URL은 순수 URL 추출 후 텍스트 폼으로, 이미지는 파일 폼으로 보내는 분기를 명시했다. 전체 자동 검증 결과는 `shared 21 + ai 13 + api 141 + web 112 = 287` 테스트다.
 
 ## 사용자 확인 필요
 

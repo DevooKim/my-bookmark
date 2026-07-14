@@ -4,7 +4,7 @@
 
 **Goal:** Add one `/api/share` multipart endpoint that accepts either a URL text field or an image file from a single iOS Shortcut while preserving the existing bookmark and image APIs.
 
-**Architecture:** Extract link and image creation orchestration into focused services, leaving HTTP parsing and authentication in route modules. The share router accepts one multipart field named `item`, rejects ambiguous input, and delegates to the same creation services as `/api/bookmarks` and `/api/images`.
+**Architecture:** Extract link and image creation orchestration into focused services, leaving HTTP parsing and authentication in route modules. The share router accepts a URL-encoded or multipart text `item` for links and a multipart file `item` for images, rejects ambiguous input, and delegates to the same creation services as `/api/bookmarks` and `/api/images`.
 
 **Tech Stack:** Express 5, Multer 2, Zod, Supabase, Vitest/Supertest, TypeScript 7, Bun workspaces
 
