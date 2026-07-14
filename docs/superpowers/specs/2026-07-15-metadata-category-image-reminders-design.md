@@ -43,6 +43,7 @@ resize·회전·품질·최대 크기는 변경하지 않는다. HEIC는 휴대 
 
 - `recurrence`: `none | daily | weekly | monthly`, 기본값 `none`
 - `recurrence_timezone`: IANA timezone 문자열, 기존 행 기본값 `UTC`
+- `recurrence_day`: 매월 반복의 최초 로컬 날짜 `1..31`, 다른 반복은 null
 - `is_enabled`: boolean, 기본값 `true`
 
 `remind_at`은 단발 알림의 설정 시각 또는 반복 알림의 다음 실행 시각이다. `sent_at`은 가장 최근 실제 클레임 시각이다. 기존 `pending | sent | cancelled` 상태는 유지한다.
@@ -60,7 +61,7 @@ resize·회전·품질·최대 크기는 변경하지 않는다. HEIC는 휴대 
 
 - 매일: 같은 로컬 시각의 다음 날
 - 매주: 같은 로컬 요일과 시각의 다음 주
-- 매월: 같은 로컬 날짜와 시각의 다음 달
+- 매월: `recurrence_day`에 보존한 최초 로컬 날짜와 같은 날짜·시각의 다음 달
 - 다음 달에 해당 날짜가 없으면 그 달의 마지막 날
 
 서버 중단 등으로 여러 회차가 지났다면 한 번만 알림을 보내고 현재 시각보다 미래인 가장 가까운 다음 회차까지 건너뛴다. 재활성화도 동일하게 과거 회차를 건너뛴다.
