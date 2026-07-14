@@ -131,6 +131,7 @@ describe("HomePage", () => {
           ...bookmark,
           metadata: {
             네이버지도: "https://map.naver.com/p/search/react",
+            공식사이트: "https://example.com/restaurant",
             지역: "서울 성수동",
           },
         },
@@ -151,6 +152,10 @@ describe("HomePage", () => {
     expect(localityLabels).toHaveLength(2);
     expect(localityLabels[0]?.parentElement?.className).toContain("truncate");
     expect(mapLinks[1]?.className).toContain("pointer-events-auto");
+    expect(mapLinks[0]?.className).toContain("hover:bg-[#03c75a]");
+    const websiteLink = screen.getByRole("link", { name: "공식사이트" });
+    expect(websiteLink.className).toContain("hover:bg-blue-100");
+    expect(websiteLink.className).not.toContain("hover:bg-[#03c75a]");
   });
 
   it("renders search controls without a library hero", async () => {

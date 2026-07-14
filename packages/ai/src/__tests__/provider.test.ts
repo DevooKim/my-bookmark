@@ -75,6 +75,9 @@ describe("OpenRouter preset provider", () => {
     expect(
       body.response_format.json_schema.schema.properties.source.required,
     ).toEqual(["platform", "handle", "postUrl", "repository", "confidence"]);
+    expect(
+      body.response_format.json_schema.schema.properties.tags,
+    ).toMatchObject({ minItems: 2, maxItems: 5 });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -158,6 +161,19 @@ describe("OpenRouter preset provider", () => {
 });
 
 describe("AI analysis response parsing", () => {
+  it("accepts two focused tags and rejects a single padded tag", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(
+      parseAnalyzeResponse({ ...analysis, tags: ["미소카츠", "천호"] }),
+    ).toMatchObject({ tags: ["미소카츠", "천호"] });
+    expect(
+      parseAnalyzeResponse({ ...analysis, tags: ["미소카츠"] }),
+    ).toBeNull();
+
+    warn.mockRestore();
+  });
+
   it("parses a complete analysis and rejects malformed analysis", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(parseAnalyzeResponse(analysis)).toEqual(analysis);
@@ -276,5 +292,15 @@ describe("AI analysis response parsing", () => {
     expect(systemPrompt()).toContain(
       "표시명이나 로고만으로 계정을 추측하지 않는다",
     );
+  });
+
+  it("asks for a small, non-redundant tag set without restaurant names", () => {
+    const prompt = systemPrompt();
+
+    expect(prompt).toContain("태그 2개로 충분하면 2개에서 멈춘다");
+    expect(prompt).toContain("TrueNAS와 NAS");
+    expect(prompt).toContain("돈까스, 돈카츠, 미소카츠");
+    expect(prompt).toContain("돈까스맛집, 천호맛집, 강동구맛집");
+    expect(prompt).toContain("식당 상호와 지점명은 tags에서 제외한다");
   });
 });

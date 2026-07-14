@@ -221,4 +221,21 @@ describe("category ordering", () => {
       screen.getByRole("button", { name: "📰 뉴스 순서 변경" }),
     ).toBeTruthy();
   });
+
+  it("uses a two-row mobile category layout and keeps one desktop row", async () => {
+    vi.mocked(listCategories).mockResolvedValue(categories);
+    renderCategorySection();
+
+    const input = await screen.findByDisplayValue("💻 개발");
+    const row = input.parentElement;
+    const handle = screen.getByRole("button", { name: "💻 개발 순서 변경" });
+
+    expect(row?.className).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+    expect(row?.className).toContain("sm:grid-cols-[auto_1fr_80px_auto]");
+    expect(handle.className).toContain("row-span-2");
+    expect(handle.className).toContain("sm:row-span-1");
+    expect(input.className).toContain("col-span-2");
+    expect(input.className).toContain("min-w-0");
+    expect(input.className).toContain("sm:col-span-1");
+  });
 });

@@ -39,6 +39,7 @@ import {
   type UpdateBookmarkRequest,
   type UpdateCategoryRequest,
 } from "@my-bookmark/shared";
+import { navigateToLogin } from "./auth-redirect";
 import { getSupabase } from "./supabase";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -51,6 +52,11 @@ export class ApiClientError extends Error {
   ) {
     super(message);
   }
+}
+
+function throwExpiredSession(): never {
+  navigateToLogin();
+  throw new ApiClientError("로그인이 필요합니다", 401);
 }
 
 async function getAccessToken() {
@@ -71,8 +77,11 @@ async function refreshAccessToken() {
   return data.session?.access_token;
 }
 
-async function apiFetch(path: string, init: RequestInit = {}, retry = true) {
+async function apiFetch(path: string, init: RequestInit = {}) {
   const token = await getAccessToken();
+  if (!token) {
+    throwExpiredSession();
+  }
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
@@ -84,18 +93,29 @@ async function apiFetch(path: string, init: RequestInit = {}, retry = true) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${apiUrl}${path}`, { ...init, headers });
 
-  if (response.status === 401 && retry) {
-    const refreshedToken = await refreshAccessToken();
-    if (refreshedToken) {
-      headers.set("Authorization", `Bearer ${refreshedToken}`);
-      return fetch(`${apiUrl}${path}`, { ...init, headers });
+  if (response.status === 401) {
+    let refreshedToken: string | undefined;
+    try {
+      refreshedToken = await refreshAccessToken();
+    } catch {
+      throwExpiredSession();
     }
+    if (!refreshedToken) {
+      throwExpiredSession();
+    }
+    headers.set("Authorization", `Bearer ${refreshedToken}`);
+    const retriedResponse = await fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers,
+    });
+    if (retriedResponse.status === 401) {
+      throwExpiredSession();
+    }
+    return retriedResponse;
   }
 
   return response;

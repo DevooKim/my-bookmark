@@ -17,20 +17,9 @@ export const Route = createFileRoute("/_authed/images/$id")({
   component: ImageDetailPage,
 });
 
-const fileSizeFormatter = new Intl.NumberFormat("ko-KR", {
-  maximumFractionDigits: 1,
+const createdDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  dateStyle: "medium",
 });
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  const kilobytes = bytes / 1024;
-  if (kilobytes < 1024) {
-    return `${fileSizeFormatter.format(kilobytes)} KB`;
-  }
-  return `${fileSizeFormatter.format(kilobytes / 1024)} MB`;
-}
 
 function ImageDetailPage() {
   const { id } = Route.useParams();
@@ -256,13 +245,7 @@ export function ImageDetailView({
           </div>
         ) : null}
         <p className="text-xs text-zinc-500">
-          {bookmark.image.filename ?? "파일명 없음"} · {bookmark.image.width}×
-          {bookmark.image.height} · {formatFileSize(bookmark.image.fileSize)} ·{" "}
-          {bookmark.aiStatus === "pending"
-            ? "분석 중"
-            : bookmark.aiStatus === "failed"
-              ? "분석 실패"
-              : "분석 완료"}
+          등록일 {createdDateFormatter.format(new Date(bookmark.createdAt))}
         </p>
       </section>
     </main>

@@ -1,17 +1,30 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createImage, listBookmarks } from "./api-client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  navigateToLogin: vi.fn(),
+  refreshSession: vi.fn(),
+}));
 
 vi.mock("./supabase", () => ({
   getSupabase: vi.fn(async () => ({
     auth: {
-      getSession: vi.fn(async () => ({
-        data: { session: { access_token: "token" } },
-        error: null,
-      })),
-      refreshSession: vi.fn(),
+      getSession: mocks.getSession,
+      refreshSession: mocks.refreshSession,
     },
   })),
 }));
+vi.mock("./auth-redirect", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./auth-redirect")>()),
+  navigateToLogin: mocks.navigateToLogin,
+}));
+
+import {
+  ApiClientError,
+  createImage,
+  getMe,
+  listBookmarks,
+} from "./api-client";
 
 const imageBookmark = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -40,7 +53,102 @@ const imageBookmark = {
   updatedAt: "2026-07-13T10:00:00.000Z",
 };
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.getSession.mockResolvedValue({
+    data: { session: { access_token: "token" } },
+    error: null,
+  });
+  mocks.refreshSession.mockResolvedValue({
+    data: { session: { access_token: "refreshed-token" } },
+    error: null,
+  });
+});
+
 afterEach(() => vi.unstubAllGlobals());
+
+describe("web session expiry", () => {
+  it("redirects without making a request when the session has no token", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMe()).rejects.toMatchObject({ status: 401 });
+
+    expect(mocks.navigateToLogin).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects when refreshing an initial 401 fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+    );
+    mocks.refreshSession.mockRejectedValue(new Error("refresh failed"));
+
+    await expect(getMe()).rejects.toMatchObject({ status: 401 });
+
+    expect(mocks.navigateToLogin).toHaveBeenCalledOnce();
+  });
+
+  it("redirects when refresh succeeds without a new session", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ userId: "unexpected" }), {
+          status: 200,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.refreshSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(getMe()).rejects.toMatchObject({ status: 401 });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(mocks.navigateToLogin).toHaveBeenCalledOnce();
+  });
+
+  it("redirects when a refreshed request is still unauthorized", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMe()).rejects.toMatchObject({ status: 401 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mocks.navigateToLogin).toHaveBeenCalledOnce();
+  });
+
+  it("does not treat an upstream auth outage as an expired session", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ error: { message: "JWKS unavailable" } }),
+            { status: 502 },
+          ),
+        ),
+    );
+
+    await expect(getMe()).rejects.toEqual(
+      new ApiClientError("JWKS unavailable", 502, {
+        error: { message: "JWKS unavailable" },
+      }),
+    );
+    expect(mocks.navigateToLogin).not.toHaveBeenCalled();
+  });
+});
 
 describe("image API client", () => {
   it("adds the image kind to bookmark list queries", async () => {

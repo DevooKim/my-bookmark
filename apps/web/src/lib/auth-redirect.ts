@@ -8,6 +8,13 @@ export function loginUrlForLocation(location: LocationParts): string {
   return `/login?redirect=${encodeURIComponent(redirect)}`;
 }
 
+export function navigateToLogin(
+  location: LocationParts = window.location,
+  assign: (url: string) => void = (url) => window.location.assign(url),
+): void {
+  assign(loginUrlForLocation(location));
+}
+
 export function parsePostLoginRedirect(value: unknown): string {
   if (
     typeof value !== "string" ||

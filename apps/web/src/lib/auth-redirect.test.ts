@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { loginUrlForLocation, parsePostLoginRedirect } from "./auth-redirect";
+import { describe, expect, it, vi } from "vitest";
+import {
+  loginUrlForLocation,
+  navigateToLogin,
+  parsePostLoginRedirect,
+} from "./auth-redirect";
 
 describe("authentication redirects", () => {
   it("preserves an image share batch through login", () => {
@@ -17,5 +21,18 @@ describe("authentication redirects", () => {
     expect(parsePostLoginRedirect("/\\evil.example/path")).toBe("/");
     expect(parsePostLoginRedirect("/safe\npath")).toBe("/");
     expect(parsePostLoginRedirect(null)).toBe("/");
+  });
+
+  it("navigates to login while preserving the current protected location", () => {
+    const assign = vi.fn();
+
+    navigateToLogin(
+      { pathname: "/images/id", search: "?view=preview" },
+      assign,
+    );
+
+    expect(assign).toHaveBeenCalledWith(
+      "/login?redirect=%2Fimages%2Fid%3Fview%3Dpreview",
+    );
   });
 });

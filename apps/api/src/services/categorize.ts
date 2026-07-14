@@ -256,7 +256,35 @@ export async function applyCategorizeResult(
     }
   }
 
-  await markDone(db, userId, bookmarkId, categoryId, result, aiModel, metadata);
+  await markDone(
+    db,
+    userId,
+    bookmarkId,
+    categoryId,
+    {
+      ...result,
+      tags: removePlaceNameTags(result.tags, result.place?.name),
+    },
+    aiModel,
+    metadata,
+  );
+}
+
+function normalizeTagIdentity(value: string): string {
+  return value.toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+export function removePlaceNameTags(
+  tags: string[],
+  placeName: string | null | undefined,
+): string[] {
+  if (!placeName) {
+    return tags;
+  }
+  const normalizedPlaceName = normalizeTagIdentity(placeName);
+  return tags.filter(
+    (tag) => normalizeTagIdentity(tag) !== normalizedPlaceName,
+  );
 }
 
 async function loadBookmark(

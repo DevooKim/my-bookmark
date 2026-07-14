@@ -73,11 +73,13 @@ export function SortableList({
 export function SortableRow({
   id,
   handleLabel,
+  handleClassName,
   className,
   children,
 }: {
   id: string;
   handleLabel: string;
+  handleClassName?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -91,7 +93,7 @@ export function SortableRow({
     >
       <button
         aria-label={handleLabel}
-        className="icon-button cursor-grab touch-none"
+        className={`icon-button cursor-grab touch-none ${handleClassName ?? ""}`}
         type="button"
         {...attributes}
         {...listeners}

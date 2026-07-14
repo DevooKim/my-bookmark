@@ -61,10 +61,16 @@ describe("ImageDetailView", () => {
     expect(image.className).toContain("h-[70dvh]");
     expect(image.className).toContain("max-h-[48rem]");
     expect(image.className).toContain("object-contain");
-    expect(screen.getByText(/5\.5 MB/)).toBeTruthy();
+    expect(screen.getByText("등록일 2026. 7. 12.")).toBeTruthy();
+    expect(screen.queryByText(/sample\.png/)).toBeNull();
+    expect(screen.queryByText(/2×2/)).toBeNull();
+    expect(screen.queryByText(/5\.5 MB/)).toBeNull();
+    expect(screen.queryByText("분석 완료")).toBeNull();
     const mapLink = screen.getByRole("link", { name: "네이버지도" });
     expect(mapLink.getAttribute("target")).toBe("_blank");
     expect(mapLink.getAttribute("rel")).toBe("noreferrer");
+    expect(mapLink.className).toContain("hover:bg-[#03c75a]");
+    expect(mapLink.className).toContain("hover:text-white");
     const locality = screen.getByText("지역: 강원도 강릉");
     expect(locality).toBeTruthy();
     expect(locality.parentElement?.className).not.toContain("truncate");

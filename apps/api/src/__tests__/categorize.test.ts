@@ -117,6 +117,38 @@ describe("applyCategorizeResult", () => {
     });
   });
 
+  it("removes exact normalized restaurant names from generated tags", async () => {
+    const db = new FakeDb();
+    await applyCategorizeResult(
+      db,
+      "user",
+      "bookmark",
+      db.categories,
+      {
+        ...analysis({ type: "none" }),
+        tags: [
+          "신죠오 사사게요 천호점",
+          "신죠오·사사게요-천호점",
+          "미소카츠",
+          "천호",
+        ],
+        place: {
+          name: "신죠오 사사게요 천호점",
+          locality: "서울 강동구",
+          confidence: 0.9,
+        },
+      },
+      "google/gemini-3.1-flash-lite-20260507",
+      db.bookmark.metadata,
+    );
+
+    expect(db.bookmarkUpdates.at(-1)).toMatchObject({
+      title: "웹 접근성 실전 안내",
+      tags: ["미소카츠", "천호"],
+      ai_status: "done",
+    });
+  });
+
   it("leaves metadata unchanged below the place confidence threshold", async () => {
     const db = new FakeDb();
     await applyCategorizeResult(
