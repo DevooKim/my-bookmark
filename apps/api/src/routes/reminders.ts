@@ -60,6 +60,8 @@ interface RemindersDb {
     recurrenceTimezone: string;
     recurrenceDay: number | null;
     isEnabled: boolean;
+    expectedRemindAt: string;
+    expectedIsEnabled: boolean;
   }): Promise<ReminderDbRow | null>;
   rescheduleReminder(input: {
     userId: string;
@@ -127,15 +129,26 @@ export function createRemindersRouter(
     const recurrenceTimezone =
       body.recurrenceTimezone ?? current.recurrence_timezone;
     assertValidTimezone(recurrenceTimezone);
-    if (body.isEnabled === false && recurrence === "none") {
+    let remindAt = body.remindAt ?? current.remind_at;
+    const isEnabled = body.isEnabled ?? current.is_enabled;
+    if (recurrence === "none" && !isEnabled) {
       throw new HttpError(
         400,
         API_ERROR_CODES.VALIDATION_ERROR,
         "Only recurring reminders can be disabled",
       );
     }
-    let remindAt = body.remindAt ?? current.remind_at;
-    const isEnabled = body.isEnabled ?? current.is_enabled;
+    const scheduleChanged =
+      body.remindAt !== undefined ||
+      body.recurrence !== undefined ||
+      body.recurrenceTimezone !== undefined;
+    const effectiveRecurrenceDay =
+      recurrence === "monthly"
+        ? scheduleChanged
+          ? localDayInTimezone(new Date(remindAt), recurrenceTimezone)
+          : (current.recurrence_day ??
+            localDayInTimezone(new Date(remindAt), recurrenceTimezone))
+        : null;
     if (
       body.isEnabled === true &&
       !current.is_enabled &&
@@ -147,31 +160,27 @@ export function createRemindersRouter(
         recurrence,
         timeZone: recurrenceTimezone,
         now: new Date(),
-        recurrenceDay: current.recurrence_day,
+        recurrenceDay: effectiveRecurrenceDay,
       }).toISOString();
     }
-    const scheduleChanged =
-      body.remindAt !== undefined ||
-      body.recurrence !== undefined ||
-      body.recurrenceTimezone !== undefined;
-    const reminder = await getDb().updatePendingReminder({
+    const reminder = await db.updatePendingReminder({
       userId,
       id,
       remindAt,
       note: body.note === undefined ? current.note : body.note,
       recurrence,
       recurrenceTimezone,
-      recurrenceDay:
-        recurrence === "monthly"
-          ? scheduleChanged
-            ? localDayInTimezone(new Date(remindAt), recurrenceTimezone)
-            : (current.recurrence_day ??
-              localDayInTimezone(new Date(remindAt), recurrenceTimezone))
-          : null,
+      recurrenceDay: effectiveRecurrenceDay,
       isEnabled,
+      expectedRemindAt: current.remind_at,
+      expectedIsEnabled: current.is_enabled,
     });
     if (!reminder) {
-      throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Reminder not found");
+      throw new HttpError(
+        409,
+        API_ERROR_CODES.CONFLICT,
+        "Reminder changed while it was being updated",
+      );
     }
     response.json({ reminder: mapReminderWithBookmark(reminder) });
   });
@@ -293,6 +302,8 @@ export function createSupabaseRemindersDb(): RemindersDb {
         .eq("user_id", input.userId)
         .eq("id", input.id)
         .eq("status", "pending")
+        .eq("remind_at", input.expectedRemindAt)
+        .eq("is_enabled", input.expectedIsEnabled)
         .select("*,bookmarks(id,kind,url,title)")
         .maybeSingle();
       if (error) {

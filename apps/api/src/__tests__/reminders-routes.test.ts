@@ -1,7 +1,7 @@
 import { API_ERROR_CODES } from "@my-bookmark/shared";
 import express from "express";
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { requireAuth } from "../middleware/auth";
 import { errorMiddleware } from "../middleware/error";
 import { createRemindersRouter } from "../routes/reminders";
@@ -36,6 +36,7 @@ interface ReminderRow {
 }
 
 class FakeRemindersDb {
+  beforeUpdate: ((row: ReminderRow) => void) | null = null;
   bookmarks = new Map([[bookmarkId, userId]]);
   reminders: ReminderRow[] = [
     {
@@ -195,6 +196,8 @@ class FakeRemindersDb {
     recurrenceTimezone: string;
     recurrenceDay: number | null;
     isEnabled: boolean;
+    expectedRemindAt: string;
+    expectedIsEnabled: boolean;
   }) {
     const row = this.reminders.find(
       (reminder) =>
@@ -203,6 +206,14 @@ class FakeRemindersDb {
         reminder.status === "pending",
     );
     if (!row) {
+      return Promise.resolve(null);
+    }
+    this.beforeUpdate?.(row);
+    this.beforeUpdate = null;
+    if (
+      row.remind_at !== input.expectedRemindAt ||
+      row.is_enabled !== input.expectedIsEnabled
+    ) {
       return Promise.resolve(null);
     }
     row.remind_at = input.remindAt;
@@ -432,5 +443,67 @@ describe("reminders routes", () => {
       recurrence: "monthly",
       isEnabled: true,
     });
+  });
+
+  it("rejects a stale patch after cron advances the same recurring row", async () => {
+    const db = new FakeRemindersDb();
+    db.beforeUpdate = (row) => {
+      row.remind_at = "2026-07-16T12:10:00.000Z";
+    };
+    const response = await request(createTestApp(db))
+      .patch(`/api/reminders/${recurringReminderId}`)
+      .set("Authorization", "Bearer test-token")
+      .send({ note: "stale update" });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe(API_ERROR_CODES.CONFLICT);
+    expect(
+      db.reminders.find((reminder) => reminder.id === recurringReminderId)
+        ?.note,
+    ).toBeNull();
+  });
+
+  it("does not turn a disabled recurring reminder into a disabled one-off", async () => {
+    const db = new FakeRemindersDb();
+    const response = await request(createTestApp(db))
+      .patch(`/api/reminders/${recurringReminderId}`)
+      .set("Authorization", "Bearer test-token")
+      .send({ recurrence: "none" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe(API_ERROR_CODES.VALIDATION_ERROR);
+    expect(
+      db.reminders.find((reminder) => reminder.id === recurringReminderId)
+        ?.recurrence,
+    ).toBe("daily");
+  });
+
+  it("recomputes a monthly anchor before enabling in a new timezone", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T00:00:00.000Z"));
+    try {
+      const db = new FakeRemindersDb();
+      const row = db.reminders.find(
+        (reminder) => reminder.id === recurringReminderId,
+      );
+      if (!row) {
+        throw new Error("test reminder missing");
+      }
+      row.remind_at = "2026-01-31T23:30:00.000Z";
+      row.recurrence = "monthly";
+      row.recurrence_timezone = "UTC";
+      row.recurrence_day = 31;
+      row.is_enabled = false;
+
+      const response = await request(createTestApp(db))
+        .patch(`/api/reminders/${recurringReminderId}`)
+        .set("Authorization", "Bearer test-token")
+        .send({ isEnabled: true, recurrenceTimezone: "Asia/Tokyo" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.reminder.remindAt).toBe("2026-07-31T23:30:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
