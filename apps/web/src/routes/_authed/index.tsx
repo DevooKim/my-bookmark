@@ -255,7 +255,7 @@ export function HomePage() {
             }
             return (
               <div
-                className="absolute left-0 top-0 w-full pb-3 focus-within:z-10"
+                className="virtual-bookmark-row absolute left-0 top-0 w-full pb-3 focus-within:z-10"
                 data-index={virtualItem.index}
                 key={virtualItem.key}
                 ref={virtualizer.measureElement}

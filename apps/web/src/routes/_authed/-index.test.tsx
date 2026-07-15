@@ -250,6 +250,7 @@ describe("HomePage", () => {
     const menuButton = await screen.findByRole("button", {
       name: "북마크 메뉴",
     });
+    expect(menuButton.closest(".virtual-bookmark-row")).not.toBeNull();
     expect(menuButton.getAttribute("aria-haspopup")).toBeNull();
     expect(menuButton.getAttribute("aria-controls")).toBeTruthy();
     expect(menuButton.getAttribute("aria-expanded")).toBe("false");
