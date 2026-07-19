@@ -124,7 +124,9 @@ export function RemindersPage() {
                     }`}
                     data-reminder-date
                   >
-                    {new Date(reminder.remindAt).toLocaleString()}
+                    {new Date(reminder.remindAt).toLocaleString("ko-KR", {
+                      hourCycle: "h23",
+                    })}
                   </p>
                   {reminder.recurrence !== "none" ? (
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs">

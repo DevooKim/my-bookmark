@@ -391,6 +391,9 @@ export function ReminderDialog({
         <Field label="알림 시간">
           <input
             className="input"
+            // datetime-local의 시각 표시(12h/24h)는 lang 로케일을 따른다.
+            // en-GB는 24시간제로 렌더링하며 저장 값 형식(YYYY-MM-DDTHH:mm)은 동일하다.
+            lang="en-GB"
             min={toDatetimeLocalValue(new Date())}
             onChange={(event) => setRemindAt(event.target.value)}
             required
