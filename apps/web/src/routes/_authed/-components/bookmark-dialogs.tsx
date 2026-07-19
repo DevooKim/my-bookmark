@@ -15,7 +15,11 @@ import {
   rescheduleReminder,
   updateBookmark,
 } from "../../../lib/api-client";
-import { toDatetimeLocalValue } from "../../../lib/datetime";
+import {
+  joinDatetimeLocalValue,
+  splitDatetimeLocalValue,
+  toDatetimeLocalValue,
+} from "../../../lib/datetime";
 import {
   BookmarkMetadataEditor,
   metadataRows,
@@ -337,10 +341,12 @@ export function ReminderDialog({
   };
 }) {
   const queryClient = useQueryClient();
-  const defaultDate = toDatetimeLocalValue(
-    new Date(Date.now() + 2 * 60 * 1000),
+  const defaultParts = splitDatetimeLocalValue(
+    toDatetimeLocalValue(new Date(Date.now() + 2 * 60 * 1000)),
   );
-  const [remindAt, setRemindAt] = useState(defaultDate);
+  const [remindDate, setRemindDate] = useState(defaultParts.date);
+  const [remindTime, setRemindTime] = useState(defaultParts.time);
+  const remindAt = joinDatetimeLocalValue(remindDate, remindTime);
   const [note, setNote] = useState(reminder?.note ?? "");
   const [recurrence, setRecurrence] = useState<ReminderRecurrence>(
     reminder?.recurrence ?? "none",
@@ -382,25 +388,25 @@ export function ReminderDialog({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!remindAt) {
+            toast.error("알림 날짜와 시간을 선택하세요");
+            return;
+          }
           mutation.mutate();
         }}
       >
         <p className="truncate text-sm text-zinc-500">
           {bookmark.title ?? bookmark.url}
         </p>
-        <Field label="알림 시간">
-          <input
-            className="input"
-            // datetime-local의 시각 표시(12h/24h)는 lang 로케일을 따른다.
-            // en-GB는 24시간제로 렌더링하며 저장 값 형식(YYYY-MM-DDTHH:mm)은 동일하다.
-            lang="en-GB"
-            min={toDatetimeLocalValue(new Date())}
-            onChange={(event) => setRemindAt(event.target.value)}
-            required
-            type="datetime-local"
-            value={remindAt}
-          />
-        </Field>
+        <DateTime24Field
+          date={remindDate}
+          minDate={
+            splitDatetimeLocalValue(toDatetimeLocalValue(new Date())).date
+          }
+          onDateChange={setRemindDate}
+          onTimeChange={setRemindTime}
+          time={remindTime}
+        />
         <Field label="반복">
           <select
             className="input"
@@ -529,6 +535,71 @@ function Dialog({
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+// Native datetime-local renders its time picker in the OS locale's 12/24h
+// clock, which no attribute overrides. This drives a native date input plus
+// separate hour (00-23) / minute selects so the time is always 24-hour.
+function DateTime24Field({
+  date,
+  time,
+  minDate,
+  onDateChange,
+  onTimeChange,
+}: {
+  date: string;
+  time: string;
+  minDate: string;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+}) {
+  const dateId = useId();
+  const [hour = "", minute = ""] = time.split(":");
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const hours = Array.from({ length: 24 }, (_, index) => pad(index));
+  const minutes = Array.from({ length: 60 }, (_, index) => pad(index));
+  const setHour = (value: string) => onTimeChange(`${value}:${minute || "00"}`);
+  const setMinute = (value: string) => onTimeChange(`${hour || "00"}:${value}`);
+  return (
+    <div className="block space-y-1 text-sm font-medium">
+      <span>알림 시간</span>
+      <div className="flex gap-2">
+        <input
+          className="input flex-1"
+          id={dateId}
+          min={minDate}
+          onChange={(event) => onDateChange(event.target.value)}
+          type="date"
+          value={date}
+        />
+        <select
+          aria-label="시"
+          className="input w-20"
+          onChange={(event) => setHour(event.target.value)}
+          value={hour}
+        >
+          {hours.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <span className="self-center text-zinc-500">:</span>
+        <select
+          aria-label="분"
+          className="input w-20"
+          onChange={(event) => setMinute(event.target.value)}
+          value={minute}
+        >
+          {minutes.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
