@@ -7,6 +7,7 @@ dist/
 .env
 .env.*
 !.env.example
+AGENT.local.md
 public/sw.js
 **/public/sw.js
 .DS_Store
