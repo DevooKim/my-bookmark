@@ -25,6 +25,8 @@
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
 | `TRUST_PROXY` | 리버스 프록시 hop 수 | Caddy 등 프록시 뒤에서는 `1` — 미설정 시 rate limit이 프록시 IP를 클라이언트로 본다 |
+| `DISCORD_ALERT_WEBHOOK_URL` | 장애·비정상 접근 Discord Webhook | **서버 전용. 비공개 채널 Webhook 사용** |
+| `ALERT_ENV` | Discord 메시지 환경명 | 기본 `home-production` |
 | `VITE_SUPABASE_URL` | 웹 클라이언트용 | 빌드 시점에 번들에 포함 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key (`sb_publishable_…`) | 공개 가능 |
 | `VITE_API_URL` | 브라우저가 접근하는 api 주소 | 배포 시 `https://bm.example.com/api`가 아니라 **api 서버의 공개 주소** (예: `https://api.bm.example.com` 또는 리버스 프록시 경유 동일 도메인) |
@@ -81,8 +83,10 @@ curl -I http://localhost:3000/login     # 200
 ```
 
 - api 헬스체크: `GET /api/health`, web 헬스체크: `GET /manifest.webmanifest` (Compose에 내장).
+- readiness: `GET /api/health/ready`가 DB·Push·리마인더 cron 상태를 민감정보 없이 반환한다.
 - api는 기동 시 VAPID 설정이 완전할 때만 리마인더 cron을 시작한다. 로그에서 확인:
   `docker compose logs api | grep -i cron`
+- Uptime Kuma는 `127.0.0.1:3002`에만 공개되며 데이터는 로컬 `uptime-kuma-data` volume에 저장된다. Docker socket은 마운트하지 않는다.
 
 ## 4. 자체 호스팅 HTTPS / 리버스 프록시 (Caddy)
 
@@ -118,6 +122,8 @@ volumes:
 
 단일 도메인 구성 시 `.env`는 `WEB_ORIGIN=https://bm.example.com`, `VITE_API_URL=https://bm.example.com`으로 설정하고 web 이미지를 다시 빌드한다. 프록시 뒤에서는 `TRUST_PROXY=1`도 설정해 api가 `X-Forwarded-For`의 실제 클라이언트 IP를 보게 한다(API Key rate limit 정확도).
 
+집 서버의 실제 Caddy 설정은 저장소 밖에서 관리한다. Tailscale 내부 전용 Kuma hostname을 `127.0.0.1:3002`로 reverse proxy하고 Tailnet 밖에서 열리지 않는지 확인한다. Caddy가 별도 컨테이너라면 api/web/Kuma와 같은 Docker network에 연결하고 host port를 외부 인터페이스로 넓히지 않는다.
+
 ## 5. Supabase 설정 요약
 
 - Auth → URL Configuration: Site URL을 배포 도메인으로.
@@ -138,6 +144,22 @@ iOS는 **홈 화면에 설치된 PWA에서만** Web Push가 동작한다 (iOS 16
 7. 실패 시: iOS 설정 → 알림 → 해당 PWA 허용 여부, 저전력 모드/집중 모드 확인
 
 ## 7. 운영 메모
+
+### Uptime Kuma + Discord
+
+Kuma에 비공개 Discord 알림을 만들고 다음 HTTP 모니터에 연결한다.
+
+| 이름 | 대상 | 주기 | Retries |
+|---|---|---:|---:|
+| `[home-prod] web` | Caddy 경유 `/login` | 60초 | 2 |
+| `[home-prod] api` | Caddy 경유 `/api/health` | 30초 | 2 |
+| `[home-prod] api-readiness` | Caddy 경유 `/api/health/ready` | 60초 | 2 |
+
+Down/Up만 전송하고 정상 heartbeat와 공개 status page는 끈다. 같은 집 서버에서 Kuma도 실행하므로 정전, Docker daemon 중단, 회선 또는 Tailscale 전체 장애는 알릴 수 없다.
+
+API는 동일 IP의 인증 실패 1분 5회, 민감 API 경로 1회, route miss 5분 20회, parser/413 10분 5회, 429 10분 20회와 cron·Push·AI·500/502 오류를 알린다. 전체 IP를 표시하지만 인증값, cookie, query/body, 북마크 내용, AI 원문은 보내지 않는다. 자동 차단은 없으며 필요하면 Tailscale에서 장치를 수동 제거한다.
+
+배포 후 web/API 컨테이너 중지·복구, readiness 실패·복구, 한 IP의 인증 실패 5회, `/api/.env` 요청을 차례로 시험한다. Discord Webhook을 일시적으로 잘못 설정해도 앱 요청과 cron이 계속 동작하는지 확인한다.
 
 - 로그: `docker compose logs -f api` (pino JSON). `Authorization`/`X-API-Key` 헤더는 redact됨.
 - 종료: `docker compose down` — api는 SIGTERM에서 cron 중지 후 서버를 닫는다(graceful).

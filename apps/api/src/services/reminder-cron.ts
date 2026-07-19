@@ -3,6 +3,10 @@ import cron, { type ScheduledTask } from "node-cron";
 import { appEnv } from "../lib/env";
 import { supabaseAdmin } from "../lib/supabase";
 import { HttpError } from "../middleware/error";
+import type {
+  OperationalMonitor,
+  ReminderRunResult,
+} from "./operational-monitor";
 import {
   createDefaultPushSender,
   type StoredPushSubscription,
@@ -41,7 +45,7 @@ interface PushSenderLike {
   send(
     subscription: StoredPushSubscription,
     payload: { title: string; body: string; url: string },
-  ): Promise<{ ok: boolean }>;
+  ): Promise<{ ok: boolean; expired?: boolean }>;
 }
 
 export interface ProcessDueRemindersOptions {
@@ -58,16 +62,12 @@ export async function processDueReminders({
   now = new Date(),
   limit = 20,
   webOrigin = appEnv.WEB_ORIGIN,
-}: ProcessDueRemindersOptions): Promise<{
-  scanned: number;
-  claimed: number;
-  sent: number;
-  failed: number;
-}> {
+}: ProcessDueRemindersOptions): Promise<ReminderRunResult> {
   const reminders = await db.dueReminders(now, limit);
   let claimed = 0;
   let sent = 0;
   let failed = 0;
+  let expired = 0;
 
   for (const reminder of reminders) {
     const nextRemindAt =
@@ -104,21 +104,25 @@ export async function processDueReminders({
       });
       if (result.ok) {
         sent += 1;
+      } else if (result.expired) {
+        expired += 1;
       } else {
         failed += 1;
       }
     }
   }
 
-  return { scanned: reminders.length, claimed, sent, failed };
+  return { scanned: reminders.length, claimed, sent, failed, expired };
 }
 
 export function startReminderCron({
   pushConfigured,
   schedule = cron.schedule,
+  monitor,
 }: {
   pushConfigured: boolean;
   schedule?: typeof cron.schedule;
+  monitor?: Pick<OperationalMonitor, "recordCronFailure" | "recordCronSuccess">;
 }): ScheduledTask | null {
   if (!pushConfigured) {
     if (appEnv.NODE_ENV !== "test") {
@@ -131,10 +135,14 @@ export function startReminderCron({
   }
   const db = createSupabaseReminderCronDb();
   const pushSender = createDefaultPushSender();
-  const task = schedule("* * * * *", () => {
-    void processDueReminders({ db, pushSender }).catch((error) => {
+  const task = schedule("* * * * *", async () => {
+    try {
+      const result = await processDueReminders({ db, pushSender });
+      monitor?.recordCronSuccess(result);
+    } catch (error) {
+      monitor?.recordCronFailure(error);
       console.warn("reminder cron failed", error);
-    });
+    }
   });
   task.start();
   return task;

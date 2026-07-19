@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: iOS 통합 공유 API 후속 개선과 홈 카드 메뉴 stacking 수정 완료. `POST /api/share`는 링크·이미지를 자동 AI 분석하고, 열린 카드 메뉴는 iOS의 포커스 동작과 무관하게 다음 가상 목록 카드 위에 표시된다.
-- **최종 갱신**: 2026-07-15 (카드 메뉴 stacking 수정)
+- **현재 Phase**: Discord 운영 모니터링 후속 구현 완료. Uptime Kuma가 Caddy 경유 web/API/readiness를 감시하고, API는 서비스 오류와 IP별 비정상 접근을 Discord로 집계한다.
+- **최종 갱신**: 2026-07-19 (Discord 모니터링·비정상 접근 알림)
 
 ## Phase 체크리스트
 
@@ -24,11 +24,14 @@
 - [x] 후속 — 상세 등록일·지도 호버·모바일 카테고리·세션 만료·태그 품질
 - [x] 후속 — 메타데이터 호버·카테고리 한 줄·이미지 sRGB·반복 리마인더
 - [x] 후속 — iOS 단축어 링크·이미지 통합 공유 API
+- [x] 후속 — Discord 서비스 장애·비정상 접근 모니터링
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
 | 날짜 | 결정 | 이유 |
 |---|---|---|
+| 2026-07-19 | 같은 집 서버의 Uptime Kuma 2.4.0은 Caddy 경유 web/API/readiness만 감시하고, API 내부 알림은 Discord Webhook과 인메모리 집계로 구현했다. 동일 IP 인증 실패는 1분 5회에 경고하며 전체 IP를 표시하되 자동 차단은 하지 않는다. | Tailscale 내부 개인 서비스에서 장애·비정상 접근을 빠르게 확인하면서 외부 모니터·Redis·방화벽 권한·장기 이벤트 저장소의 운영 비용과 오탐 차단 위험을 피하기 위함. |
+| 2026-07-19 | api/web/Kuma host port를 loopback에만 바인딩하고 `TRUST_PROXY=1`의 Caddy 한 hop에서 실제 IP를 신뢰한다. | Caddy 우회 접근과 `X-Forwarded-For` 위조 범위를 줄이고 Discord 보안 알림의 출처 IP를 신뢰할 수 있게 하기 위함. |
 | 2026-07-15 | 기존 등록 API를 제거하지 않고 `POST /api/share`를 얇은 multipart 통합 진입점으로 추가했다. 요청당 `item` 하나만 허용하고 URL은 `mode=ai`, 파일은 기존 이미지 분석 흐름으로 전달한다. | 공유 단축어는 하나로 단순화하면서 웹과 기존 단축어의 API 호환성, 저장 검증, 실패 정리 규칙을 유지하기 위함. |
 | 2026-07-06 | TanStack Start CLI가 `@tanstack/create-start` deprecation 경고를 냈지만, 로드맵 요구대로 공식 `pnpm create @tanstack/start@latest`로 스캐폴딩하고 현행 CLI 출력물을 이식했다. | 공식 CLI의 현재 API/구조를 우선한다는 docs/01-architecture 지침 준수. |
 | 2026-07-06 | Phase 0 API env 검증은 `PORT`, `WEB_ORIGIN`, `NODE_ENV` 기본값을 제공하고 Supabase/AI/Push 값은 optional로 두었다. | Phase 1 전에는 Supabase 값이 준비되지 않아도 `/api/health`와 dev 서버 수용 기준을 검증할 수 있어야 함. Phase 1에서 인증 구현 시 필요한 값들을 강화할 예정. |
@@ -175,6 +178,8 @@
 - iOS 링크 폼 인코딩 호환 수정(2026-07-15): 단축어의 텍스트 폼이 `application/x-www-form-urlencoded`로 전송되어 multipart 전용 파서에서 `item`이 누락되던 400 오류를 재현 테스트로 고정했다. `/api/share`가 8KB 제한의 URL-encoded 폼과 기존 multipart를 모두 파싱하도록 수정했고, 단축어 문서에 URL은 순수 URL 추출 후 텍스트 폼으로, 이미지는 파일 폼으로 보내는 분기를 명시했다. 전체 자동 검증 결과는 `shared 21 + ai 13 + api 141 + web 112 = 287` 테스트다.
 - 카드 메뉴 stacking 수정(2026-07-15): 가상 목록의 각 행이 `transform`으로 별도 stacking context를 만들어 아래 카드가 열린 popover를 가리던 문제를 수정했다. iOS Safari의 탭 포커스에 의존하던 `focus-within`만 사용하지 않고, 기존 `aria-expanded=true` 트리거를 포함한 행을 CSS `:has()`로 `z-index: 20`에 올린다. 메뉴 열기·바깥 클릭·Escape·액션 후 닫기와 포커스 복원을 유지했으며 `shared 21 + ai 13 + api 141 + web 113 = 288` 테스트, typecheck, lint, production build가 통과했다.
 
+- Discord 모니터링 자동 검증 완료(2026-07-19): `shared 21 + ai 13 + api 164 + web 113 = 311` 테스트, typecheck, Biome lint, API/web production build, `docker compose config --quiet`가 통과했다. Discord payload allowlist·5xx 재시도·10분 중복 억제, 동일 IP 인증 실패 1분 5회, 민감 API 경로, route miss·413·429 임계치, malformed JSON 400, DB·Push·cron readiness, cron 실패·복구, AI 연속 실패, reminder backlog, 만료 Push 분리를 회귀 테스트로 고정했다. API seed script info 1건과 web build dynamic import/chunk 경고는 기존 항목으로 exit 0이다.
+
 ## 사용자 확인 필요
 
 - (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
@@ -186,6 +191,7 @@
 - **iOS 통합 단축어 실환경 확인**: 배포 후 공유 시트의 `북마크 저장` 단축어 하나로 Safari URL, JPEG, HEIC, 여러 이미지 선택, 링크·이미지 혼합 입력을 각각 보내고 성공·실패 집계와 AI 분석 시작을 확인해야 한다.
 - **카테고리 순서 변경 DND 실사용 확인**: 데스크톱 dev 브라우저에서 위 방향 드래그(핸들 → 위 항목)는 자동화로 검증 완료(순서 변경 + 서버 저장 + 새로고침 유지). 아래 방향 드래그는 agent-browser의 합성 드래그(중간 pointermove 부족)에서 반영되지 않았는데 앱 버그인지 자동화 한계인지 미확정 — 실제 마우스/터치로 아래 방향 드래그 1회와 iOS Safari/PWA 터치 드래그를 직접 확인 필요(사용자가 추가 자동화 검증은 생략하기로 함, 2026-07-13).
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
+- **Discord 모니터링 실환경 확인**: 집 서버 `.env`에 실제 Webhook을 넣고, Tailscale 전용 Caddy hostname으로 Kuma UI를 연결해 web/API/readiness 세 모니터를 생성해야 한다. web/API 중지·복구, readiness 실패·복구, 한 IP의 인증 실패 5회, `/api/.env` 경고, Webhook 실패 시 앱 지속 동작, Kuma UI의 Tailnet 외부 비노출을 장애 훈련으로 확인한다. Caddy가 컨테이너라면 loopback host port 대신 동일 Docker network 연결을 사용한다.
 
 ## 배포 후 TODO
 

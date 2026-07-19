@@ -7,17 +7,30 @@ import helmet from "helmet";
 import type pino from "pino";
 import pinoHttp, { type Options as PinoHttpOptions } from "pino-http";
 import { appEnv } from "./lib/env";
-import { errorMiddleware } from "./middleware/error";
+import { createErrorMiddleware } from "./middleware/error";
+import { createSecurityMonitor } from "./middleware/security-monitor";
 import { aiRouter } from "./routes/ai";
 import { bookmarksRouter } from "./routes/bookmarks";
 import { categoriesRouter } from "./routes/categories";
-import { healthRouter } from "./routes/health";
+import { createHealthRouter } from "./routes/health";
 import { imagesRouter } from "./routes/images";
 import { keysRouter } from "./routes/keys";
 import { meRouter } from "./routes/me";
 import { pushRouter } from "./routes/push";
 import { remindersRouter } from "./routes/reminders";
 import { shareRouter } from "./routes/share";
+import {
+  type AlertDispatcher,
+  defaultAlertDispatcher,
+} from "./services/alerting";
+import {
+  defaultOperationalMonitor,
+  type OperationalMonitor,
+} from "./services/operational-monitor";
+import {
+  defaultReadinessService,
+  type ReadinessService,
+} from "./services/readiness";
 
 interface HttpLoggerOptions extends PinoHttpOptions {
   stream?: pino.DestinationStream;
@@ -42,8 +55,18 @@ export function createHttpLogger(options: HttpLoggerOptions = {}) {
   );
 }
 
-export function createApp(): express.Express {
+export interface CreateAppOptions {
+  alerts?: AlertDispatcher;
+  securityMonitor?: ReturnType<typeof createSecurityMonitor>;
+  readiness?: ReadinessService;
+  operationalMonitor?: OperationalMonitor;
+}
+
+export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
+  const securityMonitor =
+    options.securityMonitor ??
+    createSecurityMonitor({ alerts: options.alerts ?? defaultAlertDispatcher });
 
   if (appEnv.TRUST_PROXY !== undefined) {
     app.set("trust proxy", parseTrustProxy(appEnv.TRUST_PROXY));
@@ -52,8 +75,9 @@ export function createApp(): express.Express {
   app.use(helmet());
   app.use(compression());
   app.use(cors({ origin: appEnv.WEB_ORIGIN }));
-  app.use(express.json());
   app.use(createHttpLogger());
+  app.use(securityMonitor.middleware);
+  app.use(express.json());
   app.use(
     "/api",
     rateLimit({
@@ -74,7 +98,12 @@ export function createApp(): express.Express {
     }),
   );
 
-  app.use("/api", healthRouter);
+  app.use(
+    "/api",
+    createHealthRouter({
+      readiness: options.readiness ?? defaultReadinessService,
+    }),
+  );
   app.use("/api", meRouter);
   app.use("/api", keysRouter);
   app.use("/api", categoriesRouter);
@@ -84,7 +113,19 @@ export function createApp(): express.Express {
   app.use("/api", remindersRouter);
   app.use("/api", pushRouter);
   app.use("/api", aiRouter);
-  app.use(errorMiddleware);
+  app.use("/api", (_request, response) => {
+    Object.assign(response.locals, { securityRouteNotFound: true });
+    response.status(404).json({
+      error: { code: API_ERROR_CODES.NOT_FOUND, message: "Route not found" },
+    });
+  });
+  app.use(
+    createErrorMiddleware({
+      operationalMonitor:
+        options.operationalMonitor ?? defaultOperationalMonitor,
+      securityMonitor,
+    }),
+  );
 
   return app;
 }

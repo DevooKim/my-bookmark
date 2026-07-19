@@ -44,6 +44,20 @@ describe("parseEnv", () => {
       "1",
     );
   });
+
+  it("parses optional server-only Discord alert settings", () => {
+    const env = parseEnv({
+      NODE_ENV: "test",
+      DISCORD_ALERT_WEBHOOK_URL:
+        "https://discord.com/api/webhooks/123/example-token",
+      ALERT_ENV: "home-production",
+    });
+
+    expect(env.DISCORD_ALERT_WEBHOOK_URL).toBe(
+      "https://discord.com/api/webhooks/123/example-token",
+    );
+    expect(env.ALERT_ENV).toBe("home-production");
+  });
 });
 
 describe("parseTrustProxy", () => {

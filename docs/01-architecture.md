@@ -119,4 +119,6 @@ api 부팅 시 `lib/env.ts`에서 zod로 전체 env를 검증하고, 누락 시 
 - **보안 헤더**: helmet 기본 적용.
 - **레이트 리밋**: `express-rate-limit` — API Key 인증 엔드포인트에 분당 60회 (무차별 대입 완화).
 - **로깅**: pino(JSON). 요청 로그 + 에러 스택. AI 응답 원문은 debug 레벨.
+- **운영 알림**: 같은 Compose의 Uptime Kuma가 Caddy 경유 가용성을 확인하고, API는 Discord Webhook으로 cron·Push·AI·서버 오류와 IP별 비정상 접근 임계치를 알린다. 알림 실패는 원래 작업을 실패시키지 않는다.
+- **접근 감지**: Caddy 뒤 `TRUST_PROXY=1`의 실제 IP를 기준으로 인증 실패(1분 5회), API 경로 탐색, parser/413, 429를 메모리에서 집계한다. 자동 차단은 하지 않는다.
 - **graceful shutdown**: SIGTERM 시 cron 중지 → 서버 close.

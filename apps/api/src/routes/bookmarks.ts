@@ -28,6 +28,10 @@ import {
   signImage,
 } from "../services/image-storage";
 import { fetchMetadata, type PageMetadata } from "../services/metadata";
+import {
+  defaultOperationalMonitor,
+  type OperationalMonitor,
+} from "../services/operational-monitor";
 
 const IMAGE_BUCKET = "bookmark-images";
 
@@ -374,6 +378,7 @@ interface CategorizeBookmarkForUserOptions {
     mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
     base64: string;
   };
+  usageMonitor?: Pick<OperationalMonitor, "recordAiUsage">;
 }
 
 export async function categorizeBookmarkForUser({
@@ -383,13 +388,16 @@ export async function categorizeBookmarkForUser({
   providerResolver = getAiProvider,
   categorize = categorizeBookmark,
   imageInput,
+  usageMonitor = defaultOperationalMonitor,
 }: CategorizeBookmarkForUserOptions): Promise<void> {
   await categorize({
     db,
     userId,
     bookmarkId,
     provider: providerResolver(),
-    recordUsage: createAiUsageRecorder(db, userId),
+    recordUsage: createAiUsageRecorder(db, userId, (event) =>
+      usageMonitor.recordAiUsage(event),
+    ),
     imageLoader: imageInput
       ? async () => imageInput
       : ({ originalPath }) =>

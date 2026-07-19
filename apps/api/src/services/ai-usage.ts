@@ -57,8 +57,17 @@ interface UsageSelectDb {
 }
 
 // 기록 실패는 분류를 깨면 안 된다 — 절대 throw하지 않는다.
-export function createAiUsageRecorder(db: unknown, userId: string) {
+export function createAiUsageRecorder(
+  db: unknown,
+  userId: string,
+  onEvent: (event: AiUsageEventInput) => void = () => undefined,
+) {
   return async (event: AiUsageEventInput): Promise<void> => {
+    try {
+      onEvent(event);
+    } catch {
+      console.warn("AI usage monitoring failed");
+    }
     try {
       const { error } = await (db as UsageInsertDb)
         .from("ai_usage_events")

@@ -17,6 +17,8 @@ const envSchema = z
     // express `trust proxy` — set to the proxy hop count (e.g. 1 behind
     // Caddy) so req.ip and the API-key rate limit see the real client IP
     TRUST_PROXY: z.string().min(1).optional(),
+    DISCORD_ALERT_WEBHOOK_URL: z.url().optional(),
+    ALERT_ENV: z.string().min(1).default("home-production"),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === "test") {

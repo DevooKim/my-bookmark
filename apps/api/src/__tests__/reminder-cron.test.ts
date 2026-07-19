@@ -55,7 +55,13 @@ describe("reminder cron", () => {
       now: new Date("2026-07-10T12:01:00.000Z"),
     });
 
-    expect(result).toEqual({ scanned: 1, claimed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      claimed: 1,
+      sent: 1,
+      failed: 0,
+      expired: 0,
+    });
     expect(db.claimReminder).toHaveBeenCalledWith({
       id: "reminder-1",
       expectedRemindAt: "2026-07-10T12:00:00.000Z",
@@ -107,7 +113,13 @@ describe("reminder cron", () => {
       now: new Date("2026-07-10T12:01:00.000Z"),
     });
 
-    expect(result).toEqual({ scanned: 1, claimed: 0, sent: 0, failed: 0 });
+    expect(result).toEqual({
+      scanned: 1,
+      claimed: 0,
+      sent: 0,
+      failed: 0,
+      expired: 0,
+    });
     expect(pushSender.send).not.toHaveBeenCalled();
   });
 
@@ -141,5 +153,22 @@ describe("reminder cron", () => {
         url: "https://bookmark.example/images/bookmark-1",
       }),
     );
+  });
+
+  it("counts expired subscriptions separately from delivery failures", async () => {
+    const db = createDb();
+    const pushSender = {
+      send: vi.fn().mockResolvedValue({ ok: false, expired: true }),
+    };
+
+    const result = await processDueReminders({ db, pushSender });
+
+    expect(result).toEqual({
+      scanned: 1,
+      claimed: 1,
+      sent: 0,
+      failed: 0,
+      expired: 1,
+    });
   });
 });

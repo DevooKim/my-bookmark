@@ -9,6 +9,26 @@ import {
 const userId = "11111111-1111-4111-8111-111111111111";
 
 describe("ai usage recorder", () => {
+  it("reports an event to monitoring before persisting it", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const db = { from: vi.fn(() => ({ insert })) };
+    const onEvent = vi.fn();
+    const record = createAiUsageRecorder(db, userId, onEvent);
+    const event = {
+      provider: "openrouter",
+      model: "@preset/my-bookmark",
+      bookmarkId: null,
+      status: "failed" as const,
+      errorCode: "429",
+      durationMs: 10,
+      isByok: null,
+    };
+
+    await record(event);
+
+    expect(onEvent).toHaveBeenCalledWith(event);
+  });
+
   it("inserts one row per attempt", async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
     const db = { from: vi.fn(() => ({ insert })) };
