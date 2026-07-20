@@ -31,14 +31,14 @@ describe("security monitor", () => {
   it("alerts on the fifth authentication failure from one IP in one minute", async () => {
     const { app, alerts } = setup();
     for (let index = 0; index < 5; index += 1) {
-      await hit(app, "/status/401", "100.87.42.16");
+      await hit(app, "/status/401", "203.0.113.16");
     }
 
     await vi.waitFor(() => expect(alerts.notify).toHaveBeenCalledOnce());
     expect(alerts.notify).toHaveBeenCalledWith(
       expect.objectContaining({
-        fingerprint: "security:authentication:100.87.42.16",
-        sourceIp: "100.87.42.16",
+        fingerprint: "security:authentication:203.0.113.16",
+        sourceIp: "203.0.113.16",
         count: 5,
         windowLabel: "1분",
       }),
@@ -48,20 +48,20 @@ describe("security monitor", () => {
   it("does not combine authentication failures from different IPs", async () => {
     const { app, alerts } = setup();
     for (let index = 0; index < 4; index += 1) {
-      await hit(app, "/status/401", "100.87.42.16");
-      await hit(app, "/status/401", "100.87.42.17");
+      await hit(app, "/status/401", "203.0.113.16");
+      await hit(app, "/status/401", "203.0.113.17");
     }
     expect(alerts.notify).not.toHaveBeenCalled();
   });
 
   it("alerts immediately on a sensitive API path", async () => {
     const { app, alerts } = setup();
-    await hit(app, "/api/.env", "100.87.42.18");
+    await hit(app, "/api/.env", "203.0.113.18");
 
     await vi.waitFor(() => expect(alerts.notify).toHaveBeenCalledOnce());
     expect(alerts.notify).toHaveBeenCalledWith(
       expect.objectContaining({
-        fingerprint: "security:sensitive-path:100.87.42.18",
+        fingerprint: "security:sensitive-path:203.0.113.18",
         path: "/api/.env",
       }),
     );
@@ -70,10 +70,10 @@ describe("security monitor", () => {
   it("counts only terminal route misses toward the 404 threshold", async () => {
     const { app, alerts } = setup();
     for (let index = 0; index < 19; index += 1) {
-      await hit(app, "/api/missing", "100.87.42.19");
+      await hit(app, "/api/missing", "203.0.113.19");
     }
     expect(alerts.notify).not.toHaveBeenCalled();
-    await hit(app, "/api/missing", "100.87.42.19");
+    await hit(app, "/api/missing", "203.0.113.19");
     await vi.waitFor(() => expect(alerts.notify).toHaveBeenCalledOnce());
   });
 
@@ -87,7 +87,7 @@ describe("security monitor", () => {
   }) => {
     const { app, alerts } = setup();
     for (let index = 0; index < attempts; index += 1) {
-      await hit(app, `/status/${status}`, "100.87.42.20");
+      await hit(app, `/status/${status}`, "203.0.113.20");
     }
 
     await vi.waitFor(() => expect(alerts.notify).toHaveBeenCalledOnce());

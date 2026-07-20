@@ -188,8 +188,8 @@ Use a fake clock and injected `AlertDispatcher`. Lock these cases:
 ```ts
 expect(alerts.notify).toHaveBeenCalledWith(
   expect.objectContaining({
-    fingerprint: "security:authentication:100.87.42.16",
-    sourceIp: "100.87.42.16",
+    fingerprint: "security:authentication:203.0.113.16",
+    sourceIp: "203.0.113.16",
     count: 5,
     windowLabel: "1분",
   }),

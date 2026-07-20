@@ -7,13 +7,13 @@ import {
 } from "../services/alerting";
 
 const event: AlertEvent = {
-  fingerprint: "security:authentication:100.87.42.16",
+  fingerprint: "security:authentication:203.0.113.16",
   severity: "warning",
   title: "반복 인증 실패",
   component: "authentication",
   summary: "인증 실패 임계치 초과",
   occurredAt: new Date("2026-07-19T12:00:00.000Z"),
-  sourceIp: "100.87.42.16",
+  sourceIp: "203.0.113.16",
   method: "GET",
   path: "/api/bookmarks",
   status: 401,
@@ -35,7 +35,7 @@ describe("Discord alerting", () => {
     );
     const serialized = JSON.stringify(payload);
 
-    expect(serialized).toContain("100.87.42.16");
+    expect(serialized).toContain("203.0.113.16");
     expect(serialized).not.toContain("secret-token");
     expect(serialized).not.toContain("bm_secret");
     expect(serialized).not.toContain("private body");
