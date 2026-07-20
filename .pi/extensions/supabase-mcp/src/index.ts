@@ -13,29 +13,34 @@ type SupabaseMcpClient = {
 let cached: SupabaseMcpClient | undefined;
 let cachedProjectRef: string | undefined;
 
-function getProjectRef(): string | undefined {
-  return process.env.SUPABASE_PROJECT_REF ?? "sieffvagayeluitgysgm";
-}
-
-function readLocalAccessToken(cwd: string): string | undefined {
+function readLocalEnv(cwd: string): Record<string, string> {
   const envPath = join(cwd, ".pi", "supabase-mcp.env");
   if (!existsSync(envPath)) {
-    return undefined;
+    return {};
   }
 
+  const result: Record<string, string> = {};
   const contents = readFileSync(envPath, "utf8");
   for (const line of contents.split(/\r?\n/)) {
-    const match = line.match(/^\s*SUPABASE_ACCESS_TOKEN\s*=\s*(.+?)\s*$/);
+    const match = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
     if (match?.[1]) {
-      return match[1].replace(/^['\"]|['\"]$/g, "");
+      result[match[1]] = (match[2] ?? "").replace(/^['\"]|['\"]$/g, "");
     }
   }
-  return undefined;
+  return result;
 }
 
 async function getClient(cwd = process.cwd()): Promise<SupabaseMcpClient> {
-  const projectRef = getProjectRef();
-  const accessToken = process.env.SUPABASE_ACCESS_TOKEN ?? readLocalAccessToken(cwd);
+  const localEnv = readLocalEnv(cwd);
+  const projectRef =
+    process.env.SUPABASE_PROJECT_REF ?? localEnv.SUPABASE_PROJECT_REF;
+  if (!projectRef) {
+    throw new Error(
+      "SUPABASE_PROJECT_REF is not set. Export it before starting pi or put it in .pi/supabase-mcp.env.",
+    );
+  }
+  const accessToken =
+    process.env.SUPABASE_ACCESS_TOKEN ?? localEnv.SUPABASE_ACCESS_TOKEN;
   if (!accessToken) {
     throw new Error(
       "SUPABASE_ACCESS_TOKEN is not set. Export it before starting pi or put it in .pi/supabase-mcp.env.",
@@ -51,10 +56,11 @@ async function getClient(cwd = process.cwd()): Promise<SupabaseMcpClient> {
     cached = undefined;
   }
 
-  const args = ["@supabase/mcp-server-supabase@0.8.2", "--read-only"];
-  if (projectRef) {
-    args.push(`--project-ref=${projectRef}`);
-  }
+  const args = [
+    "@supabase/mcp-server-supabase@0.8.2",
+    "--read-only",
+    `--project-ref=${projectRef}`,
+  ];
 
   const transport = new StdioClientTransport({
     command: "npx",
