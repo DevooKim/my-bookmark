@@ -54,6 +54,22 @@ describe("PWA configuration", () => {
     expect(nodeVersion).toBe("24");
   });
 
+  it("pins package management and Docker builds to Bun 1.4.0", () => {
+    const repositoryRoot = path.resolve(__dirname, "../../../..");
+    const rootPackageJson = JSON.parse(
+      readFileSync(path.join(repositoryRoot, "package.json"), "utf8"),
+    ) as { packageManager?: string };
+    const dockerfiles = ["apps/api/Dockerfile", "apps/web/Dockerfile"];
+
+    expect(rootPackageJson.packageManager).toBe("bun@1.4.0");
+    for (const dockerfile of dockerfiles) {
+      expect(
+        readFileSync(path.join(repositoryRoot, dockerfile), "utf8"),
+        dockerfile,
+      ).toContain("FROM oven/bun:1.4.0-alpine AS base");
+    }
+  });
+
   it("builds the Docker fallback with the Node server preset", () => {
     const dockerfile = readFileSync(
       path.resolve(__dirname, "../../Dockerfile"),

@@ -2,7 +2,7 @@
 # Build context is the repository root (see docker-compose.yml).
 # VITE_* values are baked into the client bundle at build time.
 
-FROM oven/bun:1.3.14-alpine AS base
+FROM oven/bun:1.4.0-alpine AS base
 WORKDIR /app
 
 FROM base AS build

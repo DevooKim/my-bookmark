@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context is the repository root (see docker-compose.yml).
 
-FROM oven/bun:1.3.14-alpine AS base
+FROM oven/bun:1.4.0-alpine AS base
 WORKDIR /app
 
 FROM base AS build

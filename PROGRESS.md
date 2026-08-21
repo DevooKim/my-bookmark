@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Discord 운영 모니터링 후속 구현 완료. Uptime Kuma가 Caddy 경유 web/API/readiness를 감시하고, API는 서비스 오류와 IP별 비정상 접근을 Discord로 집계한다.
-- **최종 갱신**: 2026-07-19 (Discord 모니터링·비정상 접근 알림)
+- **현재 Phase**: Bun 1.4.0 마이그레이션 완료. 로컬 패키지 관리자와 API/Web Docker 빌드 이미지를 같은 정확 버전으로 고정한다.
+- **최종 갱신**: 2026-08-22 (Bun 1.4.0 마이그레이션)
 
 ## Phase 체크리스트
 
@@ -30,6 +30,7 @@
 
 | 날짜 | 결정 | 이유 |
 |---|---|---|
+| 2026-08-22 | 루트 `packageManager`와 API/Web Docker 빌드 이미지를 Bun 1.4.0으로 함께 올리고, Vercel Functions의 `bunVersion: "1.x"`는 유지한다. | 로컬·Docker 의존성 설치/빌드의 재현 버전을 일치시키되, Vercel 설정은 플랫폼이 지원하는 1.x 런타임 선택 계약을 따라야 한다. |
 | 2026-07-19 | 같은 집 서버의 Uptime Kuma 2.4.0은 Caddy 경유 web/API/readiness만 감시하고, API 내부 알림은 Discord Webhook과 인메모리 집계로 구현했다. 동일 IP 인증 실패는 1분 5회에 경고하며 전체 IP를 표시하되 자동 차단은 하지 않는다. | Tailscale 내부 개인 서비스에서 장애·비정상 접근을 빠르게 확인하면서 외부 모니터·Redis·방화벽 권한·장기 이벤트 저장소의 운영 비용과 오탐 차단 위험을 피하기 위함. |
 | 2026-07-19 | api/web/Kuma host port를 loopback에만 바인딩하고 `TRUST_PROXY=1`의 Caddy 한 hop에서 실제 IP를 신뢰한다. | Caddy 우회 접근과 `X-Forwarded-For` 위조 범위를 줄이고 Discord 보안 알림의 출처 IP를 신뢰할 수 있게 하기 위함. |
 | 2026-07-15 | 기존 등록 API를 제거하지 않고 `POST /api/share`를 얇은 multipart 통합 진입점으로 추가했다. 요청당 `item` 하나만 허용하고 URL은 `mode=ai`, 파일은 기존 이미지 분석 흐름으로 전달한다. | 공유 단축어는 하나로 단순화하면서 웹과 기존 단축어의 API 호환성, 저장 검증, 실패 정리 규칙을 유지하기 위함. |
@@ -179,6 +180,7 @@
 - 카드 메뉴 stacking 수정(2026-07-15): 가상 목록의 각 행이 `transform`으로 별도 stacking context를 만들어 아래 카드가 열린 popover를 가리던 문제를 수정했다. iOS Safari의 탭 포커스에 의존하던 `focus-within`만 사용하지 않고, 기존 `aria-expanded=true` 트리거를 포함한 행을 CSS `:has()`로 `z-index: 20`에 올린다. 메뉴 열기·바깥 클릭·Escape·액션 후 닫기와 포커스 복원을 유지했으며 `shared 21 + ai 13 + api 141 + web 113 = 288` 테스트, typecheck, lint, production build가 통과했다.
 
 - Discord 모니터링 자동 검증 완료(2026-07-19): `shared 21 + ai 13 + api 164 + web 113 = 311` 테스트, typecheck, Biome lint, API/web production build, `docker compose config --quiet`가 통과했다. Discord payload allowlist·5xx 재시도·10분 중복 억제, 동일 IP 인증 실패 1분 5회, 민감 API 경로, route miss·413·429 임계치, malformed JSON 400, DB·Push·cron readiness, cron 실패·복구, AI 연속 실패, reminder backlog, 만료 Push 분리를 회귀 테스트로 고정했다. API seed script info 1건과 web build dynamic import/chunk 경고는 기존 항목으로 exit 0이다.
+- Bun 1.4.0 마이그레이션 자동 검증 완료(2026-08-22): Bun 1.4.0에서 `bun install --frozen-lockfile`이 잠금 파일 변경 없이 통과했고, `shared 21 + ai 13 + api 164 + web 119 = 317` 전체 테스트, typecheck, Biome lint, API/web production build가 통과했다. 루트 package manager와 API/Web Docker 빌드 이미지의 정확 버전을 구성 테스트로 고정했으며 `oven/bun:1.4.0-alpine`의 amd64/arm64 manifest도 확인했다. API seed script info 1건과 web build dynamic import/chunk 경고는 기존 항목으로 exit 0이다.
 
 ## 사용자 확인 필요
 
