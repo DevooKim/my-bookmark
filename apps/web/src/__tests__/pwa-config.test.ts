@@ -66,7 +66,11 @@ describe("PWA configuration", () => {
       expect(
         readFileSync(path.join(repositoryRoot, dockerfile), "utf8"),
         dockerfile,
-      ).toContain("FROM oven/bun:1.4.0-alpine AS base");
+      ).toContain("FROM docker.io/oven/bun:1.4.0-alpine AS base");
+      expect(
+        readFileSync(path.join(repositoryRoot, dockerfile), "utf8"),
+        dockerfile,
+      ).toContain("FROM docker.io/library/node:24-alpine AS runtime");
     }
   });
 

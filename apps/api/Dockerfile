@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context is the repository root (see docker-compose.yml).
 
-FROM oven/bun:1.4.0-alpine AS base
+FROM docker.io/oven/bun:1.4.0-alpine AS base
 WORKDIR /app
 
 FROM base AS build
@@ -25,7 +25,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/ai/package.json packages/ai/
 RUN bun install --frozen-lockfile --production --filter @my-bookmark/api
 
-FROM node:24-alpine AS runtime
+FROM docker.io/library/node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules

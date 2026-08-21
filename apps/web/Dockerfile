@@ -2,7 +2,7 @@
 # Build context is the repository root (see docker-compose.yml).
 # VITE_* values are baked into the client bundle at build time.
 
-FROM oven/bun:1.4.0-alpine AS base
+FROM docker.io/oven/bun:1.4.0-alpine AS base
 WORKDIR /app
 
 FROM base AS build
@@ -25,7 +25,7 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 RUN bun run --filter @my-bookmark/web build
 
-FROM node:24-alpine AS runtime
+FROM docker.io/library/node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 # nitro's .output is self-contained (server bundle + client assets)

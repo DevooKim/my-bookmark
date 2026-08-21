@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Bun 1.4.0 마이그레이션 완료. 로컬 패키지 관리자와 API/Web Docker 빌드 이미지를 같은 정확 버전으로 고정한다.
-- **최종 갱신**: 2026-08-22 (Bun 1.4.0 마이그레이션)
+- **현재 Phase**: Bun 1.4.0 마이그레이션 및 Podman Compose 호환 수정 완료. 모든 외부 컨테이너 이미지는 완전한 Docker Hub 이름을 사용한다.
+- **최종 갱신**: 2026-08-22 (Podman short-name 호환 수정)
 
 ## Phase 체크리스트
 
@@ -30,6 +30,7 @@
 
 | 날짜 | 결정 | 이유 |
 |---|---|---|
+| 2026-08-22 | Dockerfile과 Compose의 외부 이미지 이름을 `docker.io/...`로 완전히 한정한다. | Podman은 `registries.conf`에 unqualified-search registry가 없으면 `oven/bun`, `node`, `louislam/uptime-kuma` 같은 short name을 거부한다. 호스트 전역 설정 변경 없이 Docker와 Podman에서 같은 저장소 설정을 사용하기 위함. |
 | 2026-08-22 | 루트 `packageManager`와 API/Web Docker 빌드 이미지를 Bun 1.4.0으로 함께 올리고, Vercel Functions의 `bunVersion: "1.x"`는 유지한다. | 로컬·Docker 의존성 설치/빌드의 재현 버전을 일치시키되, Vercel 설정은 플랫폼이 지원하는 1.x 런타임 선택 계약을 따라야 한다. |
 | 2026-07-19 | 같은 집 서버의 Uptime Kuma 2.4.0은 Caddy 경유 web/API/readiness만 감시하고, API 내부 알림은 Discord Webhook과 인메모리 집계로 구현했다. 동일 IP 인증 실패는 1분 5회에 경고하며 전체 IP를 표시하되 자동 차단은 하지 않는다. | Tailscale 내부 개인 서비스에서 장애·비정상 접근을 빠르게 확인하면서 외부 모니터·Redis·방화벽 권한·장기 이벤트 저장소의 운영 비용과 오탐 차단 위험을 피하기 위함. |
 | 2026-07-19 | api/web/Kuma host port를 loopback에만 바인딩하고 `TRUST_PROXY=1`의 Caddy 한 hop에서 실제 IP를 신뢰한다. | Caddy 우회 접근과 `X-Forwarded-For` 위조 범위를 줄이고 Discord 보안 알림의 출처 IP를 신뢰할 수 있게 하기 위함. |
@@ -181,6 +182,7 @@
 
 - Discord 모니터링 자동 검증 완료(2026-07-19): `shared 21 + ai 13 + api 164 + web 113 = 311` 테스트, typecheck, Biome lint, API/web production build, `docker compose config --quiet`가 통과했다. Discord payload allowlist·5xx 재시도·10분 중복 억제, 동일 IP 인증 실패 1분 5회, 민감 API 경로, route miss·413·429 임계치, malformed JSON 400, DB·Push·cron readiness, cron 실패·복구, AI 연속 실패, reminder backlog, 만료 Push 분리를 회귀 테스트로 고정했다. API seed script info 1건과 web build dynamic import/chunk 경고는 기존 항목으로 exit 0이다.
 - Bun 1.4.0 마이그레이션 자동 검증 완료(2026-08-22): Bun 1.4.0에서 `bun install --frozen-lockfile`이 잠금 파일 변경 없이 통과했고, `shared 21 + ai 13 + api 164 + web 119 = 317` 전체 테스트, typecheck, Biome lint, API/web production build가 통과했다. 루트 package manager와 API/Web Docker 빌드 이미지의 정확 버전을 구성 테스트로 고정했으며 `oven/bun:1.4.0-alpine`의 amd64/arm64 manifest도 확인했다. API seed script info 1건과 web build dynamic import/chunk 경고는 기존 항목으로 exit 0이다.
+- Podman Compose short-name 호환 수정 자동 검증 완료(2026-08-22): API/Web Dockerfile의 Bun·Node 이미지와 Compose의 Uptime Kuma 이미지를 `docker.io/...` 완전 이름으로 변경했다. 구성 회귀 테스트, `docker compose config --quiet`, `docker compose build api web`, typecheck, Biome lint, 전체 317개 테스트, API/web production build가 통과했다. 현재 검증 호스트에는 Podman이 없어 사용자가 제시한 실제 Podman Compose 명령의 재실행은 배포 호스트 확인 항목으로 남는다.
 
 ## 사용자 확인 필요
 

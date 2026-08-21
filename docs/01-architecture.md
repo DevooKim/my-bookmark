@@ -107,8 +107,8 @@ api 부팅 시 `lib/env.ts`에서 zod로 전체 env를 검증하고, 누락 시 
 ## Docker 구성 (Phase 7)
 
 - 빌드 단계: Bun 1.4.0으로 `bun.lock` 기반 의존성 설치와 workspace build 수행.
-- `apps/api`: node:24-alpine 실행 스테이지에서 프로덕션 의존성과 dist 번들 실행.
-- `apps/web`: node:24-alpine에서 TanStack Start Node 서버 산출물 실행 (Compose/자체 호스팅 대안).
+- `apps/api`: `docker.io/library/node:24-alpine` 실행 스테이지에서 프로덕션 의존성과 dist 번들 실행.
+- `apps/web`: `docker.io/library/node:24-alpine`에서 TanStack Start Node 서버 산출물 실행 (Compose/자체 호스팅 대안).
 - Supabase는 클라우드 사용 — 로컬 컨테이너 불필요. (로컬 개발 시 `supabase start`는 선택사항)
 - 기본 web 배포는 Vercel이며 `apps/web/vercel.json`에서 Bun 1.x Runtime Beta를 사용한다. API는 Node 24 Docker로 별도 배포한다.
 - 자체 호스팅 시 리버스 프록시/HTTPS(Caddy)를 docker-compose 앞에 둔다. **푸시와 PWA 설치는 HTTPS 필수**다.

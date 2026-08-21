@@ -9,7 +9,7 @@ describe("monitoring compose configuration", () => {
       "utf8",
     );
 
-    expect(compose).toContain("louislam/uptime-kuma:2.4.0");
+    expect(compose).toContain("docker.io/louislam/uptime-kuma:2.4.0");
     expect(compose).toContain("uptime-kuma-data:/app/data");
     expect(compose).toContain("127.0.0.1:3001:3001");
     expect(compose).toContain("127.0.0.1:3000:3000");

@@ -74,6 +74,8 @@ Vercel 프로젝트 설정:
 
 ### 3.3 Docker Compose 대안
 
+저장소의 모든 외부 이미지는 Podman의 short-name alias 설정 없이도 동작하도록 `docker.io/...` 완전 이름을 사용한다. 아래 명령은 Docker Compose와 Podman Compose 모두에서 사용할 수 있다.
+
 ```bash
 docker compose build
 docker compose up -d
@@ -110,7 +112,7 @@ compose 오버라이드 예시 (`docker-compose.override.yml`):
 ```yaml
 services:
   caddy:
-    image: caddy:2-alpine
+    image: docker.io/library/caddy:2-alpine
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
