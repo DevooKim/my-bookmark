@@ -77,9 +77,8 @@ interface SemanticSearchDb {
     functionName: "semantic_search_bookmarks",
     params: {
       p_user_id: string;
-      p_embedding: number[];
+      p_embedding: string;
       p_limit: number;
-      p_max_distance: number;
     },
   ): {
     select(columns: string): PromiseLike<{
@@ -398,9 +397,8 @@ export async function searchSemanticBookmarksForUser(
   const { data, error } = await db
     .rpc("semantic_search_bookmarks", {
       p_user_id: userId,
-      p_embedding: embedding,
+      p_embedding: JSON.stringify(embedding),
       p_limit: query.limit,
-      p_max_distance: 0.6,
     })
     .select(BOOKMARK_DB_COLUMNS);
   if (error) {

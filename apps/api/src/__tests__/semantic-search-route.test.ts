@@ -65,7 +65,7 @@ function createApp() {
 }
 
 describe("semantic bookmark search route", () => {
-  it("serves the semantic path before the bookmark id route", async () => {
+  it("serves the semantic path before the bookmark id route on the real router", async () => {
     fake.embed.mockResolvedValue([0.1, 0.2]);
     const select = vi
       .fn()
@@ -90,9 +90,8 @@ describe("semantic bookmark search route", () => {
     expect(fake.embed).toHaveBeenCalledWith({ text: "맛집" });
     expect(fake.rpc).toHaveBeenCalledWith("semantic_search_bookmarks", {
       p_user_id: fake.userId,
-      p_embedding: [0.1, 0.2],
+      p_embedding: "[0.1,0.2]",
       p_limit: 7,
-      p_max_distance: 0.6,
     });
   });
 });

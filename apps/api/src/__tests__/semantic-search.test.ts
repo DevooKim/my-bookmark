@@ -58,9 +58,8 @@ describe("semantic bookmark search", () => {
     expect(embed).toHaveBeenCalledWith({ text: "맛집" });
     expect(rpc).toHaveBeenCalledWith("semantic_search_bookmarks", {
       p_user_id: userId,
-      p_embedding: [0.1, 0.2],
+      p_embedding: "[0.1,0.2]",
       p_limit: 10,
-      p_max_distance: 0.6,
     });
     expect(select).toHaveBeenCalledWith(BOOKMARK_DB_COLUMNS);
     expect(mapBookmark).toHaveBeenCalledWith({ id: "row" }, false);
@@ -68,6 +67,7 @@ describe("semantic bookmark search", () => {
       bookmarks: [createMappedBookmark()],
       nextCursor: null,
     });
+    expect(rpc.mock.calls[0]?.[1].p_embedding).toBe("[0.1,0.2]");
   });
 
   it("returns a clear server error when semantic search is not configured", async () => {
