@@ -3,6 +3,7 @@ import { API_ERROR_CODES } from "@my-bookmark/shared";
 import type { RequestHandler } from "express";
 import { Router } from "express";
 import multer from "multer";
+import { BOOKMARK_DB_COLUMNS } from "../lib/db-mappers";
 import { supabaseAdmin } from "../lib/supabase";
 import { getUserId, requireAuth } from "../middleware/auth";
 import { HttpError } from "../middleware/error";
@@ -73,7 +74,7 @@ export function defaultImageDependencies(): ImageRouteDeps {
       const { data, error } = await db
         .from("bookmarks")
         .insert(row)
-        .select("*")
+        .select(BOOKMARK_DB_COLUMNS)
         .single();
       if (error) {
         throw error;

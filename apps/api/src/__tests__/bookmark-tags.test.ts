@@ -36,6 +36,7 @@ vi.mock("../middleware/auth", async (importOriginal) => {
   };
 });
 
+import { BOOKMARK_DB_COLUMNS } from "../lib/db-mappers";
 import { errorMiddleware } from "../middleware/error";
 import { bookmarksRouter } from "../routes/bookmarks";
 
@@ -66,6 +67,12 @@ function bookmarkRow(overrides: Record<string, unknown> = {}) {
     updated_at: createdAt,
     ...overrides,
   };
+}
+
+function mockRpcRows(rows: Record<string, unknown>[]) {
+  const select = vi.fn().mockResolvedValue({ data: rows, error: null });
+  mocks.rpc.mockReturnValue({ select });
+  return select;
 }
 
 function createTestApp() {
@@ -178,10 +185,10 @@ describe("bookmark tags API", () => {
       JSON.stringify({ createdAt, id: bookmarkId }),
       "utf8",
     ).toString("base64url");
-    mocks.rpc.mockResolvedValue({
-      data: [bookmarkRow(), bookmarkRow({ id: olderId })],
-      error: null,
-    });
+    const select = mockRpcRows([
+      bookmarkRow({ embedding: [0.1, 0.2] }),
+      bookmarkRow({ id: olderId }),
+    ]);
 
     const response = await request(createTestApp())
       .get("/api/bookmarks")
@@ -193,6 +200,8 @@ describe("bookmark tags API", () => {
       });
 
     expect(response.status).toBe(200);
+    expect(select).toHaveBeenCalledWith(BOOKMARK_DB_COLUMNS);
+    expect(response.body.items[0]).not.toHaveProperty("embedding");
     expect(mocks.rpc).toHaveBeenCalledWith("search_bookmarks", {
       p_user_id: userId,
       p_query: "React",
@@ -214,7 +223,7 @@ describe("bookmark tags API", () => {
   });
 
   it("passes the uncategorized filter to the search RPC", async () => {
-    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    mockRpcRows([]);
 
     const response = await request(createTestApp())
       .get("/api/bookmarks")

@@ -1,7 +1,12 @@
-import type { AiProvider, AnalyzeResult } from "@my-bookmark/ai";
+import type {
+  AiProvider,
+  AnalyzeResult,
+  EmbeddingProvider,
+} from "@my-bookmark/ai";
 import { PRESET_MODEL } from "@my-bookmark/ai";
 import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
+import { updateBookmarkEmbedding } from "./embedding";
 import { fetchMetadata, type PageMetadata } from "./metadata";
 import { buildSourceMetadataEntry } from "./source-link";
 
@@ -28,8 +33,14 @@ interface CategoryRow {
   name: string;
 }
 
+interface BookmarkDbTable {
+  select?: (...args: never[]) => unknown;
+  update?: (...args: never[]) => unknown;
+  insert?: (...args: never[]) => unknown;
+}
+
 interface BookmarkCategorizeDb {
-  from(table: string): unknown;
+  from(table: string): BookmarkDbTable;
 }
 
 export interface AiUsageEventInput {
@@ -47,6 +58,7 @@ interface CategorizeOptions {
   userId: string;
   bookmarkId: string;
   provider: AiProvider | null;
+  embeddingProvider?: EmbeddingProvider | null;
   recordUsage?: (event: AiUsageEventInput) => Promise<void>;
   metadataFetcher?: (url: string) => Promise<PageMetadata>;
   imageLoader?: (input: { originalPath: string }) => Promise<{
@@ -67,6 +79,7 @@ export async function categorizeBookmark({
   userId,
   bookmarkId,
   provider,
+  embeddingProvider,
   recordUsage,
   metadataFetcher = fetchMetadata,
   imageLoader,
@@ -145,6 +158,10 @@ export async function categorizeBookmark({
         durationMs: Date.now() - startedAt,
         isByok: outcome.isByok,
       });
+      const embeddingTags = removePlaceNameTags(
+        outcome.analysis.tags,
+        outcome.analysis.place?.name,
+      );
       await applyCategorizeResult(
         db,
         userId,
@@ -154,6 +171,25 @@ export async function categorizeBookmark({
         outcome.model,
         bookmarkMetadataSchema.parse(bookmark.metadata ?? {}),
         bookmark.kind,
+      );
+      void updateBookmarkEmbedding({
+        db,
+        userId,
+        bookmarkId,
+        provider: embeddingProvider ?? null,
+        content: {
+          title: outcome.analysis.summaryTitle,
+          description:
+            outcome.analysis.summary ??
+            linkMetadata?.description ??
+            bookmark.description,
+          tags: embeddingTags,
+        },
+      }).catch((error) =>
+        console.warn("bookmark embedding update failed", {
+          bookmarkId,
+          error,
+        }),
       );
     } catch (error) {
       console.warn("AI categorization request failed", error);

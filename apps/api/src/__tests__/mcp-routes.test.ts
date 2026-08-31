@@ -2,6 +2,7 @@ import { API_ERROR_CODES } from "@my-bookmark/shared";
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BOOKMARK_DB_COLUMNS } from "../lib/db-mappers";
 import { buildMcpServer } from "../mcp/server";
 import { errorMiddleware, HttpError } from "../middleware/error";
 import { getBookmarkForUser } from "../routes/bookmarks";
@@ -389,7 +390,7 @@ describe("MCP search route", () => {
       content: [{ type: "text", text: "Bookmark not found" }],
     });
     expect(fake.databaseFrom).toHaveBeenCalledWith("bookmarks");
-    expect(select).toHaveBeenCalledWith("*");
+    expect(select).toHaveBeenCalledWith(BOOKMARK_DB_COLUMNS);
     expect(firstEq).toHaveBeenCalledWith("user_id", userId);
     expect(secondEq).toHaveBeenCalledWith("id", otherUserBookmarkId);
     expect(maybeSingle).toHaveBeenCalledWith();

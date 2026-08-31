@@ -9,7 +9,11 @@ import {
   uuidSchema,
 } from "@my-bookmark/shared";
 import { Router } from "express";
-import { type BookmarkDbRow, mapBookmark } from "../lib/db-mappers";
+import {
+  BOOKMARK_DB_COLUMNS,
+  type BookmarkDbRow,
+  mapBookmark,
+} from "../lib/db-mappers";
 import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl, normalizeBookmarkUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
@@ -21,6 +25,8 @@ import {
   type LinkBookmarkCreationDeps,
 } from "../services/bookmark-creation";
 import { categorizeBookmark } from "../services/categorize";
+import { updateBookmarkEmbedding } from "../services/embedding";
+import { getEmbeddingProvider } from "../services/embedding-provider";
 import { processImage } from "../services/image-processing";
 import {
   type ImageStorageBucket,
@@ -114,7 +120,7 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
     .update({ ai_status: "pending" })
     .eq("user_id", userId)
     .eq("id", id)
-    .select("*")
+    .select(BOOKMARK_DB_COLUMNS)
     .maybeSingle();
   if (error) {
     throw error;
@@ -202,19 +208,41 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
     updates.category_id = body.categoryId;
     updates.ai_status = "idle";
   }
+  const shouldUpdateEmbedding =
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.tags !== undefined;
 
   const { data, error } = await db
     .from("bookmarks")
     .update(updates)
     .eq("user_id", userId)
     .eq("id", id)
-    .select("*")
+    .select(BOOKMARK_DB_COLUMNS)
     .maybeSingle();
   if (error) {
     await handleBookmarkInsertError(error, userId, updates.url ?? "");
   }
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
+  }
+  if (shouldUpdateEmbedding) {
+    void updateBookmarkEmbedding({
+      db,
+      userId,
+      bookmarkId: id,
+      provider: getEmbeddingProvider(),
+      content: {
+        title: data.title,
+        description: data.description,
+        tags: data.tags,
+      },
+    }).catch((embeddingError) =>
+      console.warn("bookmark embedding update failed", {
+        bookmarkId: id,
+        error: embeddingError,
+      }),
+    );
   }
   response.json({
     bookmark: await mapBookmarkWithSignedMedia(data, true),
@@ -227,7 +255,7 @@ bookmarksRouter.delete("/bookmarks/:id", async (request, response) => {
   const db = getDb();
   const { data, error: selectError } = await db
     .from("bookmarks")
-    .select("*")
+    .select(BOOKMARK_DB_COLUMNS)
     .eq("user_id", userId)
     .eq("id", id)
     .maybeSingle();
@@ -288,16 +316,15 @@ export async function listBookmarksForUser(
 ): Promise<BookmarkListResult> {
   const db = getDb();
   const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-  const { data, error } = await db.rpc(
-    "search_bookmarks",
-    buildBookmarkSearchParams(userId, query, cursor),
-  );
+  const { data, error } = await db
+    .rpc("search_bookmarks", buildBookmarkSearchParams(userId, query, cursor))
+    .select(BOOKMARK_DB_COLUMNS);
   if (error) {
     throw error;
   }
 
-  const rows: BookmarkDbRow[] = data ?? [];
-  const pageRows = rows.slice(0, query.limit);
+  const rows = Array.isArray(data) ? data : [];
+  const pageRows: BookmarkDbRow[] = rows.slice(0, query.limit);
   const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
   return {
     bookmarks: await Promise.all(
@@ -313,7 +340,7 @@ export async function getBookmarkForUser(
 ): Promise<Bookmark> {
   const { data, error } = await getDb()
     .from("bookmarks")
-    .select("*")
+    .select(BOOKMARK_DB_COLUMNS)
     .eq("user_id", userId)
     .eq("id", id)
     .maybeSingle();
@@ -344,7 +371,7 @@ export async function createLinkBookmarkForUser(input: {
           category_id: categoryId,
           ai_status: aiStatus,
         })
-        .select("*")
+        .select(BOOKMARK_DB_COLUMNS)
         .single();
       if (error) {
         throw error;
@@ -414,6 +441,7 @@ export async function categorizeBookmarkForUser({
     userId,
     bookmarkId,
     provider: providerResolver(),
+    embeddingProvider: getEmbeddingProvider(),
     recordUsage: createAiUsageRecorder(db, userId, (event) =>
       usageMonitor.recordAiUsage(event),
     ),

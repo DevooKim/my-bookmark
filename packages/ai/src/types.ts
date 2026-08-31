@@ -66,6 +66,19 @@ export interface AiProviderConfig {
   apiKey: string;
 }
 
+export interface EmbeddingProviderConfig {
+  apiKey: string;
+}
+
+export interface EmbeddingInput {
+  taskType?: string;
+}
+
+export interface EmbeddingProvider {
+  embed(input: EmbeddingInput & { text: string }): Promise<number[]>;
+  embed(input: EmbeddingInput & { text: string[] }): Promise<number[][]>;
+}
+
 export interface AnalyzeOutcome {
   analysis: AnalyzeResult;
   model: string;

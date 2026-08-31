@@ -518,6 +518,41 @@ describe("categorizeBookmark", () => {
     );
   });
 
+  it("embeds finalized AI fields without changing AI status on embedding failure", async () => {
+    const db = new FakeDb();
+    const embed = vi.fn().mockRejectedValue(new Error("embedding failed"));
+    const provider = fakeProvider(
+      vi.fn().mockResolvedValue({
+        analysis: successResult,
+        model: "google/gemini-3.1-flash-lite-20260507",
+        isByok: false,
+      }),
+    );
+
+    await categorizeBookmark({
+      db,
+      userId: "user",
+      bookmarkId: "bookmark",
+      provider,
+      embeddingProvider: { embed },
+      metadataFetcher: vi.fn().mockResolvedValue({
+        title: null,
+        description: null,
+        siteName: null,
+        faviconUrl: null,
+        ogImageUrl: null,
+      }),
+    });
+    await vi.waitFor(() => expect(embed).toHaveBeenCalled());
+
+    expect(embed).toHaveBeenCalledWith({
+      text: "웹 접근성 실전 안내\n핵심 요약.\n웹 접근성 프론트엔드 사용자 경험",
+      taskType: "document",
+    });
+    expect(db.bookmark.ai_status).toBe("done");
+    expect(db.bookmarkUpdates).not.toContainEqual({ ai_status: "failed" });
+  });
+
   it("records the actual model used on success", async () => {
     const db = new FakeDb();
     const events: {

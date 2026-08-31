@@ -1,6 +1,7 @@
 import {
   jsonSchema,
   openRouterCompletionSchema,
+  openRouterEmbeddingSchema,
   parseAnalyzeResponse,
   systemPrompt,
   userPrompt,
@@ -11,6 +12,8 @@ import type {
   AiProviderConfig,
   AnalyzeOutcome,
   CategorizeInput,
+  EmbeddingProvider,
+  EmbeddingProviderConfig,
 } from "./types";
 
 export const PRESET_MODEL = "@preset/my-bookmark";
@@ -27,8 +30,80 @@ function httpError(status: number, message: string): HttpError {
   return error;
 }
 
+export const EMBEDDING_MODEL = "openai/text-embedding-3-small";
+export const EMBEDDING_DIMENSIONS = 1536;
+
 export function createAiProvider(config: AiProviderConfig): AiProvider {
   return new OpenRouterProvider(config.apiKey);
+}
+
+export function createEmbeddingProvider(
+  config: EmbeddingProviderConfig,
+): EmbeddingProvider {
+  return new OpenRouterEmbeddingProvider(config.apiKey);
+}
+
+class OpenRouterEmbeddingProvider implements EmbeddingProvider {
+  constructor(private readonly apiKey: string) {}
+
+  async embed(input: { text: string; taskType?: string }): Promise<number[]>;
+  async embed(input: {
+    text: string[];
+    taskType?: string;
+  }): Promise<number[][]>;
+  async embed(input: { text: string | string[]; taskType?: string }) {
+    const isBatch = Array.isArray(input.text);
+    const texts: string[] =
+      typeof input.text === "string" ? [input.text] : input.text;
+    const response = await withTimeout(async (signal) => {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/embeddings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "X-Title": "my-bookmark",
+        },
+        body: JSON.stringify({
+          model: EMBEDDING_MODEL,
+          input: isBatch ? texts : texts[0],
+          encoding_format: "float",
+          // taskType stays provider-agnostic; this OpenAI-compatible endpoint
+          // has no task_type request field.
+        }),
+        signal,
+      });
+      if (!response.ok) {
+        throw httpError(
+          response.status,
+          `OpenRouter embedding request failed with status ${response.status}`,
+        );
+      }
+      return openRouterEmbeddingSchema.parse(await response.json());
+    });
+
+    const byIndex = new Map(
+      response.data.map((item) => [item.index, item.embedding]),
+    );
+    if (
+      byIndex.size !== texts.length ||
+      response.data.some((item) => item.index >= texts.length)
+    ) {
+      throw new Error("OpenRouter embedding response indexes are malformed");
+    }
+    const ordered = texts.map((_text, index) => {
+      const embedding = byIndex.get(index);
+      if (!embedding) {
+        throw new Error("OpenRouter embedding response is missing an item");
+      }
+      return embedding;
+    });
+
+    const first = ordered[0];
+    if (!first) {
+      throw new Error("OpenRouter embedding response is empty");
+    }
+    return isBatch ? ordered : first;
+  }
 }
 
 class OpenRouterProvider implements AiProvider {

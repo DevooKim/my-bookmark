@@ -11,6 +11,10 @@ import {
 
 const dbCategorySchema = categorySchema.transform((category) => category);
 
+// Keep vector columns out of row payloads used to build API responses.
+export const BOOKMARK_DB_COLUMNS =
+  "id,user_id,kind,url,title,description,site_name,favicon_url,og_image_url,category_id,tags,metadata,ai_status,ai_model,image_original_path,image_thumbnail_path,image_mime_type,image_file_size,image_width,image_height,image_filename,created_at,updated_at";
+
 export interface BookmarkDbRow {
   id: string;
   user_id: string;

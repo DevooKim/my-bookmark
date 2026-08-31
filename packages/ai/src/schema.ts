@@ -134,6 +134,17 @@ export const openRouterCompletionSchema = z.object({
   usage: z.object({ is_byok: z.boolean().nullish() }).nullish(),
 });
 
+export const openRouterEmbeddingSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        index: z.number().int().nonnegative(),
+        embedding: z.array(z.number().finite()).length(1536),
+      }),
+    )
+    .min(1),
+});
+
 export function systemPrompt(): string {
   return [
     "너는 저장 자료 분류기다. 링크 또는 이미지와 사용자의 기존 카테고리 목록을 보고 가장 적합한 카테고리를 고른다.",
