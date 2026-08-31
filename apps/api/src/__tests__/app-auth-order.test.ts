@@ -43,6 +43,21 @@ describe("app auth routing order", () => {
     });
   });
 
+  it("exempts MCP API-key requests from the rate limit while keeping auth", async () => {
+    const app = createApp();
+    const statuses: number[] = [];
+
+    for (let i = 0; i < 61; i += 1) {
+      const response = await request(app)
+        .post("/api/mcp")
+        .set("X-API-Key", "bm_test")
+        .send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+      statuses.push(response.status);
+    }
+
+    expect(new Set(statuses)).toEqual(new Set([401]));
+  });
+
   it("rate limits API-key requests to the unified share endpoint", async () => {
     const app = createApp();
     let response: request.Response | undefined;

@@ -277,7 +277,7 @@ async function mapBookmarkWithSignedMedia(
   );
 }
 
-interface BookmarkListResult {
+export interface BookmarkListResult {
   bookmarks: Bookmark[];
   nextCursor: string | null;
 }

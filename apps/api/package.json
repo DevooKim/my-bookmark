@@ -12,6 +12,7 @@
     "build": "tsup src/index.ts --format esm --target node24 --clean --sourcemap"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@my-bookmark/ai": "workspace:*",
     "@my-bookmark/shared": "workspace:*",
     "@supabase/supabase-js": "^2.110.0",

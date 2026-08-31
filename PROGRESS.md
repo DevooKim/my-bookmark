@@ -29,9 +29,12 @@
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
 | 날짜 | 결정 | 이유 |
-|---|---|---|
+| --- | --- | --- |
 | 2026-08-31 | 조회 서비스 함수를 `services/`가 아닌 `routes/`에 둔다. | 기존 라우트가 소유한 DB 조회·미디어 매핑 도우미와의 응집도를 유지하면서, 이번 티켓 범위에서 MCP가 재사용할 명시적 seam만 만든다. |
 | 2026-08-31 | 조회 서비스는 HTTP envelope가 아닌 도메인 값을 반환한다. | 목록은 `{ bookmarks, nextCursor }`, 카테고리는 배열을 반환하고 HTTP 응답의 `items`/`bookmark` envelope는 라우터가 조립해, 생성 서비스의 bare 도메인 반환 선례와 맞추면서 기존 JSON 계약을 보존한다. |
+| 2026-08-31 | MCP SDK는 `@modelcontextprotocol/sdk@1.30.0`과 현재 설치된 Zod 4.x를 사용하고, 기존 `bookmarkListQuerySchema`를 `search_bookmarks` 입력 스키마로 재사용한다. | SDK peer dependency가 Zod 3.25 이상 또는 4.x를 지원하며 실제 설치 버전은 4.5.4였다. 별도 변환 스키마와 이중 body parse를 두지 않아 요청 검증 경계를 하나로 유지한다. |
+| 2026-08-31 | MCP Streamable HTTP transport는 session ID generator 없이 JSON 응답 stateless 모드로 생성하고, SDK 타입의 `exactOptionalPropertyTypes` 충돌은 동작을 전달하는 명시적 adapter로 격리한다. | MCP 요청마다 독립적인 인증 사용자 서버를 만들고 세션 상태를 저장하지 않는다. SDK transport의 optional callback 타입이 애플리케이션 TypeScript 설정과 직접 호환되지 않아 unsafe assertion 없이 adapter를 사용했다. |
+| 2026-08-31 | `/api/mcp`는 API 키 레이트리밋 whitelist(면제 경로)로 등록한다. | MCP 대화의 `initialize`·`tools/list`·`tools/call`이 여러 POST를 사용하므로 60req/min을 적용하지 않되, 라우터 인증은 그대로 수행한다. 61회 잘못된 키 요청이 모두 401인 테스트로 면제를 확인했다. |
 | 2026-08-22 | Dockerfile과 Compose의 외부 이미지 이름을 `docker.io/...`로 완전히 한정한다. | Podman은 `registries.conf`에 unqualified-search registry가 없으면 `oven/bun`, `node`, `louislam/uptime-kuma` 같은 short name을 거부한다. 호스트 전역 설정 변경 없이 Docker와 Podman에서 같은 저장소 설정을 사용하기 위함. |
 | 2026-08-22 | 루트 `packageManager`와 API/Web Docker 빌드 이미지를 Bun 1.4.0으로 함께 올리고, Vercel Functions의 `bunVersion: "1.x"`는 유지한다. | 로컬·Docker 의존성 설치/빌드의 재현 버전을 일치시키되, Vercel 설정은 플랫폼이 지원하는 1.x 런타임 선택 계약을 따라야 한다. |
 | 2026-07-19 | 같은 집 서버의 Uptime Kuma 2.4.0은 Caddy 경유 web/API/readiness만 감시하고, API 내부 알림은 Discord Webhook과 인메모리 집계로 구현했다. 동일 IP 인증 실패는 1분 5회에 경고하며 전체 IP를 표시하되 자동 차단은 하지 않는다. | Tailscale 내부 개인 서비스에서 장애·비정상 접근을 빠르게 확인하면서 외부 모니터·Redis·방화벽 권한·장기 이벤트 저장소의 운영 비용과 오탐 차단 위험을 피하기 위함. |
@@ -113,6 +116,8 @@
 
 ## 알려진 이슈 / 기술 부채
 
+- MCP 티켓 02의 자동 검증과 API 단위 curl(무인증/잘못된 API key의 401)은 완료했다. 직접 실행한 API에서도 잘못된 키의 MCP POST 61회가 모두 401로 유지되어 API 키 레이트리밋 면제를 확인했다. 유효한 `bm_` API key와 MCP Inspector/Claude Desktop 클라이언트가 현재 작업 환경에 없어 실제 `initialize → tools/list → tools/call` 외부 클라이언트 확인은 수동 후속 항목으로 남겼다.
+- 전체 검증 루프는 2026-08-31 22:03 실행에서 typecheck/lint/test/build 모두 통과(API 173개·web 119개 포함)했다. 이후 동일 루프 재실행에서는 코드와 무관한 기존 web 테스트의 5초 timeout 및 API rate/security 테스트 flake가 간헐적으로 발생했으며, web은 `--testTimeout=30000`으로 119개 통과하고 API 단독도 173개 통과했다. lint는 기존 `scripts/seed-bookmarks.ts`의 `process.env["TEST_EMAIL"]`와 이번 테스트의 헤더 인덱스 표기 정보 2건만 보고한다.
 - (해소) Phase 1 수용 기준 — 로그인/리다이렉트/로그아웃/`GET /api/me` — 사용자가 실제 동작 확인 완료. `supabase db push` 및 대시보드 가입 차단/계정 생성도 사용자 측에서 반영된 것으로 확인.
 - Phase 2 실제 계정 API E2E 확인 완료: Supabase password login → `GET /api/me`, 카테고리 생성/목록 count, 수동/미지정 북마크 등록, 정규화 중복 409(`existingId`), metadata title/favicon 백그라운드 보강, 검색/카테고리/미분류 필터, 카테고리 변경, 카테고리 삭제 시 미분류化, pagination 응답 shape를 `PORT=3101` 현 브랜치 API에서 확인했다. 테스트 데이터는 스크립트 종료 시 삭제했다.
 - Phase 2 브라우저 UI 조작 확인 필요: 도구에 Playwright/Puppeteer가 없어 실제 클릭 기반 확인은 자동화하지 못했다. 웹 dev 서버는 `VITE_API_URL=http://localhost:3101` + port 3100에서 HTTP 200 렌더 확인 완료. 남은 항목: 중복 URL 토스트, 375px 모바일 레이아웃, 다크모드 토글, 인라인 카테고리 생성/무한 스크롤의 실제 브라우저 확인.

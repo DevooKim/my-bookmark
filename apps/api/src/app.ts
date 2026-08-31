@@ -15,6 +15,7 @@ import { categoriesRouter } from "./routes/categories";
 import { createHealthRouter } from "./routes/health";
 import { imagesRouter } from "./routes/images";
 import { keysRouter } from "./routes/keys";
+import { mcpRouter } from "./routes/mcp";
 import { meRouter } from "./routes/me";
 import { pushRouter } from "./routes/push";
 import { remindersRouter } from "./routes/reminders";
@@ -86,7 +87,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       standardHeaders: true,
       legacyHeaders: false,
       skip: (request) =>
-        !request.header("X-API-Key") || !isApiKeyAllowedPath(request.path),
+        isMcpPath(request.path) ||
+        !request.header("X-API-Key") ||
+        !isApiKeyAllowedPath(request.path),
       handler: (_request, response) => {
         response.status(429).json({
           error: {
@@ -105,6 +108,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }),
   );
   app.use("/api", meRouter);
+  app.use("/api", mcpRouter);
   app.use("/api", keysRouter);
   app.use("/api", categoriesRouter);
   app.use("/api", bookmarksRouter);
@@ -139,6 +143,10 @@ export function parseTrustProxy(value: string): boolean | number | string {
   }
   const hops = Number(value);
   return Number.isInteger(hops) && hops >= 0 ? hops : value;
+}
+
+function isMcpPath(path: string): boolean {
+  return path === "/mcp" || path === "/mcp/";
 }
 
 function isApiKeyAllowedPath(path: string): boolean {
