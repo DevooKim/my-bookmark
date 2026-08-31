@@ -1,5 +1,7 @@
 import {
   API_ERROR_CODES,
+  type Category,
+  type CategoryWithCount,
   createCategoryRequestSchema,
   reorderCategoriesRequestSchema,
   updateCategoryRequestSchema,
@@ -24,7 +26,9 @@ categoriesRouter.get("/categories", async (request, response) => {
   // Express query is typed as an index signature; dot access fails noPropertyAccessFromIndexSignature.
   // biome-ignore lint/complexity/useLiteralKeys: bracket access is required by TypeScript config.
   const withCounts = request.query["withCounts"] === "true";
-  response.json(await listCategoriesForUser(userId, withCounts));
+  response.json({
+    items: await listCategoriesForUser({ userId, withCounts }),
+  });
 });
 
 categoriesRouter.post("/categories", async (request, response) => {
@@ -147,10 +151,13 @@ function getDb() {
   return supabaseAdmin;
 }
 
-export async function listCategoriesForUser(
-  userId: string,
-  withCounts = false,
-) {
+export async function listCategoriesForUser({
+  userId,
+  withCounts,
+}: {
+  userId: string;
+  withCounts: boolean;
+}): Promise<Category[] | CategoryWithCount[]> {
   const { data, error } = await getDb()
     .from("categories")
     .select("*")
@@ -162,15 +169,13 @@ export async function listCategoriesForUser(
   }
 
   if (!withCounts) {
-    return { items: (data ?? []).map(mapCategory) };
+    return (data ?? []).map(mapCategory);
   }
 
   const counts = await loadBookmarkCounts(userId);
-  return {
-    items: (data ?? []).map((row) =>
-      mapCategoryWithCount({ ...row, bookmark_count: counts.get(row.id) ?? 0 }),
-    ),
-  };
+  return (data ?? []).map((row) =>
+    mapCategoryWithCount({ ...row, bookmark_count: counts.get(row.id) ?? 0 }),
+  );
 }
 
 async function loadBookmarkCounts(

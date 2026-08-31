@@ -1,5 +1,6 @@
 import {
   API_ERROR_CODES,
+  type Bookmark,
   type BookmarkListQuery,
   bookmarkListQuerySchema,
   type CreateBookmarkRequest,
@@ -135,7 +136,8 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
 bookmarksRouter.get("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
   const query = bookmarkListQuerySchema.parse(request.query);
-  response.json(await listBookmarksForUser(userId, query));
+  const result = await listBookmarksForUser(userId, query);
+  response.json({ items: result.bookmarks, nextCursor: result.nextCursor });
 });
 
 bookmarksRouter.get("/bookmarks/:id", async (request, response) => {
@@ -265,7 +267,7 @@ function getImageStorage(): ImageStorageBucket {
 async function mapBookmarkWithSignedMedia(
   row: BookmarkDbRow,
   includeOriginal: boolean,
-) {
+): Promise<Bookmark> {
   if (row.kind !== "image") {
     return mapBookmark(row);
   }
@@ -275,10 +277,15 @@ async function mapBookmarkWithSignedMedia(
   );
 }
 
+interface BookmarkListResult {
+  bookmarks: Bookmark[];
+  nextCursor: string | null;
+}
+
 export async function listBookmarksForUser(
   userId: string,
   query: BookmarkListQuery,
-) {
+): Promise<BookmarkListResult> {
   const db = getDb();
   const cursor = query.cursor ? decodeCursor(query.cursor) : null;
   const { data, error } = await db.rpc(
@@ -293,14 +300,17 @@ export async function listBookmarksForUser(
   const pageRows = rows.slice(0, query.limit);
   const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
   return {
-    items: await Promise.all(
+    bookmarks: await Promise.all(
       pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
     ),
     nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
   };
 }
 
-export async function getBookmarkForUser(userId: string, id: string) {
+export async function getBookmarkForUser(
+  userId: string,
+  id: string,
+): Promise<Bookmark> {
   const { data, error } = await getDb()
     .from("bookmarks")
     .select("*")
