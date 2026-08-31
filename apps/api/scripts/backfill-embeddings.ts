@@ -1,4 +1,5 @@
 import "../src/lib/load-env";
+import { fileURLToPath } from "node:url";
 import type { EmbeddingProvider } from "@my-bookmark/ai";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "../src/lib/supabase";
@@ -6,6 +7,7 @@ import { buildEmbeddingText } from "../src/services/embedding";
 import { getEmbeddingProvider } from "../src/services/embedding-provider";
 
 export const EMBEDDING_BATCH_SIZE = 100;
+const QUERY_PAGE_SIZE = 500;
 
 const backfillBookmarkSchema = z.object({
   id: z.string().min(1),
@@ -23,13 +25,7 @@ export interface BackfillStore {
 
 interface BackfillSelectQuery {
   is(column: "embedding", value: null): BackfillSelectQuery;
-  limit(count: number): BackfillSelectQuery;
-  then<TResult1 = BackfillSelectResult, TResult2 = never>(
-    onfulfilled?:
-      | ((value: BackfillSelectResult) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): PromiseLike<TResult1 | TResult2>;
+  range(from: number, to: number): PromiseLike<BackfillSelectResult>;
 }
 
 interface BackfillSelectResult {
@@ -68,6 +64,13 @@ export interface BackfillResult {
   dryRun: boolean;
 }
 
+export function isBackfillEntrypoint(
+  moduleUrl: string,
+  argvPath: string | undefined,
+): boolean {
+  return argvPath !== undefined && fileURLToPath(moduleUrl) === argvPath;
+}
+
 export function parseBackfillArgs(argv: string[]): BackfillArgs {
   let dryRun = false;
   let limit: number | undefined;
@@ -102,12 +105,26 @@ export function createSupabaseBackfillStore(
         .from("bookmarks")
         .select("id,title,description,tags")
         .is("embedding", null);
-      const result =
-        limit === undefined ? await query : await query.limit(limit);
-      if (result.error) {
-        throw result.error;
+      const pageSize =
+        limit === undefined
+          ? QUERY_PAGE_SIZE
+          : Math.min(limit, QUERY_PAGE_SIZE);
+      const bookmarks: BackfillBookmark[] = [];
+
+      for (let offset = 0; ; offset += pageSize) {
+        const result = await query.range(offset, offset + pageSize - 1);
+        if (result.error) {
+          throw result.error;
+        }
+        const page = backfillBookmarkSchema.array().parse(result.data ?? []);
+        bookmarks.push(...page);
+        if (
+          page.length < pageSize ||
+          (limit !== undefined && bookmarks.length >= limit)
+        ) {
+          return limit === undefined ? bookmarks : bookmarks.slice(0, limit);
+        }
       }
-      return backfillBookmarkSchema.array().parse(result.data ?? []);
     },
     async updateEmbedding(bookmarkId, embedding) {
       const { error } = await supabase
@@ -146,7 +163,8 @@ export async function runBackfill(input: {
     return result;
   }
 
-  if (!input.provider) {
+  const provider = input.provider;
+  if (!provider) {
     throw new Error("OPEN_ROUTER_API_KEY is required for embedding backfill");
   }
 
@@ -160,6 +178,31 @@ export async function runBackfill(input: {
     );
   };
 
+  const writeEmbedding = async (
+    bookmark: BackfillBookmark,
+    embedding: number[],
+  ): Promise<void> => {
+    try {
+      await input.store.updateEmbedding(bookmark.id, embedding);
+      result.embedded += 1;
+    } catch (error) {
+      recordFailure(bookmark.id, error);
+    }
+  };
+
+  const retryBookmarkIndividually = async (
+    bookmark: BackfillBookmark,
+  ): Promise<void> => {
+    try {
+      const embedding = await provider.embed({
+        text: buildEmbeddingText(bookmark),
+      });
+      await writeEmbedding(bookmark, embedding);
+    } catch (error) {
+      recordFailure(bookmark.id, error);
+    }
+  };
+
   for (
     let offset = 0;
     offset < bookmarks.length;
@@ -168,7 +211,7 @@ export async function runBackfill(input: {
     const batch = bookmarks.slice(offset, offset + EMBEDDING_BATCH_SIZE);
     let embeddings: number[][];
     try {
-      embeddings = await input.provider.embed({
+      embeddings = await provider.embed({
         text: batch.map(buildEmbeddingText),
       });
       if (embeddings.length !== batch.length) {
@@ -177,8 +220,11 @@ export async function runBackfill(input: {
         );
       }
     } catch (error) {
+      input.logger.warn(
+        `Embedding batch failed for ${batch.length} bookmark(s); retrying individually: ${errorMessage(error)}`,
+      );
       for (const bookmark of batch) {
-        recordFailure(bookmark.id, error);
+        await retryBookmarkIndividually(bookmark);
       }
       continue;
     }
@@ -193,12 +239,7 @@ export async function runBackfill(input: {
         );
         continue;
       }
-      try {
-        await input.store.updateEmbedding(bookmark.id, embedding);
-        result.embedded += 1;
-      } catch (error) {
-        recordFailure(bookmark.id, error);
-      }
+      await writeEmbedding(bookmark, embedding);
     }
   }
 
@@ -227,7 +268,7 @@ async function main(): Promise<void> {
   }
 }
 
-if (import.meta.main) {
+if (isBackfillEntrypoint(import.meta.url, process.argv[1])) {
   main().catch((error: unknown) => {
     console.error(`Embedding backfill aborted: ${errorMessage(error)}`);
     process.exitCode = 1;

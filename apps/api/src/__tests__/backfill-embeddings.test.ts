@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import type { EmbeddingProvider } from "@my-bookmark/ai";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -5,6 +6,8 @@ import {
   type BackfillLogger,
   createSupabaseBackfillStore,
   EMBEDDING_BATCH_SIZE,
+  isBackfillEntrypoint,
+  parseBackfillArgs,
   runBackfill,
 } from "../../scripts/backfill-embeddings";
 
@@ -43,12 +46,11 @@ function createLogger() {
 describe("backfill embeddings", () => {
   it("selects only rows whose embedding is null", async () => {
     const rows = [bookmark("missing")];
-    const query = Object.assign(Promise.resolve({ data: rows, error: null }), {
+    const query = {
       is: vi.fn(),
-      limit: vi.fn(),
-    });
+      range: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    };
     query.is.mockReturnValue(query);
-    query.limit.mockReturnValue(query);
     const select = vi.fn().mockReturnValue(query);
     const update = vi.fn();
     const client = {
@@ -59,8 +61,38 @@ describe("backfill embeddings", () => {
     await expect(store.findMissingBookmarks(3)).resolves.toEqual(rows);
     expect(select).toHaveBeenCalledWith("id,title,description,tags");
     expect(query.is).toHaveBeenCalledWith("embedding", null);
-    expect(query.limit).toHaveBeenCalledWith(3);
+    expect(query.range).toHaveBeenCalledWith(0, 2);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("paginates an unbounded selection beyond one query page", async () => {
+    const firstPage = Array.from({ length: 500 }, (_, index) =>
+      bookmark(String(index)),
+    );
+    const secondPage = [bookmark("500")];
+    const query = {
+      is: vi.fn(),
+      range: vi.fn((from: number) =>
+        Promise.resolve({
+          data: from === 0 ? firstPage : secondPage,
+          error: null,
+        }),
+      ),
+    };
+    query.is.mockReturnValue(query);
+    const client = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue(query),
+        update: vi.fn(),
+      }),
+    };
+
+    const store = createSupabaseBackfillStore(client);
+    const rows = await store.findMissingBookmarks();
+
+    expect(rows).toHaveLength(501);
+    expect(query.range).toHaveBeenNthCalledWith(1, 0, 499);
+    expect(query.range).toHaveBeenNthCalledWith(2, 500, 999);
   });
 
   it("does not embed or write during a dry run", async () => {
@@ -85,6 +117,33 @@ describe("backfill embeddings", () => {
     expect(logger.info).toHaveBeenCalledWith(
       "Embedding backfill dry run: 1 bookmark(s) would be processed",
     );
+  });
+
+  it("validates the command-line argument contract", () => {
+    expect(parseBackfillArgs(["--dry-run", "--limit", "5"])).toEqual({
+      dryRun: true,
+      limit: 5,
+    });
+    for (const args of [
+      ["--limit"],
+      ["--limit", "abc"],
+      ["--limit", "0"],
+      ["--limit", "-1"],
+      ["--limit=5"],
+      ["--unknown"],
+    ]) {
+      expect(() => parseBackfillArgs(args)).toThrow();
+    }
+  });
+
+  it("recognizes the direct tsx entrypoint without import.meta.main", () => {
+    const modulePath = "/tmp/backfill-embeddings.ts";
+    expect(
+      isBackfillEntrypoint(pathToFileURL(modulePath).href, modulePath),
+    ).toBe(true);
+    expect(
+      isBackfillEntrypoint(pathToFileURL(modulePath).href, undefined),
+    ).toBe(false);
   });
 
   it("passes --limit through to missing-row selection", async () => {
@@ -114,17 +173,18 @@ describe("backfill embeddings", () => {
     ]);
   });
 
-  it("uses the provider batch input and continues after a failed batch", async () => {
+  it("uses the provider batch input and isolates a toxic row", async () => {
     const rows = Array.from({ length: EMBEDDING_BATCH_SIZE + 1 }, (_, index) =>
       bookmark(String(index)),
     );
     const batchCalls: string[][] = [];
-    let callCount = 0;
     const provider = createProvider(async (texts) => {
       batchCalls.push(texts);
-      callCount += 1;
-      if (callCount === 1) {
+      if (texts.length === EMBEDDING_BATCH_SIZE) {
         throw new Error("temporary embedding failure");
+      }
+      if (texts[0]?.includes("제목 0")) {
+        throw new Error("toxic bookmark");
       }
       return texts.map(() => [1]);
     });
@@ -141,20 +201,22 @@ describe("backfill embeddings", () => {
       logger,
     });
 
-    expect(batchCalls).toHaveLength(2);
     expect(batchCalls[0]).toHaveLength(EMBEDDING_BATCH_SIZE);
-    expect(batchCalls[1]).toHaveLength(1);
-    expect(updateEmbedding).toHaveBeenCalledTimes(1);
+    expect(batchCalls.at(-1)).toHaveLength(1);
+    expect(batchCalls.slice(1, -1).every((call) => call.length === 1)).toBe(
+      true,
+    );
+    expect(updateEmbedding).toHaveBeenCalledTimes(EMBEDDING_BATCH_SIZE);
     expect(result).toMatchObject({
       candidates: EMBEDDING_BATCH_SIZE + 1,
-      embedded: 1,
-      failed: EMBEDDING_BATCH_SIZE,
+      embedded: EMBEDDING_BATCH_SIZE,
+      failed: 1,
     });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining("temporary embedding failure"),
     );
     expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("failed=100"),
+      expect.stringContaining("toxic bookmark"),
     );
   });
 
