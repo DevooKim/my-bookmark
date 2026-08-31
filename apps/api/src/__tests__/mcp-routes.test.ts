@@ -25,6 +25,7 @@ const initializeRequest = {
 };
 
 const fake = vi.hoisted(() => ({
+  createBookmark: vi.fn(),
   databaseFrom: vi.fn(),
   getBookmark: vi.fn(),
   listBookmarks: vi.fn(),
@@ -43,6 +44,7 @@ function createTestApp(
     apiKeyVerifier: fake.verifyApiKey,
     buildServer: (authenticatedUserId) =>
       buildMcpServer(authenticatedUserId, {
+        createBookmark: fake.createBookmark,
         getBookmark,
         listBookmarks: fake.listBookmarks,
         listCategories: fake.listCategories,
@@ -68,6 +70,13 @@ async function postMcp(
 }
 
 beforeEach(() => {
+  fake.createBookmark.mockReset();
+  fake.createBookmark.mockResolvedValue({
+    id: bookmarkId,
+    userId,
+    kind: "link",
+    title: "New bookmark",
+  });
   fake.databaseFrom.mockReset();
   fake.verifyApiKey.mockReset();
   fake.verifyApiKey.mockResolvedValue(userId);
@@ -157,10 +166,15 @@ describe("MCP search route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body.result.tools).toHaveLength(3);
+    expect(response.body.result.tools).toHaveLength(4);
     expect(
       response.body.result.tools.map((tool: { name: string }) => tool.name),
-    ).toEqual(["search_bookmarks", "get_bookmark", "list_categories"]);
+    ).toEqual([
+      "search_bookmarks",
+      "get_bookmark",
+      "add_bookmark",
+      "list_categories",
+    ]);
   });
 
   it("calls search_bookmarks through the injected read service", async () => {
@@ -203,6 +217,60 @@ describe("MCP search route", () => {
       title: "Design systems",
     });
     expect(fake.getBookmark).toHaveBeenCalledWith(userId, bookmarkId);
+  });
+
+  it("adds a bookmark through the injected AI creation service", async () => {
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: {
+        name: "add_bookmark",
+        arguments: { url: "https://example.com/new-bookmark" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result.isError).toBeUndefined();
+    expect(JSON.parse(response.body.result.content[0].text)).toMatchObject({
+      id: bookmarkId,
+      title: "New bookmark",
+    });
+    expect(fake.createBookmark).toHaveBeenCalledWith({
+      userId,
+      request: { url: "https://example.com/new-bookmark", mode: "ai" },
+    });
+  });
+
+  it("returns a normal informational result for a duplicate URL", async () => {
+    fake.createBookmark.mockRejectedValueOnce(
+      new HttpError(409, API_ERROR_CODES.CONFLICT, "이미 저장된 링크", {
+        existingId: bookmarkId,
+      }),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: {
+        name: "add_bookmark",
+        arguments: { url: "https://example.com/existing" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result.isError).toBeUndefined();
+    expect(response.body.result.content).toEqual([
+      {
+        type: "text",
+        text: `이미 저장된 북마크입니다. 기존 북마크 ID: ${bookmarkId}`,
+      },
+    ]);
+    expect(fake.createBookmark).toHaveBeenCalledWith({
+      userId,
+      request: { url: "https://example.com/existing", mode: "ai" },
+    });
   });
 
   it("lists categories through the injected read service", async () => {
@@ -302,6 +370,17 @@ describe("MCP search route", () => {
       },
     });
 
+    fake.createBookmark.mockRejectedValueOnce(new Error("database failed"));
+    const addResponse = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/call",
+      params: {
+        name: "add_bookmark",
+        arguments: { url: "https://example.com/failure" },
+      },
+    });
+
     expect(bookmarkResponse.body.result).toMatchObject({
       isError: true,
       content: [{ type: "text", text: "북마크 조회에 실패했습니다" }],
@@ -309,6 +388,10 @@ describe("MCP search route", () => {
     expect(categoryResponse.body.result).toMatchObject({
       isError: true,
       content: [{ type: "text", text: "카테고리 조회에 실패했습니다" }],
+    });
+    expect(addResponse.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "북마크 등록에 실패했습니다" }],
     });
   });
 
