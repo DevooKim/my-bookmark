@@ -31,7 +31,6 @@ describe("OpenRouter embedding provider", () => {
 
     const result = await provider.embed({
       text: "제목\n설명",
-      taskType: "document",
     });
 
     expect(result).toEqual(vector(1));
@@ -60,7 +59,6 @@ describe("OpenRouter embedding provider", () => {
 
     const result = await provider.embed({
       text: ["첫 번째", "두 번째"],
-      taskType: "document",
     });
 
     expect(result).toEqual([first, second]);
@@ -69,6 +67,15 @@ describe("OpenRouter embedding provider", () => {
       model: EMBEDDING_MODEL,
       input: ["첫 번째", "두 번째"],
     });
+  });
+
+  it("returns an empty batch without calling the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createEmbeddingProvider({ apiKey: "or-key" });
+
+    await expect(provider.embed({ text: [] })).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects a non-success response", async () => {

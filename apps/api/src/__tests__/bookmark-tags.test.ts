@@ -8,8 +8,10 @@ const categoryId = "33333333-3333-4333-8333-333333333333";
 const createdAt = "2026-07-12T12:00:00.000Z";
 
 const mocks = vi.hoisted(() => ({
+  embeddingProvider: null as { embed: ReturnType<typeof vi.fn> } | null,
   rpc: vi.fn(),
   update: vi.fn(),
+  updateBookmarkEmbedding: vi.fn(),
 }));
 
 vi.mock("../lib/supabase", () => ({
@@ -17,6 +19,14 @@ vi.mock("../lib/supabase", () => ({
     rpc: mocks.rpc,
     from: vi.fn(() => ({ update: mocks.update })),
   },
+}));
+
+vi.mock("../services/embedding-provider", () => ({
+  getEmbeddingProvider: () => mocks.embeddingProvider,
+}));
+
+vi.mock("../services/embedding", () => ({
+  updateBookmarkEmbedding: mocks.updateBookmarkEmbedding,
 }));
 
 vi.mock("../middleware/auth", async (importOriginal) => {
@@ -83,9 +93,20 @@ function createTestApp() {
   return app;
 }
 
+function mockBookmarkPatch(row = bookmarkRow()) {
+  const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+  const select = vi.fn(() => ({ maybeSingle }));
+  const secondEq = vi.fn(() => ({ select }));
+  const firstEq = vi.fn(() => ({ eq: secondEq }));
+  mocks.update.mockReturnValue({ eq: firstEq });
+}
+
 beforeEach(() => {
+  mocks.embeddingProvider = null;
   mocks.rpc.mockReset();
   mocks.update.mockReset();
+  mocks.updateBookmarkEmbedding.mockReset();
+  mocks.updateBookmarkEmbedding.mockResolvedValue(undefined);
 });
 
 describe("bookmark tags API", () => {
@@ -168,6 +189,67 @@ describe("bookmark tags API", () => {
       ai_status: "idle",
     });
     expect(response.body.bookmark.tags).toEqual(["React", "개발"]);
+  });
+
+  it("refreshes the embedding when title, description, or tags change", async () => {
+    const embeddingProvider = { embed: vi.fn() };
+    mocks.embeddingProvider = embeddingProvider;
+    mockBookmarkPatch(
+      bookmarkRow({
+        title: "새 제목",
+        description: "새 설명",
+        tags: ["새 태그"],
+      }),
+    );
+
+    const response = await request(createTestApp())
+      .patch(`/api/bookmarks/${bookmarkId}`)
+      .send({
+        title: "새 제목",
+        description: "새 설명",
+        tags: ["새 태그"],
+      });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateBookmarkEmbedding).toHaveBeenCalledWith({
+      db: expect.any(Object),
+      userId,
+      bookmarkId,
+      provider: embeddingProvider,
+      content: {
+        title: "새 제목",
+        description: "새 설명",
+        tags: ["새 태그"],
+      },
+    });
+  });
+
+  it("does not refresh the embedding when only the category changes", async () => {
+    mockBookmarkPatch(bookmarkRow({ category_id: null }));
+
+    const response = await request(createTestApp())
+      .patch(`/api/bookmarks/${bookmarkId}`)
+      .send({ categoryId: null });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateBookmarkEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("keeps PATCH successful when embedding refresh fails", async () => {
+    mocks.embeddingProvider = { embed: vi.fn() };
+    mocks.updateBookmarkEmbedding.mockRejectedValueOnce(
+      new Error("embedding failed"),
+    );
+    mockBookmarkPatch(bookmarkRow({ title: "새 제목" }));
+
+    const response = await request(createTestApp())
+      .patch(`/api/bookmarks/${bookmarkId}`)
+      .send({ title: "새 제목" });
+
+    expect(response.status).toBe(200);
+    await vi.waitFor(() =>
+      expect(mocks.updateBookmarkEmbedding).toHaveBeenCalled(),
+    );
   });
 
   it("rejects more than five tags", async () => {

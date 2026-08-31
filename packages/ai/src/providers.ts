@@ -31,7 +31,6 @@ function httpError(status: number, message: string): HttpError {
 }
 
 export const EMBEDDING_MODEL = "openai/text-embedding-3-small";
-export const EMBEDDING_DIMENSIONS = 1536;
 
 export function createAiProvider(config: AiProviderConfig): AiProvider {
   return new OpenRouterProvider(config.apiKey);
@@ -46,13 +45,13 @@ export function createEmbeddingProvider(
 class OpenRouterEmbeddingProvider implements EmbeddingProvider {
   constructor(private readonly apiKey: string) {}
 
-  async embed(input: { text: string; taskType?: string }): Promise<number[]>;
-  async embed(input: {
-    text: string[];
-    taskType?: string;
-  }): Promise<number[][]>;
-  async embed(input: { text: string | string[]; taskType?: string }) {
+  async embed(input: { text: string }): Promise<number[]>;
+  async embed(input: { text: string[] }): Promise<number[][]>;
+  async embed(input: { text: string | string[] }) {
     const isBatch = Array.isArray(input.text);
+    if (isBatch && input.text.length === 0) {
+      return [];
+    }
     const texts: string[] =
       typeof input.text === "string" ? [input.text] : input.text;
     const response = await withTimeout(async (signal) => {
@@ -67,8 +66,6 @@ class OpenRouterEmbeddingProvider implements EmbeddingProvider {
           model: EMBEDDING_MODEL,
           input: isBatch ? texts : texts[0],
           encoding_format: "float",
-          // taskType stays provider-agnostic; this OpenAI-compatible endpoint
-          // has no task_type request field.
         }),
         signal,
       });

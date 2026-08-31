@@ -45,7 +45,6 @@ describe("bookmark embeddings", () => {
 
     expect(embed).toHaveBeenCalledWith({
       text: "제목\n설명\n태그",
-      taskType: "document",
     });
     expect(from).toHaveBeenCalledWith("bookmarks");
     expect(update).toHaveBeenCalledWith({ embedding });

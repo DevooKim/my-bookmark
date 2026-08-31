@@ -1,3 +1,5 @@
+export const EMBEDDING_DIMENSIONS = 1536;
+
 interface CategoryInput {
   id: string;
   name: string;
@@ -70,13 +72,9 @@ export interface EmbeddingProviderConfig {
   apiKey: string;
 }
 
-export interface EmbeddingInput {
-  taskType?: string;
-}
-
 export interface EmbeddingProvider {
-  embed(input: EmbeddingInput & { text: string }): Promise<number[]>;
-  embed(input: EmbeddingInput & { text: string[] }): Promise<number[][]>;
+  embed(input: { text: string }): Promise<number[]>;
+  embed(input: { text: string[] }): Promise<number[][]>;
 }
 
 export interface AnalyzeOutcome {

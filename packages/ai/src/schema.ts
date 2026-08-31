@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AnalyzeResult, CategorizeInput, CategorizeResult } from "./types";
-import { sourcePlatforms } from "./types";
+import { EMBEDDING_DIMENSIONS, sourcePlatforms } from "./types";
 
 export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({
@@ -139,7 +139,7 @@ export const openRouterEmbeddingSchema = z.object({
     .array(
       z.object({
         index: z.number().int().nonnegative(),
-        embedding: z.array(z.number().finite()).length(1536),
+        embedding: z.array(z.number().finite()).length(EMBEDDING_DIMENSIONS),
       }),
     )
     .min(1),

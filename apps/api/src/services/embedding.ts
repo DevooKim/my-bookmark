@@ -68,7 +68,6 @@ export async function updateBookmarkEmbedding(input: {
 
   const embedding = await input.provider.embed({
     text: buildEmbeddingText(input.content),
-    taskType: "document",
   });
   const table = input.db.from("bookmarks");
   if (!isBookmarkEmbeddingTable(table)) {

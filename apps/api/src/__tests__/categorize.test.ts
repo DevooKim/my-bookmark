@@ -547,7 +547,6 @@ describe("categorizeBookmark", () => {
 
     expect(embed).toHaveBeenCalledWith({
       text: "웹 접근성 실전 안내\n핵심 요약.\n웹 접근성 프론트엔드 사용자 경험",
-      taskType: "document",
     });
     expect(db.bookmark.ai_status).toBe("done");
     expect(db.bookmarkUpdates).not.toContainEqual({ ai_status: "failed" });
