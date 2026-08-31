@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "seed:bookmarks": "tsx scripts/seed-bookmarks.ts",
+    "backfill:embeddings": "tsx scripts/backfill-embeddings.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "vitest run",
