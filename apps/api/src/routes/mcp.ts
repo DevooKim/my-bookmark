@@ -72,8 +72,10 @@ function createApiKeyAuth(verifyApiKey: ApiKeyVerifier): RequestHandler {
   return async (request, _response, next) => {
     const headerApiKey = request.header("X-API-Key");
     const authorization = request.header("Authorization");
-    const bearerApiKey = authorization?.match(/^Bearer\s+(bm_.+)$/i)?.[1];
-    const apiKey = headerApiKey ?? bearerApiKey;
+    const bearerApiKey = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+    const apiKey =
+      headerApiKey ??
+      (bearerApiKey && /^bm_.+$/.test(bearerApiKey) ? bearerApiKey : undefined);
 
     if (!apiKey) {
       next(new HttpError(401, API_ERROR_CODES.UNAUTHORIZED, "Missing API key"));
@@ -110,6 +112,8 @@ export function createMcpRouter({
   const router = Router();
   const authenticate = createApiKeyAuth(apiKeyVerifier);
 
+  router.get("/mcp", methodNotAllowed);
+  router.delete("/mcp", methodNotAllowed);
   router.use("/mcp", authenticate);
   router.post("/mcp", async (request, response) => {
     const server = buildServer(getUserId(request));
@@ -126,7 +130,8 @@ export function createMcpRouter({
     try {
       await server.connect(new McpTransportAdapter(transport));
       await transport.handleRequest(request, response, request.body);
-    } catch {
+    } catch (error) {
+      console.warn("MCP transport request failed", error);
       if (!response.headersSent) {
         response.status(500).json({
           jsonrpc: "2.0",
@@ -139,8 +144,6 @@ export function createMcpRouter({
       }
     }
   });
-  router.get("/mcp", methodNotAllowed);
-  router.delete("/mcp", methodNotAllowed);
 
   return router;
 }

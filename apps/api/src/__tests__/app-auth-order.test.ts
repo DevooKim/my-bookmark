@@ -1,6 +1,6 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createApp } from "../app";
+import { createApp, isApiKeyAllowedPath } from "../app";
 
 describe("app auth routing order", () => {
   it("does not let bearer-only routers intercept API-key bookmark requests", async () => {
@@ -43,19 +43,8 @@ describe("app auth routing order", () => {
     });
   });
 
-  it("exempts MCP API-key requests from the rate limit while keeping auth", async () => {
-    const app = createApp();
-    const statuses: number[] = [];
-
-    for (let i = 0; i < 61; i += 1) {
-      const response = await request(app)
-        .post("/api/mcp")
-        .set("X-API-Key", "bm_test")
-        .send({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
-      statuses.push(response.status);
-    }
-
-    expect(new Set(statuses)).toEqual(new Set([401]));
+  it("registers MCP as an API-key allowed path", () => {
+    expect(isApiKeyAllowedPath("/mcp")).toBe(true);
   });
 
   it("rate limits API-key requests to the unified share endpoint", async () => {

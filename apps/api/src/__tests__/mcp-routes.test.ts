@@ -1,8 +1,9 @@
+import { API_ERROR_CODES } from "@my-bookmark/shared";
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildMcpServer } from "../mcp/server";
-import { errorMiddleware } from "../middleware/error";
+import { errorMiddleware, HttpError } from "../middleware/error";
 import { createMcpRouter, type McpRouterDeps } from "../routes/mcp";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -69,6 +70,29 @@ describe("MCP search route", () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("returns 401 for an invalid API key", async () => {
+    fake.verifyApiKey.mockRejectedValueOnce(
+      new HttpError(401, API_ERROR_CODES.UNAUTHORIZED, "Invalid API key"),
+    );
+
+    const response = await postMcp(createTestApp(), initializeRequest);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("returns 401 for a JWT-shaped bearer token", async () => {
+    const response = await request(createTestApp())
+      .post("/api/mcp")
+      .set("Accept", accept)
+      .set("Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9.token.signature")
+      .send(initializeRequest);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+    expect(fake.verifyApiKey).not.toHaveBeenCalled();
   });
 
   it("accepts a bm API key in Authorization and prefers X-API-Key", async () => {
@@ -152,13 +176,38 @@ describe("MCP search route", () => {
     });
   });
 
-  it.each(["get", "delete"] as const)("returns 405 for %s", async (method) => {
+  it("preserves HttpError messages in MCP error results", async () => {
+    fake.listBookmarks.mockRejectedValueOnce(
+      new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found"),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: {
+        name: "search_bookmarks",
+        arguments: { q: "design" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Bookmark not found" }],
+    });
+  });
+
+  it.each([
+    "get",
+    "delete",
+  ] as const)("returns 405 for unauthenticated %s", async (method) => {
     const response = await request(createTestApp())
       [method]("/api/mcp")
-      .set("Accept", accept)
-      .set("X-API-Key", "bm_test");
+      .set("Accept", accept);
 
     expect(response.status).toBe(405);
-    expect(response.headers["allow"]).toBe("POST");
+    const allowHeader = "allow";
+    expect(response.headers[allowHeader]).toBe("POST");
   });
 });

@@ -87,9 +87,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       standardHeaders: true,
       legacyHeaders: false,
       skip: (request) =>
-        isMcpPath(request.path) ||
-        !request.header("X-API-Key") ||
-        !isApiKeyAllowedPath(request.path),
+        !request.header("X-API-Key") || !isApiKeyAllowedPath(request.path),
       handler: (_request, response) => {
         response.status(429).json({
           error: {
@@ -145,12 +143,10 @@ export function parseTrustProxy(value: string): boolean | number | string {
   return Number.isInteger(hops) && hops >= 0 ? hops : value;
 }
 
-function isMcpPath(path: string): boolean {
-  return path === "/mcp" || path === "/mcp/";
-}
-
-function isApiKeyAllowedPath(path: string): boolean {
+export function isApiKeyAllowedPath(path: string): boolean {
   return (
+    path === "/mcp" ||
+    path.startsWith("/mcp/") ||
     path === "/share" ||
     path.startsWith("/share/") ||
     path === "/bookmarks" ||
