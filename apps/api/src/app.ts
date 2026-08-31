@@ -145,8 +145,6 @@ export function parseTrustProxy(value: string): boolean | number | string {
 
 export function isApiKeyAllowedPath(path: string): boolean {
   return (
-    path === "/mcp" ||
-    path.startsWith("/mcp/") ||
     path === "/share" ||
     path.startsWith("/share/") ||
     path === "/bookmarks" ||

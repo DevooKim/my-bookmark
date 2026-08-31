@@ -131,7 +131,7 @@ export function createMcpRouter({
       await server.connect(new McpTransportAdapter(transport));
       await transport.handleRequest(request, response, request.body);
     } catch (error) {
-      console.warn("MCP transport request failed", error);
+      request.log?.error({ err: error }, "MCP transport request failed");
       if (!response.headersSent) {
         response.status(500).json({
           jsonrpc: "2.0",

@@ -207,7 +207,7 @@ describe("MCP search route", () => {
       .set("Accept", accept);
 
     expect(response.status).toBe(405);
-    const allowHeader = "allow";
-    expect(response.headers[allowHeader]).toBe("POST");
+    // supertest exposes IncomingMessage headers through an index signature.
+    expect(response.headers["allow"]).toBe("POST");
   });
 });
