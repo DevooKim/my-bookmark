@@ -18,8 +18,8 @@ export interface McpServerDeps {
     userId: string,
     query: BookmarkListQuery,
   ) => Promise<BookmarkListResult>;
-  getBookmark?: typeof getBookmarkForUser;
-  listCategories?: typeof listCategoriesForUser;
+  getBookmark: typeof getBookmarkForUser;
+  listCategories: typeof listCategoriesForUser;
 }
 
 function jsonToolResult(value: unknown): CallToolResult {
@@ -33,15 +33,12 @@ function jsonToolResult(value: unknown): CallToolResult {
   };
 }
 
-function toolError(error: unknown): CallToolResult {
+function toolError(error: unknown, fallbackMessage: string): CallToolResult {
   return {
     content: [
       {
         type: "text",
-        text:
-          error instanceof HttpError
-            ? error.message
-            : "북마크 검색에 실패했습니다",
+        text: error instanceof HttpError ? error.message : fallbackMessage,
       },
     ],
     isError: true,
@@ -50,15 +47,16 @@ function toolError(error: unknown): CallToolResult {
 
 export function buildMcpServer(
   userId: string,
-  deps: McpServerDeps = { listBookmarks: listBookmarksForUser },
+  deps: McpServerDeps = {
+    getBookmark: getBookmarkForUser,
+    listBookmarks: listBookmarksForUser,
+    listCategories: listCategoriesForUser,
+  },
 ): McpServer {
   const server = new McpServer({
     name: "my-bookmark",
     version: "1.0.0",
   });
-  const getBookmark = deps.getBookmark ?? getBookmarkForUser;
-  const listCategories = deps.listCategories ?? listCategoriesForUser;
-
   server.registerTool(
     "search_bookmarks",
     {
@@ -70,7 +68,7 @@ export function buildMcpServer(
       try {
         return jsonToolResult(await deps.listBookmarks(userId, query));
       } catch (error) {
-        return toolError(error);
+        return toolError(error, "북마크 검색에 실패했습니다");
       }
     },
   );
@@ -83,9 +81,9 @@ export function buildMcpServer(
     },
     async ({ id }: { id: string }) => {
       try {
-        return jsonToolResult(await getBookmark(userId, id));
+        return jsonToolResult(await deps.getBookmark(userId, id));
       } catch (error) {
-        return toolError(error);
+        return toolError(error, "북마크 조회에 실패했습니다");
       }
     },
   );
@@ -98,10 +96,10 @@ export function buildMcpServer(
     async () => {
       try {
         return jsonToolResult(
-          await listCategories({ userId, withCounts: false }),
+          await deps.listCategories({ userId, withCounts: false }),
         );
       } catch (error) {
-        return toolError(error);
+        return toolError(error, "카테고리 조회에 실패했습니다");
       }
     },
   );

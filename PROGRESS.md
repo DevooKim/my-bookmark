@@ -119,7 +119,7 @@
 
 ## 알려진 이슈 / 기술 부채
 
-- MCP 티켓 03 자동 검증 완료: `get_bookmark`·`list_categories`가 tools/list와 tools/call에 노출되고, 없는 ID/타인 소유 ID는 HTTP 404가 아닌 MCP `isError` 결과로 변환된다.
+- MCP 티켓 03 자동 검증 완료: `get_bookmark`·`list_categories`가 tools/list와 tools/call에 노출되고, 없는 ID/타인 소유 ID는 HTTP 404가 아닌 MCP `isError` 결과로 변환된다. 타인 소유 케이스는 실제 `getBookmarkForUser` DB 시임으로 `user_id`·`id` 필터를 함께 검증한다.
 - MCP 티켓 02의 자동 검증과 API 단위 curl(무인증/잘못된 API key의 401)은 완료했다. 직접 실행한 API에서도 잘못된 키의 MCP POST 61회가 모두 401로 유지되어 API 키 레이트리밋 면제를 확인했다. 유효한 `bm_` API key와 MCP Inspector/Claude Desktop 클라이언트가 현재 작업 환경에 없어 실제 `initialize → tools/list → tools/call` 외부 클라이언트 확인은 수동 후속 항목으로 남겼다.
 - 전체 검증 루프는 2026-08-31 22:03 실행에서 typecheck/lint/test/build 모두 통과(API 173개·web 119개 포함)했다. 이후 동일 루프 재실행에서는 코드와 무관한 기존 web 테스트의 5초 timeout 및 API rate/security 테스트 flake가 간헐적으로 발생했으며, web은 `--testTimeout=30000`으로 119개 통과하고 API 단독도 통과했다. lint는 기존 `scripts/seed-bookmarks.ts`의 `process.env["TEST_EMAIL"]` 정보 1건만 보고한다.
 - (해소) Phase 1 수용 기준 — 로그인/리다이렉트/로그아웃/`GET /api/me` — 사용자가 실제 동작 확인 완료. `supabase db push` 및 대시보드 가입 차단/계정 생성도 사용자 측에서 반영된 것으로 확인.

@@ -4,11 +4,14 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildMcpServer } from "../mcp/server";
 import { errorMiddleware, HttpError } from "../middleware/error";
+import { getBookmarkForUser } from "../routes/bookmarks";
 import { createMcpRouter, type McpRouterDeps } from "../routes/mcp";
 
 const userId = "11111111-1111-4111-8111-111111111111";
-const missingBookmarkId = "22222222-2222-4222-8222-222222222222";
-const otherUserBookmarkId = "33333333-3333-4333-8333-333333333333";
+const bookmarkId = "22222222-2222-4222-8222-222222222222";
+const missingBookmarkId = "33333333-3333-4333-8333-333333333333";
+const otherUserBookmarkId = "44444444-4444-4444-8444-444444444444";
+const categoryId = "55555555-5555-4555-8555-555555555555";
 const accept = "application/json, text/event-stream";
 const initializeRequest = {
   jsonrpc: "2.0",
@@ -22,18 +25,25 @@ const initializeRequest = {
 };
 
 const fake = vi.hoisted(() => ({
+  databaseFrom: vi.fn(),
   getBookmark: vi.fn(),
   listBookmarks: vi.fn(),
   listCategories: vi.fn(),
   verifyApiKey: vi.fn(),
 }));
 
-function createTestApp() {
+vi.mock("../lib/supabase", () => ({
+  supabaseAdmin: { from: fake.databaseFrom },
+}));
+
+function createTestApp(
+  getBookmark: typeof getBookmarkForUser = fake.getBookmark,
+) {
   const deps: McpRouterDeps = {
     apiKeyVerifier: fake.verifyApiKey,
     buildServer: (authenticatedUserId) =>
       buildMcpServer(authenticatedUserId, {
-        getBookmark: fake.getBookmark,
+        getBookmark,
         listBookmarks: fake.listBookmarks,
         listCategories: fake.listCategories,
       }),
@@ -58,11 +68,12 @@ async function postMcp(
 }
 
 beforeEach(() => {
+  fake.databaseFrom.mockReset();
   fake.verifyApiKey.mockReset();
   fake.verifyApiKey.mockResolvedValue(userId);
   fake.getBookmark.mockReset();
   fake.getBookmark.mockResolvedValue({
-    id: userId,
+    id: bookmarkId,
     userId,
     kind: "link",
     title: "Design systems",
@@ -74,7 +85,7 @@ beforeEach(() => {
   });
   fake.listCategories.mockReset();
   fake.listCategories.mockResolvedValue([
-    { id: userId, userId, name: "Design", sortOrder: 0 },
+    { id: categoryId, userId, name: "Design", sortOrder: 0 },
   ]);
 });
 
@@ -137,7 +148,7 @@ describe("MCP search route", () => {
     expect(response.headers["mcp-session-id"]).toBeUndefined();
   });
 
-  it("lists only the search_bookmarks tool", async () => {
+  it("lists the search and read tools", async () => {
     const response = await postMcp(createTestApp(), {
       jsonrpc: "2.0",
       id: 2,
@@ -182,16 +193,16 @@ describe("MCP search route", () => {
       method: "tools/call",
       params: {
         name: "get_bookmark",
-        arguments: { id: userId },
+        arguments: { id: bookmarkId },
       },
     });
 
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body.result.content[0].text)).toMatchObject({
-      id: userId,
+      id: bookmarkId,
       title: "Design systems",
     });
-    expect(fake.getBookmark).toHaveBeenCalledWith(userId, userId);
+    expect(fake.getBookmark).toHaveBeenCalledWith(userId, bookmarkId);
   });
 
   it("lists categories through the injected read service", async () => {
@@ -207,7 +218,7 @@ describe("MCP search route", () => {
 
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body.result.content[0].text)).toEqual([
-      { id: userId, userId, name: "Design", sortOrder: 0 },
+      { id: categoryId, userId, name: "Design", sortOrder: 0 },
     ]);
     expect(fake.listCategories).toHaveBeenCalledWith({
       userId,
@@ -215,12 +226,7 @@ describe("MCP search route", () => {
     });
   });
 
-  it.each([
-    { caseName: "missing", id: missingBookmarkId },
-    { caseName: "owned by another user", id: otherUserBookmarkId },
-  ])("converts $caseName bookmark to an MCP error result instead of HTTP 404", async ({
-    id,
-  }) => {
+  it("converts a missing bookmark to an MCP error result instead of HTTP 404", async () => {
     fake.getBookmark.mockRejectedValueOnce(
       new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found"),
     );
@@ -231,7 +237,7 @@ describe("MCP search route", () => {
       method: "tools/call",
       params: {
         name: "get_bookmark",
-        arguments: { id },
+        arguments: { id: missingBookmarkId },
       },
     });
 
@@ -240,7 +246,70 @@ describe("MCP search route", () => {
       isError: true,
       content: [{ type: "text", text: "Bookmark not found" }],
     });
-    expect(fake.getBookmark).toHaveBeenCalledWith(userId, id);
+    expect(fake.getBookmark).toHaveBeenCalledWith(userId, missingBookmarkId);
+  });
+
+  it("enforces bookmark ownership before returning an MCP error for another user's ID", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const secondEq = vi.fn(() => ({ maybeSingle }));
+    const firstEq = vi.fn(() => ({ eq: secondEq }));
+    const select = vi.fn(() => ({ eq: firstEq }));
+    fake.databaseFrom.mockReturnValue({ select });
+
+    const response = await postMcp(createTestApp(getBookmarkForUser), {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: {
+        name: "get_bookmark",
+        arguments: { id: otherUserBookmarkId },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Bookmark not found" }],
+    });
+    expect(fake.databaseFrom).toHaveBeenCalledWith("bookmarks");
+    expect(select).toHaveBeenCalledWith("*");
+    expect(firstEq).toHaveBeenCalledWith("user_id", userId);
+    expect(secondEq).toHaveBeenCalledWith("id", otherUserBookmarkId);
+    expect(maybeSingle).toHaveBeenCalledWith();
+  });
+
+  it("uses tool-specific fallback messages for unexpected read failures", async () => {
+    fake.getBookmark.mockRejectedValueOnce(new Error("database failed"));
+
+    const bookmarkResponse = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 8,
+      method: "tools/call",
+      params: {
+        name: "get_bookmark",
+        arguments: { id: bookmarkId },
+      },
+    });
+
+    fake.listCategories.mockRejectedValueOnce(new Error("database failed"));
+    const categoryResponse = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 9,
+      method: "tools/call",
+      params: {
+        name: "list_categories",
+        arguments: {},
+      },
+    });
+
+    expect(bookmarkResponse.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "북마크 조회에 실패했습니다" }],
+    });
+    expect(categoryResponse.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "카테고리 조회에 실패했습니다" }],
+    });
   });
 
   it("converts search service failures to MCP error results", async () => {
