@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  API_ERROR_CODES,
   type BookmarkListQuery,
   bookmarkListQuerySchema,
   shareUrlItemSchema,
@@ -127,7 +128,11 @@ export function buildMcpServer(
           }),
         );
       } catch (error) {
-        if (error instanceof HttpError && error.status === 409) {
+        if (
+          error instanceof HttpError &&
+          error.status === 409 &&
+          error.code === API_ERROR_CODES.CONFLICT
+        ) {
           return duplicateBookmarkResult(error);
         }
         return toolError(error, "북마크 등록에 실패했습니다");

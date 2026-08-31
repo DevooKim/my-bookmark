@@ -273,6 +273,55 @@ describe("MCP search route", () => {
     });
   });
 
+  it("returns a short informational result when a duplicate has no existing ID", async () => {
+    fake.createBookmark.mockRejectedValueOnce(
+      new HttpError(409, API_ERROR_CODES.CONFLICT, "이미 저장된 링크", {
+        existingId: undefined,
+      }),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: {
+        name: "add_bookmark",
+        arguments: { url: "https://example.com/unknown-existing" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toEqual({
+      content: [{ type: "text", text: "이미 저장된 북마크입니다." }],
+    });
+  });
+
+  it("converts non-conflict HttpError failures to MCP error results", async () => {
+    fake.createBookmark.mockRejectedValueOnce(
+      new HttpError(
+        400,
+        API_ERROR_CODES.VALIDATION_ERROR,
+        "Bookmark URL is invalid",
+      ),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 8,
+      method: "tools/call",
+      params: {
+        name: "add_bookmark",
+        arguments: { url: "https://example.com/rejected" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toEqual({
+      isError: true,
+      content: [{ type: "text", text: "Bookmark URL is invalid" }],
+    });
+  });
+
   it("lists categories through the injected read service", async () => {
     const response = await postMcp(createTestApp(), {
       jsonrpc: "2.0",
