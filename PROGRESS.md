@@ -4,8 +4,8 @@
 
 ## 현재 상태
 
-- **현재 Phase**: Bun 1.4.0 마이그레이션 및 Podman Compose 호환 수정 완료. 모든 외부 컨테이너 이미지는 완전한 Docker Hub 이름을 사용한다.
-- **최종 갱신**: 2026-08-22 (Podman short-name 호환 수정)
+- **현재 Phase**: MCP + pgvector 시맨틱 검색 구현 완료. 원격 migration·백필·실연결은 사용자 확인 대기 중이다.
+- **최종 갱신**: 2026-09-01 (MCP semantic mode)
 
 ## Phase 체크리스트
 
@@ -39,7 +39,9 @@
 | 2026-08-31 | `HttpError` 메시지는 MCP `isError` 결과에도 그대로 전달한다. | 같은 메시지가 이미 REST 응답으로 노출되고 1인용 서비스이므로 MCP 경로에서 정보 노출이 증가하지 않으며, 도메인 오류의 사용자-facing 설명을 일관되게 유지한다. |
 | 2026-08-31 | `list_categories`는 `listCategoriesForUser({ userId, withCounts: false })`로 호출하고 반환 배열을 직접 JSON 직렬화한다. | 카테고리 도구는 분류 체계 조회가 목적이고 REST 기본 동작과 맞춘다. `Category[]` 또는 `CategoryWithCount[]` 유니온의 요소를 직접 다루지 않아 별도 타입 좁히기나 REST 응답 변경이 필요 없다. |
 | 2026-08-31 | `add_bookmark` MCP 입력은 `{ url }`만 받고, 공유 스키마의 URL 검증기를 재사용한 뒤 `mode: "ai"`를 서버에서 고정한다. | 기존 생성 요청 스키마의 `manual`/`none` 모드를 MCP 쓰기 도구에 노출하지 않고, share 라우터와 동일한 URL 경계 검증 및 AI 분류 파이프라인을 유지한다. |
-| 2026-08-31 | pgvector는 `extensions` 스키마의 `vector(1536)`와 `set search_path = ''`를 사용하고, semantic RPC에는 HNSW 인덱스를 만들지 않는다. | OpenRouter 임베딩 차원이 1536으로 확정됐고, 현재 약 1,000건은 순차 스캔으로 충분하다. `operator(extensions.<=>)`를 명시해 빈 search path에서도 코사인 거리 연산자를 해석하게 한다. 원격 반영은 사용자가 `supabase db push` 후 확인한다. |
+| 2026-08-31 | pgvector는 `extensions` 스키마의 `vector(1536)`와 `set search_path = ''`를 사용하고, semantic RPC에는 HNSW 인덱스를 만들지 않는다. | OpenRouter 임베딩 차원이 1536으로 확정됐고, 약 1,000건의 순차 스캔이 수 ms라 충분하다. 10만 건 전까지 HNSW는 불필요하다고 판단했다. `operator(extensions.<=>)`를 명시해 빈 search path에서도 코사인 거리 연산자를 해석하게 하며, 원격 반영은 사용자가 `supabase db push` 후 확인한다. |
+| 2026-09-01 | OpenRouter `/embeddings`를 기존 `OPEN_ROUTER_API_KEY`로 실측하고 `openai/text-embedding-3-small`을 채택했다. 1536차원·L2 norm 0.99989·배치 입력을 확인했으며 Gemini 폴백과 `GEMINI_API_KEY` 추가는 폐기했다. | 실제 응답과 비용을 확인해 차원을 고정했고, 기존 키 재사용이 가장 단순하다. 정규화된 벡터라 클라이언트 정규화가 필요 없고, provider 폴백을 늘리지 않아 운영 경계를 유지한다. |
+| 2026-09-01 | 웹 검색창은 기존 부분일치 검색을 유지하고 semantic 검색은 MCP 소비 경로로 한정한다. | 300ms debounce마다 임베딩 API를 호출하면 비용·지연·입력 중간 상태 요청이 부적합하므로, 즉시 반응해야 하는 웹 검색창에는 임베딩을 연결하지 않는다. |
 | 2026-09-01 | 백필은 100개씩 임베딩을 배치 요청하고, 배치 실패 시 해당 배치를 개별 1회 재시도해 독성 행을 격리한다. 개별 DB 쓰기 실패도 집계해 마지막 요약을 출력하며 실패가 있으면 종료 코드 1을 반환한다. | OpenRouter 배치 API 비용 효율을 유지하면서 한 건의 영구적 입력 오류가 나머지 99건을 막지 않게 하고, 재실행으로 남은 실패 건을 복구할 수 있도록 실패 행의 embedding은 null로 남긴다. |
 | 2026-09-01 | 의미 검색은 `q`와 최대 100건 `limit`을 zod로 검증하고, 05 RPC의 기본 거리 임계값 `0.6`을 사용한 `{ items, nextCursor: null }` 응답을 반환한다. 라우터에서 `p_max_distance`를 중복 전달하지 않는다. | 임계값이 migration의 한 곳에만 살게 해 튜닝 시 드리프트를 막고, RPC의 `p_max_distance is null` 방어와도 맞춘다. RPC가 거리 값을 반환하지 않으므로 API 계약에 거리 필드를 추가하지 않으며 실제 임계값 조정은 원격 SQL 거리 분포 확인 후에만 한다. API의 `limit` 최대 100 검증은 RPC의 1~100 클램프와 중복되므로 두 계약이 함께 바뀌어야 한다. |
 | 2026-08-22 | Dockerfile과 Compose의 외부 이미지 이름을 `docker.io/...`로 완전히 한정한다. | Podman은 `registries.conf`에 unqualified-search registry가 없으면 `oven/bun`, `node`, `louislam/uptime-kuma` 같은 short name을 거부한다. 호스트 전역 설정 변경 없이 Docker와 Podman에서 같은 저장소 설정을 사용하기 위함. |
@@ -205,6 +207,7 @@
 - MCP semantic search 티켓 06 완료(2026-08-31): `packages/ai`에 분류와 분리된 OpenRouter 임베딩 계약·zod 응답 파싱·1536차원 단건/배치 구현을 추가하고, API 싱글턴과 AI 완료 직후/PATCH 제목·설명·태그 변경 훅을 연결했다. 임베딩 실패는 warn 후 `ai_status`를 건드리지 않으며, bookmark 조회/RPC/생성·수정·이미지 반환 쿼리에서 `embedding`을 제외하는 명시적 컬럼 목록과 응답 비노출 회귀 테스트를 추가했다. 원격 migration 미적용으로 신규 등록 후 non-null 확인은 사용자 push 후 수행한다.
 - MCP semantic search 티켓 07 자동 구현·검증 완료(2026-09-01): `apps/api/scripts/backfill-embeddings.ts`가 `embedding is null` 행만 500개 페이지로 끝까지 materialize한 뒤 100개 배치로 처리하고, 실패 배치는 개별 1회 재시도해 독성 행을 격리한다. `--dry-run`/`--limit`, 실패 요약·종료 코드 1 정책을 제공한다. 원격 migration 미적용으로 실제 백필과 embedding null 0건 확인은 사용자 push 후 수행한다.
 - MCP semantic search 티켓 08 자동 구현·검증 완료(2026-09-01): `GET /api/bookmarks/search/semantic`이 zod 쿼리 검증·임베딩·05 RPC·기존 signed media 매핑을 연결하고 `{ items, nextCursor: null }`을 반환한다. provider 미설정은 500 `INTERNAL`로 명시하며, 원격 DB 미적용으로 동의어 품질 비교와 거리 임계값 조정은 사용자 확인 항목이다.
+- MCP semantic search 티켓 09 자동 구현·검증 완료(2026-09-01): MCP `search_bookmarks`에 shared zod 기반 `semantic?: boolean`을 추가했다. `true`는 08 semantic 서비스, 미지정/`false`는 기존 부분일치 서비스로 분기하며, tools/list schema 노출과 semantic provider 오류의 MCP `isError` 변환을 테스트했다. 원격 DB와 실제 Claude Code 연결은 사용자 확인 항목이다.
 - 남은 이슈(기존 flake): `apps/api/src/__tests__/app-auth-order.test.ts`가 루트 `bun run test`(api+web 동시 실행)에서 간헐적으로 실패한다(`expected 429, received 401` — 부하 상황에서 rate limiter 미작동). api 스위트 단독 실행 시에는 통과하며, `a8ba42d` 시점에도 재현되는 기존 flake로 이번 변경과 무관하다. 별도 티켓 대상이다.
 
 ## 사용자 확인 필요
@@ -219,6 +222,8 @@
 - **카테고리 순서 변경 DND 실사용 확인**: 데스크톱 dev 브라우저에서 위 방향 드래그(핸들 → 위 항목)는 자동화로 검증 완료(순서 변경 + 서버 저장 + 새로고침 유지). 아래 방향 드래그는 agent-browser의 합성 드래그(중간 pointermove 부족)에서 반영되지 않았는데 앱 버그인지 자동화 한계인지 미확정 — 실제 마우스/터치로 아래 방향 드래그 1회와 iOS Safari/PWA 터치 드래그를 직접 확인 필요(사용자가 추가 자동화 검증은 생략하기로 함, 2026-07-13).
 - **MCP semantic search 티켓 07 사용자 확인 필요**: `supabase db push` 후 `bun run --filter @my-bookmark/api backfill:embeddings -- --dry-run`, 실제 실행, 그리고 `bookmarks.embedding is null` 0건 확인을 수행해야 한다. 원격 DB와 OpenRouter를 사용하므로 에이전트는 실행하지 않았다.
 - **MCP semantic search 티켓 08 사용자 확인 필요**: migration push와 백필 후 동의어 쿼리 5~10개를 기존 `/api/bookmarks?q=`와 `/api/bookmarks/search/semantic?q=`에 각각 보내 결과를 비교하고, Supabase SQL 에디터에서 cosine distance 분포를 조회해 `0.6` 유지/조정 근거를 기록해야 한다. 원격 DB가 아직 미적용이라 에이전트는 실행하지 않았다.
+- **MCP semantic search 티켓 09 사용자 확인 필요**: 05 `supabase db push` 후 07 백필과 08 품질 검증을 먼저 수행하고, API를 배포한 뒤 Claude Code에서 `semantic: true` MCP 검색 시나리오를 실제 API Key로 실행해야 한다. claude.ai/Desktop 커넥터는 커스텀 헤더를 지원하지 않아 이번 범위 밖이다.
+- **MCP 티켓 04 원격 배포 실연결 확인 필요**: 배포된 `https://<도메인>/api/mcp`에 Claude Code 또는 MCP Inspector로 `initialize → tools/list → tools/call`을 실행하고 API Key 인증을 확인해야 한다.
 - **preset 폴백 동작**: OpenRouter preset(`@preset/my-bookmark`)에 폴백 모델을 구성하면 첫 모델 실패 시 다음 모델로 자연히 넘어가는지는 openrouter.ai 대시보드에서 실제로 구성했을 때만 관찰 가능하다 — 별도 자동화 검증 대상이 아님.
 - **Discord 모니터링 실환경 확인**: 집 서버 `.env`에 실제 Webhook을 넣고, Tailscale 전용 Caddy hostname으로 Kuma UI를 연결해 web/API/readiness 세 모니터를 생성해야 한다. web/API 중지·복구, readiness 실패·복구, 한 IP의 인증 실패 5회, `/api/.env` 경고, Webhook 실패 시 앱 지속 동작, Kuma UI의 Tailnet 외부 비노출을 장애 훈련으로 확인한다. Caddy가 컨테이너라면 loopback host port 대신 동일 Docker network 연결을 사용한다.
 

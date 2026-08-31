@@ -14,14 +14,30 @@ import {
   createLinkBookmarkForUser,
   getBookmarkForUser,
   listBookmarksForUser,
+  searchSemanticBookmarksForUser,
 } from "../routes/bookmarks";
 import { listCategoriesForUser } from "../routes/categories";
+
+const mcpSearchBookmarksInputSchema = bookmarkListQuerySchema
+  .extend({
+    semantic: z.boolean().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.semantic && value.q === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["q"],
+        message: "q is required for semantic search",
+      });
+    }
+  });
 
 export interface McpServerDeps {
   listBookmarks: (
     userId: string,
     query: BookmarkListQuery,
   ) => Promise<BookmarkListResult>;
+  searchSemanticBookmarks: typeof searchSemanticBookmarksForUser;
   getBookmark: typeof getBookmarkForUser;
   listCategories: typeof listCategoriesForUser;
   createBookmark: typeof createLinkBookmarkForUser;
@@ -75,6 +91,7 @@ export function buildMcpServer(
     createBookmark: createLinkBookmarkForUser,
     getBookmark: getBookmarkForUser,
     listBookmarks: listBookmarksForUser,
+    searchSemanticBookmarks: searchSemanticBookmarksForUser,
     listCategories: listCategoriesForUser,
   },
 ): McpServer {
@@ -86,12 +103,31 @@ export function buildMcpServer(
     "search_bookmarks",
     {
       description:
-        "Search the authenticated user's bookmarks by text, category, kind, or cursor.",
-      inputSchema: bookmarkListQuerySchema,
+        "Search the authenticated user's bookmarks. Use semantic=true for meaning- or topic-based searches (for example, finding bookmarks related to a concept even when the exact words are not present); omit it or set it to false for exact text, category, kind, or cursor filtering.",
+      inputSchema: mcpSearchBookmarksInputSchema,
     },
     async (query) => {
+      const { semantic, ...textQuery } = query;
       try {
-        return jsonToolResult(await deps.listBookmarks(userId, query));
+        if (semantic) {
+          if (!textQuery.q) {
+            return toolError(
+              new HttpError(
+                400,
+                API_ERROR_CODES.VALIDATION_ERROR,
+                "q is required for semantic search",
+              ),
+              "북마크 검색에 실패했습니다",
+            );
+          }
+          return jsonToolResult(
+            await deps.searchSemanticBookmarks(userId, {
+              q: textQuery.q,
+              limit: textQuery.limit,
+            }),
+          );
+        }
+        return jsonToolResult(await deps.listBookmarks(userId, textQuery));
       } catch (error) {
         return toolError(error, "북마크 검색에 실패했습니다");
       }

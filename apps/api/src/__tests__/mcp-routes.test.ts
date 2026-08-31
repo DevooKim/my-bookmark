@@ -31,6 +31,7 @@ const fake = vi.hoisted(() => ({
   getBookmark: vi.fn(),
   listBookmarks: vi.fn(),
   listCategories: vi.fn(),
+  searchSemanticBookmarks: vi.fn(),
   verifyApiKey: vi.fn(),
 }));
 
@@ -48,6 +49,7 @@ function createTestApp(
         createBookmark: fake.createBookmark,
         getBookmark,
         listBookmarks: fake.listBookmarks,
+        searchSemanticBookmarks: fake.searchSemanticBookmarks,
         listCategories: fake.listCategories,
       }),
   };
@@ -90,6 +92,11 @@ beforeEach(() => {
   });
   fake.listBookmarks.mockReset();
   fake.listBookmarks.mockResolvedValue({
+    bookmarks: [],
+    nextCursor: null,
+  });
+  fake.searchSemanticBookmarks.mockReset();
+  fake.searchSemanticBookmarks.mockResolvedValue({
     bookmarks: [],
     nextCursor: null,
   });
@@ -176,9 +183,20 @@ describe("MCP search route", () => {
       "add_bookmark",
       "list_categories",
     ]);
+    const searchTool = response.body.result.tools.find(
+      (tool: {
+        name: string;
+        inputSchema?: {
+          properties?: Record<string, { type?: string }>;
+        };
+      }) => tool.name === "search_bookmarks",
+    );
+    expect(searchTool?.inputSchema?.properties?.semantic).toMatchObject({
+      type: "boolean",
+    });
   });
 
-  it("calls search_bookmarks through the injected read service", async () => {
+  it("calls search_bookmarks through the injected read service by default", async () => {
     const response = await postMcp(createTestApp(), {
       jsonrpc: "2.0",
       id: 3,
@@ -199,6 +217,83 @@ describe("MCP search route", () => {
       q: "design",
       limit: 10,
     });
+    expect(fake.searchSemanticBookmarks).not.toHaveBeenCalled();
+  });
+
+  it("uses the partial-match service when semantic is false", async () => {
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 31,
+      method: "tools/call",
+      params: {
+        name: "search_bookmarks",
+        arguments: { q: "design", semantic: false },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result.isError).toBeUndefined();
+    expect(fake.listBookmarks).toHaveBeenCalledWith(userId, {
+      q: "design",
+      limit: 30,
+    });
+    expect(fake.searchSemanticBookmarks).not.toHaveBeenCalled();
+  });
+
+  it("uses the semantic service when semantic is true", async () => {
+    fake.searchSemanticBookmarks.mockResolvedValueOnce({
+      bookmarks: [{ id: bookmarkId, title: "Cooking" }],
+      nextCursor: null,
+    });
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 32,
+      method: "tools/call",
+      params: {
+        name: "search_bookmarks",
+        arguments: { q: "요리 관련", semantic: true, limit: 7 },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result.isError).toBeUndefined();
+    expect(JSON.parse(response.body.result.content[0].text)).toEqual({
+      bookmarks: [{ id: bookmarkId, title: "Cooking" }],
+      nextCursor: null,
+    });
+    expect(fake.searchSemanticBookmarks).toHaveBeenCalledWith(userId, {
+      q: "요리 관련",
+      limit: 7,
+    });
+    expect(fake.listBookmarks).not.toHaveBeenCalled();
+  });
+
+  it("converts a missing semantic provider to an MCP error result", async () => {
+    fake.searchSemanticBookmarks.mockRejectedValueOnce(
+      new HttpError(
+        500,
+        API_ERROR_CODES.INTERNAL,
+        "Semantic search is not configured",
+      ),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 33,
+      method: "tools/call",
+      params: {
+        name: "search_bookmarks",
+        arguments: { q: "요리 관련", semantic: true },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toEqual({
+      isError: true,
+      content: [{ type: "text", text: "Semantic search is not configured" }],
+    });
+    expect(fake.listBookmarks).not.toHaveBeenCalled();
   });
 
   it("gets a bookmark through the injected read service", async () => {
