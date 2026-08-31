@@ -24,28 +24,7 @@ categoriesRouter.get("/categories", async (request, response) => {
   // Express query is typed as an index signature; dot access fails noPropertyAccessFromIndexSignature.
   // biome-ignore lint/complexity/useLiteralKeys: bracket access is required by TypeScript config.
   const withCounts = request.query["withCounts"] === "true";
-  const db = getDb();
-  const { data, error } = await db
-    .from("categories")
-    .select("*")
-    .eq("user_id", userId)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
-  if (error) {
-    throw error;
-  }
-
-  if (!withCounts) {
-    response.json({ items: (data ?? []).map(mapCategory) });
-    return;
-  }
-
-  const counts = await loadBookmarkCounts(userId);
-  response.json({
-    items: (data ?? []).map((row) =>
-      mapCategoryWithCount({ ...row, bookmark_count: counts.get(row.id) ?? 0 }),
-    ),
-  });
+  response.json(await listCategoriesForUser(userId, withCounts));
 });
 
 categoriesRouter.post("/categories", async (request, response) => {
@@ -166,6 +145,32 @@ function getDb() {
     );
   }
   return supabaseAdmin;
+}
+
+export async function listCategoriesForUser(
+  userId: string,
+  withCounts = false,
+) {
+  const { data, error } = await getDb()
+    .from("categories")
+    .select("*")
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw error;
+  }
+
+  if (!withCounts) {
+    return { items: (data ?? []).map(mapCategory) };
+  }
+
+  const counts = await loadBookmarkCounts(userId);
+  return {
+    items: (data ?? []).map((row) =>
+      mapCategoryWithCount({ ...row, bookmark_count: counts.get(row.id) ?? 0 }),
+    ),
+  };
 }
 
 async function loadBookmarkCounts(

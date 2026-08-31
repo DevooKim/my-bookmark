@@ -135,45 +135,13 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
 bookmarksRouter.get("/bookmarks", async (request, response) => {
   const userId = getUserId(request);
   const query = bookmarkListQuerySchema.parse(request.query);
-  const db = getDb();
-  const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-  const { data, error } = await db.rpc(
-    "search_bookmarks",
-    buildBookmarkSearchParams(userId, query, cursor),
-  );
-  if (error) {
-    throw error;
-  }
-
-  const rows: BookmarkDbRow[] = data ?? [];
-  const pageRows = rows.slice(0, query.limit);
-  const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
-  response.json({
-    items: await Promise.all(
-      pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
-    ),
-    nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
-  });
+  response.json(await listBookmarksForUser(userId, query));
 });
 
 bookmarksRouter.get("/bookmarks/:id", async (request, response) => {
   const userId = getUserId(request);
   const id = uuidSchema.parse(request.params.id);
-  const { data, error } = await getDb()
-    .from("bookmarks")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("id", id)
-    .maybeSingle();
-  if (error) {
-    throw error;
-  }
-  if (!data) {
-    throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
-  }
-  response.json({
-    bookmark: await mapBookmarkWithSignedMedia(data, true),
-  });
+  response.json({ bookmark: await getBookmarkForUser(userId, id) });
 });
 
 bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
@@ -305,6 +273,47 @@ async function mapBookmarkWithSignedMedia(
     row,
     await signBookmarkMedia(row, getImageStorage(), includeOriginal),
   );
+}
+
+export async function listBookmarksForUser(
+  userId: string,
+  query: BookmarkListQuery,
+) {
+  const db = getDb();
+  const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+  const { data, error } = await db.rpc(
+    "search_bookmarks",
+    buildBookmarkSearchParams(userId, query, cursor),
+  );
+  if (error) {
+    throw error;
+  }
+
+  const rows: BookmarkDbRow[] = data ?? [];
+  const pageRows = rows.slice(0, query.limit);
+  const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
+  return {
+    items: await Promise.all(
+      pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
+    ),
+    nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
+  };
+}
+
+export async function getBookmarkForUser(userId: string, id: string) {
+  const { data, error } = await getDb()
+    .from("bookmarks")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
+  }
+  return mapBookmarkWithSignedMedia(data, true);
 }
 
 export async function createLinkBookmarkForUser(input: {

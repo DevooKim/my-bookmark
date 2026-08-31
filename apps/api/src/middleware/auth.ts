@@ -215,7 +215,7 @@ export function requireAuth(options: RequireAuthOptions | BearerVerifier = {}) {
   };
 }
 
-const defaultApiKeyVerifier: ApiKeyVerifier = async (key: string) => {
+export const defaultApiKeyVerifier: ApiKeyVerifier = async (key: string) => {
   if (!appEnv.SUPABASE_URL || !appEnv.SUPABASE_SECRET_KEY) {
     throw new HttpError(
       401,
