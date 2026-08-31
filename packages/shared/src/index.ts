@@ -219,6 +219,11 @@ export const bookmarkListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
+export const semanticBookmarkSearchQuerySchema = z.object({
+  q: z.string().trim().min(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export const createCategoryRequestSchema = z.object({
   name: z.string().trim().min(1).max(50),
 });
@@ -376,6 +381,9 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateBookmarkRequest = z.infer<typeof createBookmarkRequestSchema>;
 export type UpdateBookmarkRequest = z.infer<typeof updateBookmarkRequestSchema>;
 export type BookmarkListQuery = z.infer<typeof bookmarkListQuerySchema>;
+export type SemanticBookmarkSearchQuery = z.infer<
+  typeof semanticBookmarkSearchQuerySchema
+>;
 export type CreateCategoryRequest = z.infer<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
 export type ReorderCategoriesRequest = z.infer<

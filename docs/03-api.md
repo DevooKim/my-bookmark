@@ -80,6 +80,17 @@ zod 검증 실패는 400 + `details`에 필드별 이슈. 에러 미들웨어 �
 
 keyset 페이지네이션: `(created_at, id) < cursor` order by `created_at desc, id desc`.
 
+### GET /api/bookmarks/search/semantic — 의미 검색
+
+쿼리: `q` (필수, 공백 trim 후 1자 이상), `limit` (기본 20, 최대 100).
+제목·설명·태그로 쿼리를 임베딩한 뒤 pgvector RPC를 호출하며, 코사인 거리 임계값은 초기값 `0.6`이다. RPC가 반환하는 행에는 거리가 포함되지 않으므로 응답에도 거리를 노출하지 않는다.
+
+```json
+{ "items": [ … ], "nextCursor": null }
+```
+
+시맨틱 검색 provider가 설정되지 않으면 500 + `INTERNAL` 에러를 반환한다. 기존 `GET /api/bookmarks`의 부분일치 검색과 웹 검색창은 변경하지 않는다.
+
 ### 기타
 
 - `GET /api/bookmarks/:id` → `{ bookmark }`. 이미지 항목은 signed 썸네일·원본 URL을 포함한다.

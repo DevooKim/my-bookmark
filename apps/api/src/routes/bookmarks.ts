@@ -1,10 +1,14 @@
+import type { EmbeddingProvider } from "@my-bookmark/ai";
 import {
   API_ERROR_CODES,
   type Bookmark,
   type BookmarkListQuery,
   bookmarkListQuerySchema,
+  bookmarksResponseSchema,
   type CreateBookmarkRequest,
   createBookmarkRequestSchema,
+  type SemanticBookmarkSearchQuery,
+  semanticBookmarkSearchQuerySchema,
   updateBookmarkRequestSchema,
   uuidSchema,
 } from "@my-bookmark/shared";
@@ -66,6 +70,29 @@ interface CategoryLookupDb {
       };
     };
   };
+}
+
+interface SemanticSearchDb {
+  rpc(
+    functionName: "semantic_search_bookmarks",
+    params: {
+      p_user_id: string;
+      p_embedding: number[];
+      p_limit: number;
+      p_max_distance: number;
+    },
+  ): {
+    select(columns: string): PromiseLike<{
+      data: BookmarkDbRow[] | null;
+      error: DbError | null;
+    }>;
+  };
+}
+
+interface SemanticSearchDependencies {
+  db?: SemanticSearchDb;
+  embeddingProvider?: EmbeddingProvider | null;
+  mapBookmark?: typeof mapBookmarkWithSignedMedia;
 }
 
 interface MetadataUpdateDb {
@@ -144,6 +171,18 @@ bookmarksRouter.get("/bookmarks", async (request, response) => {
   const query = bookmarkListQuerySchema.parse(request.query);
   const result = await listBookmarksForUser(userId, query);
   response.json({ items: result.bookmarks, nextCursor: result.nextCursor });
+});
+
+bookmarksRouter.get("/bookmarks/search/semantic", async (request, response) => {
+  const userId = getUserId(request);
+  const query = semanticBookmarkSearchQuerySchema.parse(request.query);
+  const result = await searchSemanticBookmarksForUser(userId, query);
+  response.json(
+    bookmarksResponseSchema.parse({
+      items: result.bookmarks,
+      nextCursor: result.nextCursor,
+    }),
+  );
 });
 
 bookmarksRouter.get("/bookmarks/:id", async (request, response) => {
@@ -331,6 +370,48 @@ export async function listBookmarksForUser(
       pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
     ),
     nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
+  };
+}
+
+export async function searchSemanticBookmarksForUser(
+  userId: string,
+  query: SemanticBookmarkSearchQuery,
+  dependencies: SemanticSearchDependencies = {},
+): Promise<BookmarkListResult> {
+  const provider =
+    dependencies.embeddingProvider === undefined
+      ? getEmbeddingProvider()
+      : dependencies.embeddingProvider;
+  if (!provider) {
+    throw new HttpError(
+      500,
+      API_ERROR_CODES.INTERNAL,
+      "Semantic search is not configured",
+    );
+  }
+
+  const embedding = await provider.embed({ text: query.q });
+  // The local Supabase client has no generated Functions type for the new RPC
+  // until the migration is applied, so the narrow runtime adapter is explicit.
+  // SAFETY: getDb() is the same Supabase client shape used by the injected RPC adapter.
+  const db = dependencies.db ?? (getDb() as unknown as SemanticSearchDb);
+  const { data, error } = await db
+    .rpc("semantic_search_bookmarks", {
+      p_user_id: userId,
+      p_embedding: embedding,
+      p_limit: query.limit,
+      p_max_distance: 0.6,
+    })
+    .select(BOOKMARK_DB_COLUMNS);
+  if (error) {
+    throw error;
+  }
+
+  const mapBookmark = dependencies.mapBookmark ?? mapBookmarkWithSignedMedia;
+  const rows = Array.isArray(data) ? data : [];
+  return {
+    bookmarks: await Promise.all(rows.map((row) => mapBookmark(row, false))),
+    nextCursor: null,
   };
 }
 
