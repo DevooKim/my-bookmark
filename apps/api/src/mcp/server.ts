@@ -3,18 +3,34 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   type BookmarkListQuery,
   bookmarkListQuerySchema,
+  uuidSchema,
 } from "@my-bookmark/shared";
 import { HttpError } from "../middleware/error";
 import {
   type BookmarkListResult,
+  getBookmarkForUser,
   listBookmarksForUser,
 } from "../routes/bookmarks";
+import { listCategoriesForUser } from "../routes/categories";
 
 export interface McpServerDeps {
   listBookmarks: (
     userId: string,
     query: BookmarkListQuery,
   ) => Promise<BookmarkListResult>;
+  getBookmark?: typeof getBookmarkForUser;
+  listCategories?: typeof listCategoriesForUser;
+}
+
+function jsonToolResult(value: unknown): CallToolResult {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(value),
+      },
+    ],
+  };
 }
 
 function toolError(error: unknown): CallToolResult {
@@ -40,6 +56,8 @@ export function buildMcpServer(
     name: "my-bookmark",
     version: "1.0.0",
   });
+  const getBookmark = deps.getBookmark ?? getBookmarkForUser;
+  const listCategories = deps.listCategories ?? listCategoriesForUser;
 
   server.registerTool(
     "search_bookmarks",
@@ -50,15 +68,38 @@ export function buildMcpServer(
     },
     async (query) => {
       try {
-        const result = await deps.listBookmarks(userId, query);
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result),
-            },
-          ],
-        };
+        return jsonToolResult(await deps.listBookmarks(userId, query));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_bookmark",
+    {
+      description: "Get one of the authenticated user's bookmarks by ID.",
+      inputSchema: { id: uuidSchema },
+    },
+    async ({ id }: { id: string }) => {
+      try {
+        return jsonToolResult(await getBookmark(userId, id));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_categories",
+    {
+      description: "List the authenticated user's bookmark categories.",
+    },
+    async () => {
+      try {
+        return jsonToolResult(
+          await listCategories({ userId, withCounts: false }),
+        );
       } catch (error) {
         return toolError(error);
       }

@@ -7,6 +7,8 @@ import { errorMiddleware, HttpError } from "../middleware/error";
 import { createMcpRouter, type McpRouterDeps } from "../routes/mcp";
 
 const userId = "11111111-1111-4111-8111-111111111111";
+const missingBookmarkId = "22222222-2222-4222-8222-222222222222";
+const otherUserBookmarkId = "33333333-3333-4333-8333-333333333333";
 const accept = "application/json, text/event-stream";
 const initializeRequest = {
   jsonrpc: "2.0",
@@ -20,7 +22,9 @@ const initializeRequest = {
 };
 
 const fake = vi.hoisted(() => ({
+  getBookmark: vi.fn(),
   listBookmarks: vi.fn(),
+  listCategories: vi.fn(),
   verifyApiKey: vi.fn(),
 }));
 
@@ -29,7 +33,9 @@ function createTestApp() {
     apiKeyVerifier: fake.verifyApiKey,
     buildServer: (authenticatedUserId) =>
       buildMcpServer(authenticatedUserId, {
+        getBookmark: fake.getBookmark,
         listBookmarks: fake.listBookmarks,
+        listCategories: fake.listCategories,
       }),
   };
   const app = express();
@@ -54,11 +60,22 @@ async function postMcp(
 beforeEach(() => {
   fake.verifyApiKey.mockReset();
   fake.verifyApiKey.mockResolvedValue(userId);
+  fake.getBookmark.mockReset();
+  fake.getBookmark.mockResolvedValue({
+    id: userId,
+    userId,
+    kind: "link",
+    title: "Design systems",
+  });
   fake.listBookmarks.mockReset();
   fake.listBookmarks.mockResolvedValue({
     bookmarks: [],
     nextCursor: null,
   });
+  fake.listCategories.mockReset();
+  fake.listCategories.mockResolvedValue([
+    { id: userId, userId, name: "Design", sortOrder: 0 },
+  ]);
 });
 
 describe("MCP search route", () => {
@@ -129,8 +146,10 @@ describe("MCP search route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body.result.tools).toHaveLength(1);
-    expect(response.body.result.tools[0].name).toBe("search_bookmarks");
+    expect(response.body.result.tools).toHaveLength(3);
+    expect(
+      response.body.result.tools.map((tool: { name: string }) => tool.name),
+    ).toEqual(["search_bookmarks", "get_bookmark", "list_categories"]);
   });
 
   it("calls search_bookmarks through the injected read service", async () => {
@@ -154,6 +173,74 @@ describe("MCP search route", () => {
       q: "design",
       limit: 10,
     });
+  });
+
+  it("gets a bookmark through the injected read service", async () => {
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: {
+        name: "get_bookmark",
+        arguments: { id: userId },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body.result.content[0].text)).toMatchObject({
+      id: userId,
+      title: "Design systems",
+    });
+    expect(fake.getBookmark).toHaveBeenCalledWith(userId, userId);
+  });
+
+  it("lists categories through the injected read service", async () => {
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: {
+        name: "list_categories",
+        arguments: {},
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body.result.content[0].text)).toEqual([
+      { id: userId, userId, name: "Design", sortOrder: 0 },
+    ]);
+    expect(fake.listCategories).toHaveBeenCalledWith({
+      userId,
+      withCounts: false,
+    });
+  });
+
+  it.each([
+    { caseName: "missing", id: missingBookmarkId },
+    { caseName: "owned by another user", id: otherUserBookmarkId },
+  ])("converts $caseName bookmark to an MCP error result instead of HTTP 404", async ({
+    id,
+  }) => {
+    fake.getBookmark.mockRejectedValueOnce(
+      new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found"),
+    );
+
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: {
+        name: "get_bookmark",
+        arguments: { id },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Bookmark not found" }],
+    });
+    expect(fake.getBookmark).toHaveBeenCalledWith(userId, id);
   });
 
   it("converts search service failures to MCP error results", async () => {
@@ -207,7 +294,7 @@ describe("MCP search route", () => {
       .set("Accept", accept);
 
     expect(response.status).toBe(405);
-    // supertest exposes IncomingMessage headers through an index signature.
+    // biome-ignore lint/complexity/useLiteralKeys: supertest exposes IncomingMessage headers through an index signature.
     expect(response.headers["allow"]).toBe("POST");
   });
 });

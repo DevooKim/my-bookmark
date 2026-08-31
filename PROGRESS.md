@@ -37,6 +37,7 @@
 | 2026-08-31 | `/api/mcp`는 API 키 레이트리밋을 면제한다. | MCP 대화 1회가 `initialize`·`tools/list`·`tools/call`로 여러 POST를 소모하므로, `isApiKeyAllowedPath`가 레이트리밋 적용 경로 목록이라는 점을 명시하고 `/mcp`를 넣지 않는 것으로 면제를 표현한다. 헬퍼 이름이 허용/면제 의미를 혼동하게 만들 수 있으므로 이 판단을 기록한다. |
 | 2026-08-31 | MCP 응답은 JSON-RPC 프레임과 통합 HTTP 에러 envelope를 분리한다. | 트랜스포트 레벨의 405와 내부 오류 `-32603`은 MCP 클라이언트가 해석할 JSON-RPC 프레임이어야 하고, 트랜스포트 진입 전 인증 실패 401은 기존 REST 계약인 `{ error: { code, message } }`를 유지해야 한다. |
 | 2026-08-31 | `HttpError` 메시지는 MCP `isError` 결과에도 그대로 전달한다. | 같은 메시지가 이미 REST 응답으로 노출되고 1인용 서비스이므로 MCP 경로에서 정보 노출이 증가하지 않으며, 도메인 오류의 사용자-facing 설명을 일관되게 유지한다. |
+| 2026-08-31 | `list_categories`는 `listCategoriesForUser({ userId, withCounts: false })`로 호출하고 반환 배열을 직접 JSON 직렬화한다. | 카테고리 도구는 분류 체계 조회가 목적이고 REST 기본 동작과 맞춘다. `Category[]` 또는 `CategoryWithCount[]` 유니온의 요소를 직접 다루지 않아 별도 타입 좁히기나 REST 응답 변경이 필요 없다. |
 | 2026-08-22 | Dockerfile과 Compose의 외부 이미지 이름을 `docker.io/...`로 완전히 한정한다. | Podman은 `registries.conf`에 unqualified-search registry가 없으면 `oven/bun`, `node`, `louislam/uptime-kuma` 같은 short name을 거부한다. 호스트 전역 설정 변경 없이 Docker와 Podman에서 같은 저장소 설정을 사용하기 위함. |
 | 2026-08-22 | 루트 `packageManager`와 API/Web Docker 빌드 이미지를 Bun 1.4.0으로 함께 올리고, Vercel Functions의 `bunVersion: "1.x"`는 유지한다. | 로컬·Docker 의존성 설치/빌드의 재현 버전을 일치시키되, Vercel 설정은 플랫폼이 지원하는 1.x 런타임 선택 계약을 따라야 한다. |
 | 2026-07-19 | 같은 집 서버의 Uptime Kuma 2.4.0은 Caddy 경유 web/API/readiness만 감시하고, API 내부 알림은 Discord Webhook과 인메모리 집계로 구현했다. 동일 IP 인증 실패는 1분 5회에 경고하며 전체 IP를 표시하되 자동 차단은 하지 않는다. | Tailscale 내부 개인 서비스에서 장애·비정상 접근을 빠르게 확인하면서 외부 모니터·Redis·방화벽 권한·장기 이벤트 저장소의 운영 비용과 오탐 차단 위험을 피하기 위함. |
@@ -118,6 +119,7 @@
 
 ## 알려진 이슈 / 기술 부채
 
+- MCP 티켓 03 자동 검증 완료: `get_bookmark`·`list_categories`가 tools/list와 tools/call에 노출되고, 없는 ID/타인 소유 ID는 HTTP 404가 아닌 MCP `isError` 결과로 변환된다.
 - MCP 티켓 02의 자동 검증과 API 단위 curl(무인증/잘못된 API key의 401)은 완료했다. 직접 실행한 API에서도 잘못된 키의 MCP POST 61회가 모두 401로 유지되어 API 키 레이트리밋 면제를 확인했다. 유효한 `bm_` API key와 MCP Inspector/Claude Desktop 클라이언트가 현재 작업 환경에 없어 실제 `initialize → tools/list → tools/call` 외부 클라이언트 확인은 수동 후속 항목으로 남겼다.
 - 전체 검증 루프는 2026-08-31 22:03 실행에서 typecheck/lint/test/build 모두 통과(API 173개·web 119개 포함)했다. 이후 동일 루프 재실행에서는 코드와 무관한 기존 web 테스트의 5초 timeout 및 API rate/security 테스트 flake가 간헐적으로 발생했으며, web은 `--testTimeout=30000`으로 119개 통과하고 API 단독도 통과했다. lint는 기존 `scripts/seed-bookmarks.ts`의 `process.env["TEST_EMAIL"]` 정보 1건만 보고한다.
 - (해소) Phase 1 수용 기준 — 로그인/리다이렉트/로그아웃/`GET /api/me` — 사용자가 실제 동작 확인 완료. `supabase db push` 및 대시보드 가입 차단/계정 생성도 사용자 측에서 반영된 것으로 확인.
