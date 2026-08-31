@@ -269,6 +269,32 @@ describe("MCP search route", () => {
     expect(fake.listBookmarks).not.toHaveBeenCalled();
   });
 
+  it("rejects filters that semantic search cannot apply", async () => {
+    const response = await postMcp(createTestApp(), {
+      jsonrpc: "2.0",
+      id: 34,
+      method: "tools/call",
+      params: {
+        name: "search_bookmarks",
+        arguments: {
+          q: "요리",
+          semantic: true,
+          categoryId: "none",
+          cursor: "abc",
+          kind: "image",
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.result.isError).toBe(true);
+    expect(response.body.result.content[0].text).toContain(
+      "semantic search cannot be combined",
+    );
+    expect(fake.searchSemanticBookmarks).not.toHaveBeenCalled();
+    expect(fake.listBookmarks).not.toHaveBeenCalled();
+  });
+
   it("converts a missing semantic provider to an MCP error result", async () => {
     fake.searchSemanticBookmarks.mockRejectedValueOnce(
       new HttpError(

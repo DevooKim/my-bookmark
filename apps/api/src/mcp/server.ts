@@ -30,6 +30,19 @@ const mcpSearchBookmarksInputSchema = bookmarkListQuerySchema
         message: "q is required for semantic search",
       });
     }
+    if (
+      value.semantic &&
+      (value.categoryId !== undefined ||
+        value.kind !== undefined ||
+        value.cursor !== undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["semantic"],
+        message:
+          "semantic search cannot be combined with categoryId, kind, or cursor",
+      });
+    }
   });
 
 export interface McpServerDeps {
@@ -103,13 +116,14 @@ export function buildMcpServer(
     "search_bookmarks",
     {
       description:
-        "Search the authenticated user's bookmarks. Use semantic=true for meaning- or topic-based searches (for example, finding bookmarks related to a concept even when the exact words are not present); omit it or set it to false for exact text, category, kind, or cursor filtering.",
+        "Search the authenticated user's bookmarks. Use semantic=true for meaning- or topic-based searches (for example, finding bookmarks related to a concept even when the exact words are not present); semantic=true requires q and cannot be combined with categoryId, kind, or cursor. Omit semantic or set it to false for partial-text, category, kind, or cursor filtering.",
       inputSchema: mcpSearchBookmarksInputSchema,
     },
     async (query) => {
       const { semantic, ...textQuery } = query;
       try {
         if (semantic) {
+          // The input schema rejects missing q; this guard only narrows the type.
           if (!textQuery.q) {
             return toolError(
               new HttpError(
