@@ -6,6 +6,8 @@ export async function performLogout(queryClient: QueryClient) {
   const supabase = await getSupabase();
   await supabase.auth.signOut();
   await clearServiceWorkerApiCache();
+  const { clearPersistedQueries } = await import("./query-persist");
+  await clearPersistedQueries();
   queryClient.clear();
   window.location.assign("/login");
 }

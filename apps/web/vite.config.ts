@@ -11,6 +11,7 @@ import { defineConfig } from "vite";
 const config = defineConfig({
   envDir: fileURLToPath(new URL("../..", import.meta.url)),
   resolve: { tsconfigPaths: true },
+  define: { __BUILD_ID__: JSON.stringify(new Date().toISOString()) },
   build: {
     rollupOptions: {
       output: {

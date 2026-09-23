@@ -9,3 +9,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Injected by vite `define`; changes every build so persisted query
+// snapshots never outlive the response shapes they were written with.
+declare const __BUILD_ID__: string;

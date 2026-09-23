@@ -38,9 +38,17 @@ function AuthedLayout() {
 
   useEffect(() => {
     let isMounted = true;
+    // Restore the IndexedDB snapshot while the session check runs so the
+    // first render already has the last known data; queries then refetch
+    // in the background because restored data is stale.
+    const restored = import("../../lib/query-persist")
+      .then(({ startQueryPersistence }) =>
+        startQueryPersistence(queryClient, { buster: __BUILD_ID__ }),
+      )
+      .catch(() => undefined);
     void getSupabase()
       .then((supabase) => supabase.auth.getSession())
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!isMounted) {
           return;
         }
@@ -48,7 +56,10 @@ function AuthedLayout() {
           window.location.assign(loginUrlForLocation(window.location));
           return;
         }
-        setIsCheckingSession(false);
+        await restored;
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
       })
       .catch(() => {
         // chunk load failure: fall through so meQuery's error banner shows
@@ -60,7 +71,7 @@ function AuthedLayout() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [queryClient]);
 
   async function handleLogout() {
     await performLogout(queryClient);

@@ -437,12 +437,7 @@ function BookmarkCard({
         className={`flex gap-3${bookmark.kind === "image" ? " pointer-events-none relative z-10" : ""}`}
       >
         {bookmark.kind === "image" ? (
-          <img
-            alt={title}
-            className="h-20 w-20 shrink-0 rounded-xl bg-zinc-100 object-cover"
-            loading="lazy"
-            src={bookmark.image.thumbnailUrl ?? undefined}
-          />
+          <BookmarkThumbnail alt={title} src={bookmark.image.thumbnailUrl} />
         ) : (
           <img
             alt=""
@@ -584,5 +579,24 @@ function BookmarkCard({
         </div>
       </div>
     </article>
+  );
+}
+
+// Thumbnails are short-lived signed URLs; a list restored from IndexedDB can
+// carry expired ones until the background refetch swaps in fresh URLs.
+function BookmarkThumbnail({ alt, src }: { alt: string; src: string | null }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const className = "h-20 w-20 shrink-0 rounded-xl bg-zinc-100";
+  if (!src || failedSrc === src) {
+    return <div aria-hidden="true" className={className} />;
+  }
+  return (
+    <img
+      alt={alt}
+      className={`${className} object-cover`}
+      loading="lazy"
+      onError={() => setFailedSrc(src)}
+      src={src}
+    />
   );
 }
