@@ -5,7 +5,7 @@
 ## 현재 상태
 
 - **현재 Phase**: MCP + pgvector 시맨틱 검색 구현 완료. 원격 migration·백필·실연결은 사용자 확인 대기 중이다.
-- **최종 갱신**: 2026-09-01 (MCP semantic mode)
+- **최종 갱신**: 2026-09-23 (IndexedDB 쿼리 캐시 영속화 — 로컬 우선 표시)
 
 ## Phase 체크리스트
 
@@ -25,11 +25,15 @@
 - [x] 후속 — 메타데이터 호버·카테고리 한 줄·이미지 sRGB·반복 리마인더
 - [x] 후속 — iOS 단축어 링크·이미지 통합 공유 API
 - [x] 후속 — Discord 서비스 장애·비정상 접근 모니터링
+- [x] 후속 — IndexedDB 쿼리 캐시 영속화(로컬 우선 표시 + 백그라운드 refetch)
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-09-23 | 로컬 우선 표시는 전체 로컬 복제본/델타 sync가 아니라 TanStack Query 캐시의 IndexedDB 영속화(`@tanstack/react-query-persist-client` 5.101.2 + `idb-keyval`)로 구현했다. `PersistQueryClientProvider` 대신 `persistQueryClientRestore/Subscribe`를 `_authed` 레이아웃에서 dynamic import로 호출한다. | 사용자 선택(추천안). 서버/DB 변경 없이 콜드 스타트 첫 화면을 채운다. 루트에 provider를 두면 persist 코드가 초기 번들에 들어가 150KB 예산을 넘기므로 세션 확인 대기 구간에 별도 청크(2.1KB gz)로 로드·복원한다. persist-client는 설치된 `@tanstack/react-query` 5.101.2와 peer를 맞추려 정확한 버전으로 고정했다. |
+| 2026-09-23 | persister는 `createAsyncStoragePersister` 대신 자체 throttled persister(1초 합치기, 무한 목록 첫 페이지만 저장)로 작성했고, buster는 빌드 시각 `__BUILD_ID__`를 쓴다. | `persistQueryClientSubscribe`는 fetch 상태 변화까지 매 이벤트마다 저장한다. 복원된 N페이지 무한 쿼리는 시작 시 N번 순차 요청한다. 복원 데이터는 zod를 다시 거치지 않으므로 배포마다 캐시를 무효화해 응답 스키마 드리프트로 인한 렌더 오류를 막는다. |
+| 2026-09-23 | `bun add`가 `latest` 지정 의존성(TanStack Start/Router, nitro nightly, vitest 등)을 재해석해 lockfile을 대량 변경했다. lockfile은 새 패키지 3개 항목만 수동 추가했고 `bun install --frozen-lockfile`로 확인했다. | 기능과 무관한 프레임워크 버전 이동을 섞지 않기 위함. `latest` 스펙 고정 여부는 별도 결정 사항이다. |
 | 2026-08-31 | 조회 서비스 함수를 `services/`가 아닌 `routes/`에 둔다. | 기존 라우트가 소유한 DB 조회·미디어 매핑 도우미와의 응집도를 유지하면서, 이번 티켓 범위에서 MCP가 재사용할 명시적 seam만 만든다. |
 | 2026-08-31 | 조회 서비스는 HTTP envelope가 아닌 도메인 값을 반환한다. | 목록은 `{ bookmarks, nextCursor }`, 카테고리는 배열을 반환하고 HTTP 응답의 `items`/`bookmark` envelope는 라우터가 조립해, 생성 서비스의 bare 도메인 반환 선례와 맞추면서 기존 JSON 계약을 보존한다. |
 | 2026-08-31 | MCP SDK는 `@modelcontextprotocol/sdk@1.30.0`과 현재 설치된 Zod 4.x를 사용하고, 기존 `bookmarkListQuerySchema`를 `search_bookmarks` 입력 스키마로 재사용한다. | SDK peer dependency가 Zod 3.25 이상 또는 4.x를 지원하며 실제 설치 버전은 4.5.4였다. 별도 변환 스키마와 이중 body parse를 두지 않아 요청 검증 경계를 하나로 유지한다. |
@@ -126,6 +130,8 @@
 
 ## 알려진 이슈 / 기술 부채
 
+- **IndexedDB 스냅샷은 세션 만료 시 남는다**: 명시적 로그아웃만 스냅샷을 지운다(기존 SW API 캐시와 동일한 정책). 세션 만료로 `/login`에 리다이렉트되면 다음 로그인 시 같은 사용자의 이전 스냅샷이 복원된다. 1인용 서비스라 허용.
+- **복원 데이터가 staleTime(30초) 안이면 refetch하지 않는다**: 직전에 받은 데이터라 의도된 동작. 오래된 스냅샷만 복원 직후 백그라운드 refetch된다.
 - MCP 티켓 03 자동 검증 완료: `get_bookmark`·`list_categories`가 tools/list와 tools/call에 노출되고, 없는 ID/타인 소유 ID는 HTTP 404가 아닌 MCP `isError` 결과로 변환된다. 타인 소유 케이스는 실제 `getBookmarkForUser` DB 시임으로 `user_id`·`id` 필터를 함께 검증한다.
 - MCP 티켓 04 자동 검증 완료: `add_bookmark` 신규 등록·중복 URL의 정상 텍스트 결과·도구별 실패 메시지를 확인했고, `docker compose build api`도 통과했다. 컨테이너 기동과 Caddy 경유 원격 `https://<도메인>/api/mcp`의 `claude mcp add` 연결 및 도구 4종 실행 확인은 사용자 수동 항목이다. 로컬에는 Podman이 없고 Caddyfile은 저장소 밖에서 관리된다.
 - MCP 티켓 05 SQL 작성 완료: `supabase/migrations/20260831233449_semantic_search.sql`에 확장·임베딩 컬럼·소유자 제한 top-N RPC·service_role grant를 추가했다. `supabase db push`와 원격 컬럼/RPC 존재 확인은 미완료이며 사용자가 직접 실행해야 한다.

@@ -27,6 +27,13 @@
 - 검색 입력 300ms debounce. `ai_status=pending` 폴링은 pending 항목이 있을 때만 (07-ui).
 - 이미지: favicon/og 이미지는 `loading="lazy"` + 고정 크기 컨테이너(CLS 방지) + `onerror` 폴백 아이콘.
 
+### 로컬 우선 표시 (IndexedDB 쿼리 캐시 영속화)
+- `apps/web/src/lib/query-persist.ts`: TanStack Query 캐시를 IndexedDB(`my-bookmark` DB / `query-cache` store)에 저장하고, `_authed` 레이아웃이 세션 확인과 병렬로 복원한다. 첫 렌더에 마지막 목록이 보이고, staleTime이 지난 쿼리는 백그라운드에서 refetch된다.
+- 영속 대상: `['bookmarks', filters]`(검색어 `q`가 있는 키 제외), `['categories']`, `['reminders']`. 성공 상태만. mutation은 저장하지 않는다(쓰기는 온라인 전용).
+- 무한 목록은 첫 페이지만 저장(복원 후 refetch가 로드된 페이지 수만큼 순차 요청하는 것 방지). 저장은 1초 단위로 합친다.
+- `maxAge`/영속 키 `gcTime`은 7일. buster는 빌드마다 바뀌는 `__BUILD_ID__`(vite `define`) — 배포 후 첫 실행은 캐시 없이 시작해 응답 스키마 드리프트를 막는다.
+- 로그아웃 시 구독 해제 후 스냅샷 삭제. 이미지 썸네일은 10분짜리 signed URL이라 복원 직후 만료될 수 있어 로드 실패 시 placeholder로 대체하고 refetch가 새 URL로 교체한다.
+
 ### 서비스 워커 캐싱 (06-pwa-push의 SW에 구현)
 - `/assets/*` (해시된 정적 자산): cache-first (immutable이므로 안전).
 - `GET /api/bookmarks`, `GET /api/categories`: network-first, 성공 응답을 캐시에 복사 → 오프라인에서 마지막 목록 읽기 가능.
