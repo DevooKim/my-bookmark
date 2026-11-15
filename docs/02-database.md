@@ -71,6 +71,28 @@ create index bookmarks_category_idx     on public.bookmarks (category_id);
 create trigger bookmarks_updated_at before update on public.bookmarks
   for each row execute function public.set_updated_at();
 
+-- 북마크 1 : 장소 N. AI가 게시물에서 추출한 장소를 순서대로 저장한다.
+create table public.bookmark_places (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null references auth.users(id) on delete cascade,
+  bookmark_id    uuid not null references public.bookmarks(id) on delete cascade,
+  position       integer not null,            -- 게시물 안에서의 순서(0부터)
+  name           text not null,               -- AI가 반환한 상호·장소명(원문 표기)
+  locality       text,                        -- 동네·도시 단서
+  country_code   text check (country_code ~ '^[A-Z]{2}$'),  -- ISO 3166-1 alpha-2, 모르면 null
+  geocode_status text not null default 'pending'
+                 check (geocode_status in ('pending','resolved','not_found','skipped')),
+  lat            double precision,
+  lng            double precision,
+  address        text,                        -- 지역 검색 결과의 지번 주소
+  road_address   text,                        -- 지역 검색 결과의 도로명 주소
+  created_at     timestamptz not null default now(),
+  unique (bookmark_id, position),
+  check ((geocode_status = 'resolved') = (lat is not null and lng is not null))
+);
+create index bookmark_places_user_idx on public.bookmark_places (user_id);
+create index bookmark_places_bookmark_idx on public.bookmark_places (bookmark_id);
+
 create table public.api_keys (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users(id) on delete cascade,
@@ -136,6 +158,7 @@ Express는 secret key로 접근하므로 RLS를 bypass한다. RLS는 **publishab
 ```sql
 alter table public.categories         enable row level security;
 alter table public.bookmarks          enable row level security;
+alter table public.bookmark_places    enable row level security;
 alter table public.api_keys           enable row level security;
 alter table public.ai_usage_events    enable row level security;
 alter table public.push_subscriptions enable row level security;
@@ -158,8 +181,9 @@ create policy "owner_all" on public.categories
 - **카테고리 삭제** → 소속 북마크는 `on delete set null`로 미분류가 된다. UI에서 이를 안내.
 - **`ai_status` 상태 전이**: `idle → pending`(AI 재분류 요청), `pending → done | failed`, `failed → pending`(재시도). `done/pending` 북마크의 카테고리를 사용자가 수동 변경하면 `idle`로 되돌린다 (사용자 판단이 AI 결과를 덮음).
 - **태그**는 별도 조인 테이블 대신 `bookmarks.tags text[]`에 저장한다. 북마크당 최대 5개를 제약으로 강제하고, 배열 검색을 위해 GIN 인덱스를 둔다. `search_bookmarks` 함수는 API가 인증에서 얻은 `p_user_id`를 필수 조건으로 적용하고 카테고리·커서 조건과 제목·URL·설명·태그 부분 검색을 한 번에 처리한다. 함수 실행 권한은 `service_role`에만 부여한다.
-- **메타데이터**는 `bookmarks.metadata jsonb`의 문자열 key-value 객체다. 최대 10개, key 40자, value 2048자 제한은 공유 zod 스키마와 API 경계에서 검증하고 DB는 JSON object 여부를 강제한다. 목록·상세에 함께 반환하지만 이번 범위에서는 검색 대상에 포함하지 않는다. AI는 범용 객체를 직접 만들지 않고 확실한 장소 후보만 반환하며, 서버가 `네이버지도` URL을 생성해 기존 사용자 key와 병합한다.
+- **메타데이터**는 `bookmarks.metadata jsonb`의 문자열 key-value 객체다. 최대 10개, key 40자, value 2048자 제한은 공유 zod 스키마와 API 경계에서 검증하고 DB는 JSON object 여부를 강제한다. 목록·상세에 함께 반환하지만 이번 범위에서는 검색 대상에 포함하지 않는다. AI는 범용 객체를 직접 만들지 않는다. 이미지 출처 링크(SNS·GitHub)만 서버가 검증해 사용자 key와 병합하고, 장소는 `bookmark_places`에 따로 저장한다.
 - **AI 분류는 서버 env(`OPEN_ROUTER_API_KEY`)로 동작한다** — provider별 키 저장 테이블은 없다(`0008_openrouter_preset.sql`에서 `ai_settings` drop). 모델 선택·폴백·파라미터는 OpenRouter의 preset(`@preset/my-bookmark`)이 담당하므로 DB에 모델 카탈로그나 우선순위 컬럼이 없다.
+- **장소**는 `bookmark_places`에 게시물당 여러 행으로 저장한다(`position` 순). AI 분석이 `done`으로 전이될 때만 해당 북마크의 기존 장소를 지우고 새 목록으로 교체한다(수동 편집으로 pending이 아니면 건드리지 않음). `geocode_status`: `pending`=좌표 조회 전(또는 네이버 검색 키 미설정), `resolved`=좌표 확보, `not_found`=일치 결과 없음, `skipped`=해외 장소라 조회 대상 아님. 국내 판정은 `country_code`가 `KR`이거나 null이다. 지도 링크는 DB에 저장하지 않고 응답을 만들 때 계산한다(`buildPlaceMapLink`). 과거 AI가 만들던 `metadata['네이버지도']` 자동 링크는 더 이상 생성하지 않으며, 재분석 시 `https://map.naver.com/p/search/`로 시작하는 값만 삭제한다.
 - **ai_usage_events**는 분류 시도 1건당 1행이다(성공/실패 모두 기록). 토큰·비용은 로컬에 저장하지 않는다 — 공식 수치는 OpenRouter `GET /key`(계정 사용액)와 openrouter.ai activity 페이지가 원본이다.
 - **reminders**는 단발성(one-shot). 반복 규칙은 추후 컬럼 추가로 확장 (`rrule text` 예약 — 지금은 만들지 않음).
 - 사용자 계정은 Supabase 대시보드에서 수동 생성 1개뿐 — `profiles` 테이블 불필요.

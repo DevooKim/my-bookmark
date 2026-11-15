@@ -49,7 +49,24 @@ zod 검증 실패는 400 + `details`에 필드별 이슈. 에러 미들웨어 �
 2. 북마크 즉시 생성. `mode=ai`면 `ai_status='pending'`, 아니면 `'idle'` → **201 반환** (여기까지 동기)
 3. 백그라운드(fire-and-forget): 메타데이터 fetch(title/description/favicon/og:image) → 저장 → `mode=ai`면 AI 분류 실행 (05-ai)
 
-응답 201: `{ "bookmark": { …전체 필드, "kind": "link", "url": "https://…", "image": null, "tags": ["React", "프론트엔드"], "metadata": {} } }`. `tags`는 최대 5개의 문자열 배열이다. `metadata`는 최대 10개의 문자열 key-value 객체이며 URL 값도 문자열로 반환한다. `aiModel`은 AI가 분류에 실사용한 OpenRouter 모델 id(raw, 미분류/미시도면 `null`)다. 단축어는 이 응답의 `bookmark.title`을 알림 표시에 활용 가능.
+응답 201: `{ "bookmark": { …전체 필드, "kind": "link", "url": "https://…", "image": null, "tags": ["React", "프론트엔드"], "metadata": {} } }`. `tags`는 최대 5개의 문자열 배열이다. `metadata`는 최대 10개의 문자열 key-value 객체이며 URL 값도 문자열로 반환한다. `aiModel`은 AI가 분류에 실사용한 OpenRouter 모델 id(raw, 미분류/미시도면 `null`)다. `places`는 AI가 추출한 장소 배열(`position` 오름차순, 없으면 `[]`)이다. 단축어는 이 응답의 `bookmark.title`을 알림 표시에 활용 가능.
+
+#### 응답의 `places`
+
+링크·이미지 북마크 모두 목록·상세·생성·수정·MCP 응답에 `places`가 포함된다. 목록과 시맨틱 검색은 장소를 `in` 조회 한 번으로 붙인다(N+1 없음).
+
+```json
+{ "id": "…", "name": "호랑이식당 성수점", "locality": "서울 성동구", "countryCode": "KR",
+  "lat": 37.54, "lng": 127.05, "address": "서울 성동구 …", "mapProvider": "naver", "mapUrl": "https://map.naver.com/p/search/…" }
+```
+
+- `address`는 도로명 주소가 있으면 그것, 없으면 지번 주소다. 좌표가 없으면 `lat`/`lng`는 `null`.
+- 지도 링크는 DB에 저장하지 않고 응답 시점에 계산한다. `query`는 `[name, locality]`에서 빈 값을 뺀 뒤 공백으로 이은 문자열이다.
+
+| 조건 | `mapProvider` | `mapUrl` |
+|---|---|---|
+| 국내(`countryCode`가 `KR` 또는 `null`) | `naver` | `https://map.naver.com/p/search/{encodeURIComponent(query)}` |
+| 해외 | `google` | `https://www.google.com/maps/search/?api=1&query={encodeURIComponent(query)}` |
 
 ### POST /api/images — 이미지 등록·자동 분석 (웹 + 단축어 공용)
 
