@@ -97,6 +97,17 @@ zod 검증 실패는 400 + `details`에 필드별 이슈. 에러 미들웨어 �
 
 keyset 페이지네이션: `(created_at, id) < cursor` order by `created_at desc, id desc`.
 
+### GET /api/places — 지도용 장소 그룹 (Bearer 전용)
+
+API Key 허용 경로가 아니다. 좌표가 있는(`geocode_status='resolved'`) 장소를 하나 이상 가진 북마크만 북마크 `created_at` 내림차순으로 반환한다. 페이지네이션은 없다(개인용 규모). `bookmark.title`이 없으면 북마크 목록과 같은 폴백(링크는 호스트명, 이미지는 파일명)을 쓴다. 이미지 북마크의 `thumbnailUrl`은 기존 이미지 목록과 같은 signed URL이며 서명 실패 시 `null`이다.
+
+```json
+{ "items": [ { "bookmark": { "id": "…", "kind": "link", "title": "서촌 카페 6곳 추천", "url": "https://…", "thumbnailUrl": null },
+               "places": [ /* 응답의 places 형식, 좌표가 있는 것만, position 순 */ ] } ] }
+```
+
+서비스 워커는 이 응답을 캐시하지 않는다(network-only).
+
 ### GET /api/bookmarks/search/semantic — 의미 검색
 
 쿼리: `q` (필수, 공백 trim 후 1자 이상), `limit` (기본 20, 최대 100).

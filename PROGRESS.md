@@ -5,7 +5,7 @@
 ## 현재 상태
 
 - **현재 Phase**: MCP + pgvector 시맨틱 검색 구현 완료. 원격 migration·백필·실연결은 사용자 확인 대기 중이다.
-- **최종 갱신**: 2026-11-15 (AI 분류 실패 수정 — preset 경유 시 response_format 미적용 대응)
+- **최종 갱신**: 2026-11-15 (북마크 다중 장소 추출 + 국내 네이버/해외 구글 링크 + 좌표 조회 + `/map` 지도 화면)
 
 ## Phase 체크리스트
 
@@ -26,11 +26,20 @@
 - [x] 후속 — iOS 단축어 링크·이미지 통합 공유 API
 - [x] 후속 — Discord 서비스 장애·비정상 접근 모니터링
 - [x] 후속 — IndexedDB 쿼리 캐시 영속화(로컬 우선 표시 + 백그라운드 refetch)
+- [x] 후속 — 북마크 다중 장소 추출·국내 네이버/해외 구글 링크(1단계), 좌표 조회·`/map` 지도·게시물별 마커 그룹·지도 검색·백필 스크립트(2단계) — 설계: `docs/superpowers/specs/2026-11-15-bookmark-places-map-design.md`
 
 ## 결정 로그 (스펙과 다르게 한 것, 스펙에 없어서 정한 것)
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-11-15 | 장소 칩(`bookmark-places.tsx`)의 hover는 네이버/구글 구분 없이 URL 메타데이터 뱃지와 같은 파란색(`hover:bg-blue-700 hover:text-white`)으로 했다. | 설계 문서는 "네이버 링크는 `네이버지도` 메타데이터의 네이버 녹색 hover 재사용"이라 했지만, 그 녹색 특례는 2026-07-15 결정(모든 URL 뱃지 hover 통일)으로 이미 제거됐고 기존 테스트가 `not.toContain("hover:bg-[#03c75a]")`로 고정하고 있다. 스펙과 코드가 충돌해 더 최근의 기존 결정을 따랐다. 녹색이 필요하면 칩 한 곳만 바꾸면 된다. |
+| 2026-11-15 | 장소 저장·좌표 조회 실패는 `console.warn` 후 이미 `done`이 된 분석 결과를 유지한다(장소 저장 실패 시 해당 북마크의 장소는 비거나 이전 상태로 남음). | 스펙은 좌표 조회 실패만 분석에 영향이 없다고 했다. 같은 예외 경로에서 장소 insert가 실패하면 usage 성공 이벤트를 남긴 뒤 다시 failed 기록을 하는 모순이 생기고 `markDone`은 이미 성공했으므로, 장소 쪽 실패도 같은 격리 규칙으로 처리했다. 재분류하면 복구된다. |
+| 2026-11-15 | `GET /api/places`의 `bookmark.title`은 non-null 문자열이며 서버가 북마크 목록과 같은 폴백(링크=호스트명, 이미지=파일명, 없으면 "제목 없는 링크"/"분석 중인 이미지")을 적용한다. 장소는 `bookmark_places`와 `bookmarks!inner` 임베드 한 쿼리로 읽고 1000행 단위로 끝까지 페이지네이션한다. | 스펙은 "목록과 같은 폴백"이라고만 했는데 목록 폴백은 클라이언트에 있었다. 지도 패널이 제목을 그대로 표시하도록 서버에서 확정했다. PostgREST 1000행 응답 제한으로 장소가 잘리는 것을 막기 위함. |
+| 2026-11-15 | 지오코더는 이름 일치 항목 중 좌표가 한국 범위(위도 33~39, 경도 124~132) 밖이면 그 항목을 채택하지 않고 다음 일치 항목을 본다. `mapx/mapy`는 절댓값이 360을 넘으면 1e7로 나눈다. | 공식 문서는 WGS84라고만 쓰고 정밀도를 밝히지 않는다. 실측(10^7 정수 문자열)을 기본으로 하되 형식이 바뀌어도 잘못된 위치에 마커가 찍히지 않게 하는 방어. |
+| 2026-11-15 | 지도 SDK 인증 파라미터는 현행 `ncpKeyId`를 쓴다(과거 `ncpClientId`). 인증 실패는 SDK가 호출하는 전역 `navermap_authFailure`로 감지해 지도 위에 안내를 덮는다. 선택 상태는 URL이 아니라 화면 로컬 상태다(`?bookmark=`는 초기 선택 용도). | 공식 튜토리얼과 실제 SDK 스크립트(3.10.5)에서 확인했다. `q`만 URL에 반영하라는 스펙을 따랐다. |
+| 2026-11-15 | 서비스 워커는 `*.naver.com`/`*.naver.net`/`*.pstatic.net` 요청에 `respondWith`를 호출하지 않는다. cross-origin 전체를 건너뛰지는 않는다. | 기존 SW는 모든 fetch를 가로채고 `/assets/*` 경로는 origin과 무관하게 cache-first로 캐시했다. 지도 타일·SDK 경로가 겹치면 영구 캐시될 수 있다. API가 다른 origin인 배포(docker 기본 구성)의 `/api/categories` 오프라인 캐시는 유지해야 해서 호스트 기준으로 제한했다. `/api/places`는 서명 URL을 담으므로 network-only 그대로다. |
+| 2026-11-15 | `@types/navermaps@3.10.0`을 web devDependency로 추가하되 `bun add`가 만든 lockfile 재배치 대신 새 패키지 2개(`@types/navermaps`, `@types/geojson`) 항목만 수동으로 넣고 `bun install --frozen-lockfile`로 확인했다. tsconfig `types`에 `navermaps`를 추가했다. | 스펙이 지정한 dev 의존성이다. 기능과 무관한 lockfile 변동을 섞지 않는다(2026-09-23 선례). |
+| 2026-11-15 | 백필 스크립트는 `ai_status='done'`이고 장소 행이 없는 북마크를 대상으로 하므로, 장소가 실제로 없는 북마크는 실행할 때마다 다시 분석된다. 스크립트의 AI 호출은 `ai_usage_events`에 기록하지 않는다. 모바일 하단 바는 5항목(지도 추가), `/` 콜드 로드 gzip은 약 +1.0KB 늘었다(아래 알려진 이슈). | 스펙의 대상 정의를 그대로 따른 결과다. 재실행 비용이 문제가 되면 "분석 완료 표시" 컬럼이 필요한데 테이블 변경이라 임의로 하지 않았다. |
 | 2026-11-15 | AI 응답 JSON Schema를 system prompt에도 포함하고, ```` ```json ```` 코드펜스로 감싼 응답은 본문만 꺼내 파싱한다. `response_format`(strict json_schema)과 preset 단일 호출 구조는 그대로 유지한다. | 2026-11-01부터 `@preset/my-bookmark` 경유 호출에서 `response_format`이 업스트림에 적용되지 않아(같은 모델 직접 호출은 정상, 실측) 코드펜스·스키마 불일치 응답으로 분류가 전부 실패했다. preset 설정은 openrouter.ai 대시보드 소관이라 코드에서 고칠 수 없으므로, 스키마 강제 여부와 무관하게 같은 형태를 받도록 했고 zod 경계 검증은 유지된다. 수정 후 preset 실호출 8/8 통과. |
 | 2026-09-23 | 로컬 우선 표시는 전체 로컬 복제본/델타 sync가 아니라 TanStack Query 캐시의 IndexedDB 영속화(`@tanstack/react-query-persist-client` 5.101.2 + `idb-keyval`)로 구현했다. `PersistQueryClientProvider` 대신 `persistQueryClientRestore/Subscribe`를 `_authed` 레이아웃에서 dynamic import로 호출한다. | 사용자 선택(추천안). 서버/DB 변경 없이 콜드 스타트 첫 화면을 채운다. 루트에 provider를 두면 persist 코드가 초기 번들에 들어가 150KB 예산을 넘기므로 세션 확인 대기 구간에 별도 청크(2.1KB gz)로 로드·복원한다. persist-client는 설치된 `@tanstack/react-query` 5.101.2와 peer를 맞추려 정확한 버전으로 고정했다. |
 | 2026-09-23 | persister는 `createAsyncStoragePersister` 대신 자체 throttled persister(1초 합치기, 무한 목록 첫 페이지만 저장)로 작성했고, buster는 빌드 시각 `__BUILD_ID__`를 쓴다. | `persistQueryClientSubscribe`는 fetch 상태 변화까지 매 이벤트마다 저장한다. 복원된 N페이지 무한 쿼리는 시작 시 N번 순차 요청한다. 복원 데이터는 zod를 다시 거치지 않으므로 배포마다 캐시를 무효화해 응답 스키마 드리프트로 인한 렌더 오류를 막는다. |
@@ -131,6 +140,8 @@
 
 ## 알려진 이슈 / 기술 부채
 
+- **지도 SDK 실브라우저 미확인(2026-11-15)**: 네이버 지도 JS v3는 인증 키가 등록된 Web 서비스 URL에서만 인증된다. 에이전트 환경에서는 로그인 세션과 등록 URL이 없어 `/map`을 실제 브라우저로 열어 보지 못했다. 어댑터는 `@types/navermaps` 타입체크, 화면은 fake 어댑터 테스트로 검증했고, 지도 렌더·마커 클릭·`fitBounds`·인증 실패 안내는 사용자 확인이 필요하다.
+- **초기 번들 예산**: 이번 변경으로 인증된 `/` 콜드 로드 JS가 gzip 기준 약 +1.0KB(entry +0.67KB, api-client +0.15KB, `_authed` route +0.19KB; 장소 칩·지도 nav·스키마) 늘었다. 지도 코드(SDK 어댑터·화면)는 `map` 청크(4.6KB gz)에만 있다. `/`는 이미 150.4KB 경계값이었으므로 150KB를 넘는 상태가 유지·소폭 악화됐다. `/login` 경로는 영향이 없다.
 - **IndexedDB 스냅샷은 세션 만료 시 남는다**: 명시적 로그아웃만 스냅샷을 지운다(기존 SW API 캐시와 동일한 정책). 세션 만료로 `/login`에 리다이렉트되면 다음 로그인 시 같은 사용자의 이전 스냅샷이 복원된다. 1인용 서비스라 허용.
 - **복원 데이터가 staleTime(30초) 안이면 refetch하지 않는다**: 직전에 받은 데이터라 의도된 동작. 오래된 스냅샷만 복원 직후 백그라운드 refetch된다.
 - MCP 티켓 03 자동 검증 완료: `get_bookmark`·`list_categories`가 tools/list와 tools/call에 노출되고, 없는 ID/타인 소유 ID는 HTTP 404가 아닌 MCP `isError` 결과로 변환된다. 타인 소유 케이스는 실제 `getBookmarkForUser` DB 시임으로 `user_id`·`id` 필터를 함께 검증한다.
@@ -220,6 +231,7 @@
 
 ## 사용자 확인 필요
 
+- **북마크 장소·지도 사용자 액션(2026-11-15)**: (1) `bookmark_places` 마이그레이션(`20261115103015_bookmark_places.sql`)은 설계 세션이 원격에 적용했다. (2) 서버 `.env`에 `NAVER_SEARCH_CLIENT_ID`/`NAVER_SEARCH_CLIENT_SECRET`, web 빌드 환경에 `VITE_NAVER_MAP_CLIENT_ID`가 필요하다(docker는 `docker compose build web` 재빌드, Vercel은 Preview/Production 환경변수). 네이버 클라우드 플랫폼 콘솔 Maps Application의 Web 서비스 URL에 배포 도메인(개발은 `http://localhost`)을 등록해야 한다. (3) 기존 북마크 장소 채우기: `bun run --filter @my-bookmark/api backfill:places -- --dry-run` → `--limit 10` → 전체 → 필요 시 `--geocode-only`(자세한 내용은 `docs/05-ai.md`). 에이전트는 원격 DB에 쓰는 이 스크립트를 실행하지 않았다. (4) 배포 후 `/map`에서 마커 그룹 색·선택 강조·검색·네이버지도 열기(모바일 앱 전환 포함)와 카드의 장소 칩(국내 네이버/해외 구글 링크)을 확인한다. (5) 지오코더는 실제 키로 읽기 전용 호출 2건(존재하는 상호 → 서울 좌표 `resolved`, 없는 상호 → `not_found`)을 확인했다.
 - (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
 - (해소 2026-07-14) 마이그레이션 0009 + 이미지 항목 원격 적용 완료. 원격 migration list, DB lint, 실제 인증 API 200으로 확인했다.
 - **이미지 실환경 확인**: 원격의 기존 식당 JPEG 이미지 2건을 재분석해 두 건 모두 `aiStatus='done'`과 서버가 만든 `map.naver.com` 검색 링크를 확인했다. 남은 확인은 식당명 단서가 없는 음식 사진에 지도 링크가 생기지 않는 실호출, 공개 인스타그램/스레드 식당 링크, HEIC 신규 등록, 여러 장 동시 저장, unsigned Storage URL 403/404, iOS 단축어와 PWA 공유 시트, 이미지 리마인더 클릭이다.
