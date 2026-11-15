@@ -60,3 +60,26 @@ export function loadHiddenPlaceIds(): Set<string> {
 export function saveHiddenPlaceIds(ids: ReadonlySet<string>): void {
   save(HIDDEN_PLACES_STORAGE_KEY, ids);
 }
+
+// '선택한 게시물만 보기' 옵션. 기기별 편의 설정이라 localStorage에만 둔다.
+export const ONLY_SELECTED_STORAGE_KEY = "my-bookmark:map-only-selected";
+
+export function loadOnlySelected(): boolean {
+  try {
+    return window.localStorage.getItem(ONLY_SELECTED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveOnlySelected(value: boolean): void {
+  try {
+    if (value) {
+      window.localStorage.setItem(ONLY_SELECTED_STORAGE_KEY, "1");
+    } else {
+      window.localStorage.removeItem(ONLY_SELECTED_STORAGE_KEY);
+    }
+  } catch {
+    // 저장 실패는 이번 세션 동안만 옵션이 유지된다는 뜻일 뿐이다.
+  }
+}

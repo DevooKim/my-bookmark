@@ -14,6 +14,9 @@ export interface MapViewInput {
   hiddenIds: ReadonlySet<string>;
   // 개별로 숨긴 장소. 그룹이 보이는 동안 그 핀만 뺀다.
   hiddenPlaceIds: ReadonlySet<string>;
+  // 선택이 있을 때 선택 그룹 외 마커를 흐리게 두지 않고 지도에서 아예 뺀다.
+  // 선택이 없으면 아무 영향이 없다.
+  onlySelected?: boolean;
 }
 
 // 선택된 게시물은 숨김이어도 보인다(선택하면 자동으로 다시 표시되므로).
@@ -24,10 +27,23 @@ function isGroupHidden(
   return input.hiddenIds.has(groupId) && input.selectedId !== groupId;
 }
 
+// 우선순위(높은 것부터): ① '선택한 게시물만 보기'가 켜져 있으면 선택 그룹 외 전부 숨김
+// ② 그룹 숨김(선택된 그룹은 예외) ③ 개별 장소 숨김(선택 그룹 안에서도 적용).
+// 호버 강조는 이 필터를 통과한 마커에만 적용된다.
 function visiblePlaces(
-  input: Pick<MapViewInput, "hiddenIds" | "hiddenPlaceIds" | "selectedId">,
+  input: Pick<
+    MapViewInput,
+    "hiddenIds" | "hiddenPlaceIds" | "selectedId" | "onlySelected"
+  >,
   result: PlaceSearchResult,
 ): PlaceSearchResult["places"] {
+  if (
+    input.onlySelected &&
+    input.selectedId !== null &&
+    input.selectedId !== result.group.bookmark.id
+  ) {
+    return [];
+  }
   if (isGroupHidden(input, result.group.bookmark.id)) {
     return [];
   }
@@ -83,7 +99,7 @@ export function computeMapMarkers(input: MapViewInput): MapMarkerView[] {
 export function computeFitPoints(
   input: Pick<
     MapViewInput,
-    "results" | "selectedId" | "hiddenIds" | "hiddenPlaceIds"
+    "results" | "selectedId" | "hiddenIds" | "hiddenPlaceIds" | "onlySelected"
   >,
 ): MapPoint[] {
   const { results, selectedId } = input;

@@ -6,9 +6,12 @@ import {
   HIDDEN_PLACES_STORAGE_KEY,
   loadHiddenIds,
   loadHiddenPlaceIds,
+  loadOnlySelected,
+  ONLY_SELECTED_STORAGE_KEY,
   parseHiddenIds,
   saveHiddenIds,
   saveHiddenPlaceIds,
+  saveOnlySelected,
   serializeHiddenIds,
 } from "./map-visibility";
 
@@ -83,5 +86,35 @@ describe("hidden group storage", () => {
     expect(() => saveHiddenIds(new Set(["x"]))).not.toThrow();
     expect(() => saveHiddenPlaceIds(new Set(["x"]))).not.toThrow();
     expect(() => saveHiddenIds(new Set())).not.toThrow();
+  });
+});
+
+describe("only-selected option storage", () => {
+  it("round-trips and clears the stored flag", () => {
+    expect(loadOnlySelected()).toBe(false);
+    saveOnlySelected(true);
+    expect(window.localStorage.getItem(ONLY_SELECTED_STORAGE_KEY)).toBe("1");
+    expect(loadOnlySelected()).toBe(true);
+    saveOnlySelected(false);
+    expect(window.localStorage.getItem(ONLY_SELECTED_STORAGE_KEY)).toBeNull();
+    expect(loadOnlySelected()).toBe(false);
+  });
+
+  it("treats unexpected stored values as off and survives blocked storage", () => {
+    window.localStorage.setItem(ONLY_SELECTED_STORAGE_KEY, "true");
+    expect(loadOnlySelected()).toBe(false);
+
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    expect(loadOnlySelected()).toBe(false);
+    expect(() => saveOnlySelected(true)).not.toThrow();
+    expect(() => saveOnlySelected(false)).not.toThrow();
   });
 });

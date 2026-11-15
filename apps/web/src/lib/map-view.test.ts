@@ -228,3 +228,93 @@ describe("computeFitPoints", () => {
     ).toEqual([]);
   });
 });
+
+describe("only-selected mode", () => {
+  it("removes every other post from the map instead of dimming it", () => {
+    expect(
+      states(computeMapMarkers(input({ selectedId: "b", onlySelected: true }))),
+    ).toEqual([["b1", "active", false]]);
+    // 꺼져 있으면 지금처럼 나머지는 흐리게 남는다.
+    expect(
+      states(
+        computeMapMarkers(input({ selectedId: "b", onlySelected: false })),
+      ).map(([, state]) => state),
+    ).toEqual(["dim", "dim", "active", "dim"]);
+  });
+
+  it("has no effect without a selection", () => {
+    expect(
+      computeMapMarkers(input({ onlySelected: true })).map(
+        (marker) => marker.id,
+      ),
+    ).toEqual(["a1", "a2", "b1", "c1"]);
+  });
+
+  it("still applies the group hide rules and shows a selected hidden group", () => {
+    // 선택된 그룹은 숨김이어도 보인다. 다른 그룹의 숨김은 선택·옵션과 무관하게 숨김이다.
+    expect(
+      states(
+        computeMapMarkers(
+          input({
+            selectedId: "a",
+            onlySelected: true,
+            hiddenIds: new Set(["a", "b"]),
+          }),
+        ),
+      ),
+    ).toEqual([
+      ["a1", "active", false],
+      ["a2", "active", false],
+    ]);
+  });
+
+  it("keeps individually hidden places hidden inside the selected post", () => {
+    expect(
+      computeMapMarkers(
+        input({
+          selectedId: "a",
+          onlySelected: true,
+          hiddenPlaceIds: new Set(["a1", "b1"]),
+        }),
+      ).map((marker) => marker.id),
+    ).toEqual(["a2"]);
+  });
+
+  it("ignores the hovered post and only emphasizes places inside the selected post", () => {
+    // 선택이 있으면 그룹 호버는 이미 무시된다. 옵션이 켜져 숨은 그룹의 호버는 마커를 되살리지 않는다.
+    expect(
+      states(
+        computeMapMarkers(
+          input({
+            selectedId: "a",
+            onlySelected: true,
+            hoveredGroupId: "b",
+            hoveredPlaceId: "a2",
+          }),
+        ),
+      ),
+    ).toEqual([
+      ["a1", "active", false],
+      ["a2", "active", true],
+    ]);
+    // 선택이 없으면 호버 강조는 그대로 동작한다.
+    expect(
+      computeMapMarkers(input({ onlySelected: true, hoveredGroupId: "b" })).map(
+        (marker) => [marker.id, marker.state],
+      ),
+    ).toEqual([
+      ["a1", "dim"],
+      ["a2", "dim"],
+      ["b1", "active"],
+      ["c1", "dim"],
+    ]);
+  });
+
+  it("fits only the selected post's visible places", () => {
+    const base = input({ selectedId: "a", onlySelected: true });
+    expect(computeFitPoints(base)).toEqual([
+      { lat: 37.1, lng: 127 },
+      { lat: 37.2, lng: 127 },
+    ]);
+  });
+});
