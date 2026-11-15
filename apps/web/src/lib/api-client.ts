@@ -27,9 +27,11 @@ import {
   createApiKeyResponseSchema,
   type MeResponse,
   meResponseSchema,
+  type PlaceGroupsResponse,
   type PushStatusResponse,
   type PushSubscriptionRequest,
   type PushTestResponse,
+  placeGroupsResponseSchema,
   pushStatusResponseSchema,
   pushTestResponseSchema,
   type ReminderResponse,
@@ -149,6 +151,13 @@ async function parseJsonResponse<T>(
 export async function getMe(): Promise<MeResponse> {
   const response = await apiFetch("/api/me");
   return parseJsonResponse(response, (json) => meResponseSchema.parse(json));
+}
+
+export async function listPlaceGroups(): Promise<PlaceGroupsResponse> {
+  const response = await apiFetch("/api/places");
+  return parseJsonResponse(response, (json) =>
+    placeGroupsResponseSchema.parse(json),
+  );
 }
 
 export async function getAiStatus(): Promise<AiStatusResponse> {
