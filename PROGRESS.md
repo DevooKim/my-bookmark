@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-- **현재 Phase**: 북마크 다중 장소 추출 + `/map` 지도 화면 구현 완료(백필·실브라우저 지도 확인은 사용자 대기). MCP + pgvector 시맨틱 검색의 원격 백필·실연결도 사용자 확인 대기 중이다.
+- **현재 Phase**: 북마크 다중 장소 추출 + `/map` 지도 화면 구현·main 병합·myserver 배포 완료(2026-11-15). 장소 백필은 OpenRouter 크레딧 부족(402)으로 365개 중 11개 북마크만 처리된 채 중단됐다 — 크레딧 충전 후 재실행 필요. 실브라우저 지도 확인은 사용자 대기. MCP + pgvector 시맨틱 검색의 원격 백필·실연결도 사용자 확인 대기 중이다.
 - **최종 갱신**: 2026-11-15 (북마크 다중 장소 추출 + 국내 네이버/해외 구글 링크 + 좌표 조회 + `/map` 지도 화면)
 
 ## Phase 체크리스트
@@ -232,6 +232,7 @@
 
 ## 사용자 확인 필요
 
+- **북마크 장소·지도 배포·백필 기록(2026-11-15, 설계 세션)**: `1d499b4`까지 main에 병합·push하고 myserver에서 `~/containers/my-bookmark/manage.sh deploy`로 배포했다(health/readiness ok). 서버 `.env`에 네이버 키 3개, 서버 `compose.yaml` web build args에 `VITE_NAVER_MAP_CLIENT_ID`를 추가했다(수정 전 사본 `*.bak-20261115`). 첫 배포는 `bun.lock`의 `@types/navermaps`가 `apps/api` workspace 블록에 잘못 들어가 Docker(Bun 1.4.0)의 `--frozen-lockfile`에서 실패했고, `apps/web` 블록으로 옮겨 해결했다(로컬 Bun 1.4.4는 통과시켜 검증 루프로는 잡히지 않음). 백필은 11개 북마크·장소 69개(좌표 40, 해외 25, 미발견 4)까지 저장된 뒤 OpenRouter 402 `This request would exceed your available credits`로 나머지 354개가 실패했다. 같은 이유로 신규 북마크의 AI 분석도 크레딧 충전 전까지 실패한다. 충전 후 `bun run --filter @my-bookmark/api backfill:places`를 다시 실행한다. `app-auth-order.test.ts`의 share rate limit 테스트가 전체 실행에서 1회 401로 실패 후 재실행 통과(간헐 실패, 원인 미확인).
 - **북마크 장소·지도 사용자 액션(2026-11-15)**: (1) `bookmark_places` 마이그레이션(`20261115103015_bookmark_places.sql`)은 설계 세션이 원격에 적용했다. (2) 서버 `.env`에 `NAVER_SEARCH_CLIENT_ID`/`NAVER_SEARCH_CLIENT_SECRET`, web 빌드 환경에 `VITE_NAVER_MAP_CLIENT_ID`가 필요하다(docker는 `docker compose build web` 재빌드, Vercel은 Preview/Production 환경변수). 네이버 클라우드 플랫폼 콘솔 Maps Application의 Web 서비스 URL에 배포 도메인(개발은 `http://localhost`)을 등록해야 한다. (3) 기존 북마크 장소 채우기: `bun run --filter @my-bookmark/api backfill:places -- --dry-run` → `--limit 10` → 전체 → 필요 시 `--geocode-only`(자세한 내용은 `docs/05-ai.md`). 에이전트는 원격 DB에 쓰는 이 스크립트를 실행하지 않았다. (4) 배포 후 `/map`에서 마커 그룹 색·선택 강조·검색·네이버지도 열기(모바일 앱 전환 포함)와 카드의 장소 칩(국내 네이버/해외 구글 링크)을 확인한다. (5) 지오코더는 실제 키로 읽기 전용 호출 2건(존재하는 상호 → 서울 좌표 `resolved`, 없는 상호 → `not_found`)을 확인했다.
 - (해소 2026-07-12) 마이그레이션 0005~0008 원격 적용 완료(사용자 push). push 후 dev 스택에서 실계정 E2E(분류 성공, `ai_model` 기록, 이모지 카테고리 자동 생성, 요약/태그, usage 이벤트 적재, `GET /api/ai/account`)와 브라우저(편집 모달 실사용 모델 표시, 대시보드 계정 카드/모델별·일별/최근 이벤트, 설정 AI 카드) 검증 통과. 테스트 데이터는 삭제함.
 - (해소 2026-07-14) 마이그레이션 0009 + 이미지 항목 원격 적용 완료. 원격 migration list, DB lint, 실제 인증 API 200으로 확인했다.
