@@ -45,6 +45,7 @@ import {
   defaultOperationalMonitor,
   type OperationalMonitor,
 } from "../services/operational-monitor";
+import { getPlaceGeocoder } from "../services/place-geocoder-provider";
 
 const IMAGE_BUCKET = "bookmark-images";
 
@@ -550,6 +551,7 @@ export async function categorizeBookmarkForUser({
     bookmarkId,
     provider: providerResolver(),
     embeddingProvider: getEmbeddingProvider(),
+    placeGeocoder: getPlaceGeocoder(),
     recordUsage: createAiUsageRecorder(db, userId, (event) =>
       usageMonitor.recordAiUsage(event),
     ),

@@ -8,6 +8,7 @@ import {
   applyCategorizeResult,
   categorizeBookmark,
 } from "../services/categorize";
+import type { PlaceGeocoder } from "../services/place-geocoder";
 
 class FakeDb {
   categories = [{ id: "cat-dev", name: "개발" }];
@@ -51,6 +52,33 @@ class FakeDb {
           this.places.push(...rows);
           return Promise.resolve({ data: null, error: null });
         },
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              eq: () => ({
+                order: () =>
+                  Promise.resolve({
+                    data: this.places
+                      .map((row, index) => ({ ...row, id: `place-${index}` }))
+                      .filter((row) => row.geocode_status === "pending"),
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+        }),
+        update: (values: Record<string, unknown>) => ({
+          eq: (_field: string, id: string) => ({
+            eq: () => {
+              const index = Number(id.replace("place-", ""));
+              const row = this.places[index];
+              if (row) {
+                Object.assign(row, values);
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
+        }),
       };
     }
     if (table === "bookmarks") {
@@ -142,6 +170,7 @@ describe("applyCategorizeResult", () => {
     db: FakeDb,
     places: PlaceCandidate[] | null | undefined,
     tags?: string[],
+    placeGeocoder: PlaceGeocoder | null = null,
   ) {
     await applyCategorizeResult(
       db,
@@ -155,6 +184,8 @@ describe("applyCategorizeResult", () => {
       },
       "google/gemini-3.1-flash-lite-20260507",
       db.bookmark.metadata,
+      "link",
+      placeGeocoder,
     );
   }
 
@@ -241,6 +272,73 @@ describe("applyCategorizeResult", () => {
     expect(db.bookmark.ai_status).toBe("done");
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  describe("geocoding", () => {
+    const resolved = {
+      status: "resolved" as const,
+      lat: 37.5,
+      lng: 127.04,
+      address: "서울 성동구 성수동",
+      roadAddress: "서울 성동구 아차산로",
+    };
+
+    it("resolves domestic places, marks misses not_found, and skips overseas places", async () => {
+      const db = new FakeDb();
+      const geocode = vi
+        .fn()
+        .mockResolvedValueOnce(resolved)
+        .mockResolvedValueOnce({ status: "not_found" });
+      await apply(
+        db,
+        [
+          place("호랑이식당"),
+          place("없는 가게"),
+          place("% Arabica", { countryCode: "JP", locality: "Kyoto" }),
+        ],
+        undefined,
+        { geocode },
+      );
+
+      expect(geocode).toHaveBeenCalledTimes(2);
+      expect(geocode).toHaveBeenNthCalledWith(1, {
+        name: "호랑이식당",
+        locality: "서울 성동구",
+      });
+      expect(db.places.map((row) => row["geocode_status"])).toEqual([
+        "resolved",
+        "not_found",
+        "skipped",
+      ]);
+      expect(db.places[0]).toMatchObject({
+        lat: 37.5,
+        lng: 127.04,
+        address: "서울 성동구 성수동",
+        road_address: "서울 성동구 아차산로",
+      });
+    });
+
+    it("leaves places pending when no geocoder is configured", async () => {
+      const db = new FakeDb();
+      await apply(db, [place("호랑이식당")]);
+      expect(db.places.map((row) => row["geocode_status"])).toEqual([
+        "pending",
+      ]);
+    });
+
+    it("keeps the analysis and leaves the place pending when geocoding fails", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const db = new FakeDb();
+      const geocode = vi.fn().mockRejectedValue(new Error("network down"));
+      await apply(db, [place("호랑이식당")], undefined, { geocode });
+
+      expect(db.bookmark.ai_status).toBe("done");
+      expect(db.places.map((row) => row["geocode_status"])).toEqual([
+        "pending",
+      ]);
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
   });
 
   it("removes a previously auto-generated Naver Map search link only", async () => {

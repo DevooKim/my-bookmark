@@ -5,6 +5,7 @@ import {
   type BookmarkPlaceDbRow,
   mapBookmarkPlace,
 } from "../lib/db-mappers";
+import type { PlaceGeocoder } from "./place-geocoder";
 
 interface DbError {
   code?: string;
@@ -140,4 +141,121 @@ export async function replaceBookmarkPlaces(
   if (error) {
     throw error;
   }
+}
+
+export interface GeocodeRow {
+  id: string;
+  user_id: string;
+  name: string;
+  locality: string | null;
+}
+
+export interface GeocodeSummary {
+  resolved: number;
+  notFound: number;
+  failed: number;
+}
+
+interface PlaceUpdateTable {
+  update(values: Record<string, unknown>): {
+    eq(
+      field: string,
+      value: string,
+    ): {
+      eq(field: string, value: string): QueryResult<null>;
+    };
+  };
+}
+
+// 요청은 순차 실행한다(초당 호출 제한 대비). 조회·저장 실패는 해당 행을 pending으로
+// 남기고 다음 행으로 넘어간다 — 분석 결과에는 영향을 주지 않는다.
+export async function geocodePlaceRows(
+  db: PlacesDb,
+  rows: readonly GeocodeRow[],
+  geocoder: PlaceGeocoder,
+): Promise<GeocodeSummary> {
+  const summary: GeocodeSummary = { resolved: 0, notFound: 0, failed: 0 };
+  for (const row of rows) {
+    try {
+      const outcome = await geocoder.geocode({
+        name: row.name,
+        locality: row.locality,
+      });
+      const values =
+        outcome.status === "resolved"
+          ? {
+              geocode_status: "resolved",
+              lat: outcome.lat,
+              lng: outcome.lng,
+              address: outcome.address,
+              road_address: outcome.roadAddress,
+            }
+          : { geocode_status: "not_found" };
+      const { error } = await (db.from("bookmark_places") as PlaceUpdateTable)
+        .update(values)
+        .eq("id", row.id)
+        .eq("user_id", row.user_id);
+      if (error) {
+        throw error;
+      }
+      if (outcome.status === "resolved") {
+        summary.resolved += 1;
+      } else {
+        summary.notFound += 1;
+      }
+    } catch (error) {
+      summary.failed += 1;
+      console.warn("place geocoding failed", { placeId: row.id, error });
+    }
+  }
+  return summary;
+}
+
+interface PendingPlaceSelectTable {
+  select(columns: string): {
+    eq(
+      field: string,
+      value: string,
+    ): {
+      eq(
+        field: string,
+        value: string,
+      ): {
+        eq(
+          field: string,
+          value: string,
+        ): {
+          order(
+            field: string,
+            options: { ascending: boolean },
+          ): QueryResult<
+            (GeocodeRow & { country_code: string | null })[] | null
+          >;
+        };
+      };
+    };
+  };
+}
+
+export async function geocodePendingPlaces(
+  db: PlacesDb,
+  userId: string,
+  bookmarkId: string,
+  geocoder: PlaceGeocoder,
+): Promise<GeocodeSummary> {
+  const { data, error } = await (
+    db.from("bookmark_places") as PendingPlaceSelectTable
+  )
+    .select("id,user_id,name,locality,country_code")
+    .eq("user_id", userId)
+    .eq("bookmark_id", bookmarkId)
+    .eq("geocode_status", "pending")
+    .order("position", { ascending: true });
+  if (error) {
+    throw error;
+  }
+  const domestic = (data ?? []).filter((row) =>
+    isDomesticPlace({ countryCode: row.country_code }),
+  );
+  return geocodePlaceRows(db, domestic, geocoder);
 }

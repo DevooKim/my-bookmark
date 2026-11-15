@@ -7,11 +7,13 @@ import { PRESET_MODEL } from "@my-bookmark/ai";
 import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
 import {
+  geocodePendingPlaces,
   replaceBookmarkPlaces,
   selectPlaceCandidates,
 } from "./bookmark-places";
 import { updateBookmarkEmbedding } from "./embedding";
 import { fetchMetadata, type PageMetadata } from "./metadata";
+import type { PlaceGeocoder } from "./place-geocoder";
 import { buildSourceMetadataEntry } from "./source-link";
 
 interface DbError {
@@ -63,6 +65,7 @@ interface CategorizeOptions {
   bookmarkId: string;
   provider: AiProvider | null;
   embeddingProvider?: EmbeddingProvider | null;
+  placeGeocoder?: PlaceGeocoder | null;
   recordUsage?: (event: AiUsageEventInput) => Promise<void>;
   metadataFetcher?: (url: string) => Promise<PageMetadata>;
   imageLoader?: (input: { originalPath: string }) => Promise<{
@@ -87,6 +90,7 @@ export async function categorizeBookmark({
   bookmarkId,
   provider,
   embeddingProvider,
+  placeGeocoder,
   recordUsage,
   metadataFetcher = fetchMetadata,
   imageLoader,
@@ -180,6 +184,7 @@ export async function categorizeBookmark({
         outcome.model,
         bookmarkMetadataSchema.parse(bookmark.metadata ?? {}),
         bookmark.kind,
+        placeGeocoder ?? null,
       );
       void updateBookmarkEmbedding({
         db,
@@ -243,6 +248,7 @@ export async function applyCategorizeResult(
   aiModel: string,
   currentMetadata: Record<string, string> = {},
   bookmarkKind: "link" | "image" = "link",
+  placeGeocoder: PlaceGeocoder | null = null,
 ): Promise<void> {
   let categoryId: string | null = null;
 
@@ -312,9 +318,13 @@ export async function applyCategorizeResult(
   if (!transitioned) {
     return;
   }
-  // 장소 저장이 실패해도 이미 완료된 분석 결과는 되돌리지 않는다.
+  // 장소 저장·좌표 조회가 실패해도 이미 완료된 분석 결과는 되돌리지 않는다.
+  // 키가 없거나 조회에 실패한 장소는 pending으로 남는다.
   try {
     await replaceBookmarkPlaces(db, userId, bookmarkId, places);
+    if (placeGeocoder && places.length > 0) {
+      await geocodePendingPlaces(db, userId, bookmarkId, placeGeocoder);
+    }
   } catch (error) {
     console.warn("bookmark places save failed", { bookmarkId, error });
   }
