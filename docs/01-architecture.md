@@ -87,7 +87,8 @@ my-bookmark/
 | `WEB_ORIGIN` | CORS 허용 origin (예: `http://localhost:3000`) |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`, 구 service_role). 서버 전용 |
-| `OPEN_ROUTER_API_KEY` | OpenRouter API 키(https://openrouter.ai/keys). AI 분류는 preset `@preset/my-bookmark` 단일 호출로 동작하며, 모델 선택·폴백·파라미터는 openrouter.ai의 preset 설정이 담당한다(05-ai 참조). 미설정 시 AI 비활성 모드로 기동 |
+| `OPEN_ROUTER_API_KEY` | OpenRouter API 키(https://openrouter.ai/keys). AI 분류는 요청의 `models` 배열(아래 `OPEN_ROUTER_MODELS`)로 폴백하며, provider 제한은 요청이 직접 명시한다(05-ai 참조). 미설정 시 AI 비활성 모드로 기동 |
+| `OPEN_ROUTER_MODELS` | 분류 모델과 폴백 순서(선택, 쉼표 구분 `vendor/model`, zod 검증). 기본값 `google/gemini-3.5-flash-lite,openai/gpt-6-luna`. 빈 값은 미설정으로 취급 |
 | `OPEN_ROUTER_MANAGEMENT_KEY` | OpenRouter management 키(선택). 설정 시 `GET /api/ai/analytics`가 Analytics API(`/analytics/query`)를 프록시해 대시보드에 모델별·일별 비용/토큰 집계 카드를 표시한다. 미설정 시 해당 카드만 생략(`configured:false`) |
 | `NAVER_SEARCH_CLIENT_ID` / `NAVER_SEARCH_CLIENT_SECRET` | 선택. NAVER API HUB 지역 검색 Client ID/Secret(서버 전용). 국내 장소 좌표 조회에 사용하며 미설정 시 조회를 건너뛰고 기동 시 경고 1회 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys`로 생성 |

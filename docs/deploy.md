@@ -22,6 +22,7 @@
 | `SUPABASE_URL` | Supabase 프로젝트 URL | |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`) | **서버 전용. 절대 클라이언트 노출 금지** |
 | `OPEN_ROUTER_API_KEY` | OpenRouter API 키 | https://openrouter.ai/keys 에서 발급. **서버 전용**. 미설정 시 AI 비활성 모드로 기동 |
+| `OPEN_ROUTER_MODELS` | 분류 모델·폴백 순서(선택) | 쉼표 구분 `vendor/model`. 기본 `google/gemini-3.5-flash-lite,openai/gpt-6-luna` |
 | `NAVER_SEARCH_CLIENT_ID` / `NAVER_SEARCH_CLIENT_SECRET` | NAVER API HUB 지역 검색 Client ID/Secret | 국내 장소 좌표 조회용. **서버 전용**. 미설정 시 좌표 조회를 건너뛰고 장소는 `pending`으로 남는다 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
@@ -36,7 +37,7 @@
 
 주의: `VITE_*` 값은 **web 이미지 빌드 시점**에 번들로 구워진다. 값을 바꾸면 `docker compose build web`을 다시 해야 한다.
 
-AI 분류는 OpenRouter preset(`@preset/my-bookmark`) 단일 호출로 동작한다 — 서버 env `OPEN_ROUTER_API_KEY` 하나가 유일한 설정이며, 모델 선택·폴백 순서는 openrouter.ai 대시보드에서 preset으로 관리한다(`docs/05-ai.md` 참조). 설정 화면에는 키 입력 UI가 없다.
+AI 분류는 OpenRouter 요청의 `models` 배열로 폴백한다 — 서버 env `OPEN_ROUTER_API_KEY`(키)와 선택적 `OPEN_ROUTER_MODELS`(모델·폴백 순서, 기본 `google/gemini-3.5-flash-lite,openai/gpt-6-luna`)로 설정한다(`docs/05-ai.md` 참조). 설정 화면에는 키 입력 UI가 없다.
 
 ## 2. VAPID 키 생성
 

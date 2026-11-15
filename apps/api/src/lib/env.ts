@@ -1,4 +1,28 @@
+import { DEFAULT_MODELS } from "@my-bookmark/ai";
 import { z } from "zod";
+
+// 쉼표로 구분한 OpenRouter 모델 id 목록. 비어 있으면 기본 폴백 순서를 쓴다.
+const openRouterModelsSchema = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z
+    .string()
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0),
+    )
+    .pipe(
+      z
+        .array(z.string().regex(/^[\w.-]+\/[\w.:-]+$/, "Invalid model id"))
+        .min(1)
+        .refine((models) => new Set(models).size === models.length, {
+          message: "Duplicate model id",
+        }),
+    )
+    .optional(),
+);
 
 const envSchema = z
   .object({
@@ -11,6 +35,9 @@ const envSchema = z
     SUPABASE_SECRET_KEY: z.string().min(1).optional(),
     OPEN_ROUTER_API_KEY: z.string().min(1).optional(),
     OPEN_ROUTER_MANAGEMENT_KEY: z.string().min(1).optional(),
+    OPEN_ROUTER_MODELS: openRouterModelsSchema.transform(
+      (models) => models ?? [...DEFAULT_MODELS],
+    ),
     NAVER_SEARCH_CLIENT_ID: z.string().min(1).optional(),
     NAVER_SEARCH_CLIENT_SECRET: z.string().min(1).optional(),
     VAPID_PUBLIC_KEY: z.string().optional(),

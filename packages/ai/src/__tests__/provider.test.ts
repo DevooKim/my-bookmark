@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAiProvider, PRESET_MODEL } from "../index";
+import {
+  ALLOWED_PROVIDERS,
+  createAiProvider,
+  DEFAULT_MODELS,
+  PRESET_LABEL,
+  PRESET_NAME,
+} from "../index";
 import { CATEGORIZE_TIMEOUT_MS } from "../providers";
 import { parseAnalyzeResponse, systemPrompt } from "../schema";
 
@@ -61,9 +67,20 @@ describe("OpenRouter preset provider", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
     const body = JSON.parse(String(init.body));
-    expect(body.model).toBe(PRESET_MODEL);
+    // model 필드 없이 preset + models를 함께 보내야 429에서 다음 모델로 폴백된다.
+    expect(body.model).toBeUndefined();
+    expect(body.preset).toBe(PRESET_NAME);
+    expect(body.models).toEqual([
+      "google/gemini-3.5-flash-lite",
+      "openai/gpt-6-luna",
+    ]);
     expect(body.max_tokens).toBe(2048);
-    expect(body.provider).toEqual({ require_parameters: true });
+    // 요청의 provider 객체는 preset의 provider 설정을 대체하므로 제한을 직접 명시한다.
+    expect(body.provider).toEqual({
+      require_parameters: true,
+      only: ["google-ai-studio", "openai"],
+      data_collection: "deny",
+    });
     expect(body.response_format.json_schema.strict).toBe(true);
     // strict 규칙: category의 모든 property가 required
     expect(
@@ -92,6 +109,63 @@ describe("OpenRouter preset provider", () => {
       body.response_format.json_schema.schema.properties.tags,
     ).toMatchObject({ minItems: 2, maxItems: 5 });
     expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("sends the configured model list in order and falls back to the default list", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => completionResponse(analysis));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createAiProvider({
+      apiKey: "or-key",
+      models: ["openai/gpt-6-luna", "google/gemini-3.5-flash-lite"],
+    }).categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+    await createAiProvider({ apiKey: "or-key" }).categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+
+    const bodies = fetchMock.mock.calls.map(([, init]) =>
+      JSON.parse(String((init as RequestInit).body)),
+    );
+    expect(bodies[0].models).toEqual([
+      "openai/gpt-6-luna",
+      "google/gemini-3.5-flash-lite",
+    ]);
+    expect(bodies[1].models).toEqual([...DEFAULT_MODELS]);
+    expect(ALLOWED_PROVIDERS).toEqual(["google-ai-studio", "openai"]);
+  });
+
+  it("rejects an empty model list", () => {
+    expect(() => createAiProvider({ apiKey: "or-key", models: [] })).toThrow(
+      "At least one OpenRouter model",
+    );
+  });
+
+  it("labels a response without a model with the preset label", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify(analysis) } }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const outcome = await createAiProvider({ apiKey: "or-key" }).categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+    expect(outcome.model).toBe(PRESET_LABEL);
   });
 
   it("sends private image data after the text prompt", async () => {

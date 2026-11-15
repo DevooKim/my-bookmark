@@ -152,7 +152,7 @@ API Key 허용 경로가 아니다. 좌표가 있는(`geocode_status='resolved'`
 
 ## AI (Bearer 전용)
 
-AI 분류는 OpenRouter preset(`@preset/my-bookmark`) 단일 호출로 동작한다. 키는 서버 env `OPEN_ROUTER_API_KEY` 하나뿐이며, provider별 키 관리 API는 없다(05-ai 참조).
+AI 분류는 OpenRouter 단일 호출(요청의 `models` 배열로 폴백)로 동작한다. 키는 서버 env `OPEN_ROUTER_API_KEY`, 모델·폴백 순서는 선택 env `OPEN_ROUTER_MODELS`이며, provider별 키 관리 API는 없다(05-ai 참조). `GET /api/ai`의 `preset`은 표시용 라벨이다.
 
 - `GET /api/ai` → `{ enabled, preset }`. `enabled`는 서버에 `OPEN_ROUTER_API_KEY`가 설정돼 있는지, `preset`은 `"@preset/my-bookmark"` 고정값
 - `POST /api/ai/test` → 저장된 키로 OpenRouter `GET /key`를 호출해 유효성만 확인. `{ ok }` 반환, 추론은 실행하지 않음

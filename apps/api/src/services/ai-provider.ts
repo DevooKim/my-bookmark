@@ -1,12 +1,15 @@
 import {
   type AiProvider,
   createAiProvider,
-  PRESET_MODEL,
+  PRESET_LABEL,
 } from "@my-bookmark/ai";
 import { appEnv } from "../lib/env";
 
 const provider: AiProvider | null = appEnv.OPEN_ROUTER_API_KEY
-  ? createAiProvider({ apiKey: appEnv.OPEN_ROUTER_API_KEY })
+  ? createAiProvider({
+      apiKey: appEnv.OPEN_ROUTER_API_KEY,
+      models: appEnv.OPEN_ROUTER_MODELS,
+    })
   : null;
 
 if (!provider) {
@@ -20,7 +23,7 @@ export function getAiProvider(): AiProvider | null {
 }
 
 export function getAiStatus(): { enabled: boolean; preset: string } {
-  return { enabled: provider !== null, preset: PRESET_MODEL };
+  return { enabled: provider !== null, preset: PRESET_LABEL };
 }
 
 export async function testAiConnection(): Promise<boolean> {

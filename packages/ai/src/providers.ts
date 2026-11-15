@@ -17,7 +17,25 @@ import type {
   EmbeddingProviderConfig,
 } from "./types";
 
-export const PRESET_MODEL = "@preset/my-bookmark";
+// 요청 본문의 `preset` 필드 값과 화면·사용량 기록에 쓰는 표시 라벨.
+// 실측(2026-11-15): `@preset/` 접두어 없는 slug는 OpenRouter가 무시하고(문서에도 명시),
+// 접두어를 붙이면 preset이 적용되지만 그 경우 요청의 `models`가 폴백으로 동작하지 않고
+// 첫 모델의 429가 그대로 반환된다. 그래서 폴백이 되는 이 형태(접두어 없는 slug + models)를 쓰며,
+// preset의 provider 설정은 적용되지 않으므로 요청이 provider 제한을 직접 명시한다.
+export const PRESET_NAME = "my-bookmark";
+export const PRESET_LABEL = `@preset/${PRESET_NAME}`;
+
+// BYOK 키를 등록한 업스트림만 허용하고 학습용 데이터 수집은 거부한다.
+// 요청의 `provider` 객체는 preset의 provider 설정을 통째로 대체하므로 여기서 명시한다.
+export const ALLOWED_PROVIDERS: readonly string[] = [
+  "google-ai-studio",
+  "openai",
+];
+
+export const DEFAULT_MODELS: readonly string[] = [
+  "google/gemini-3.5-flash-lite",
+  "openai/gpt-6-luna",
+];
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -37,7 +55,7 @@ function httpError(status: number, message: string): HttpError {
 export const EMBEDDING_MODEL = "openai/text-embedding-3-small";
 
 export function createAiProvider(config: AiProviderConfig): AiProvider {
-  return new OpenRouterProvider(config.apiKey);
+  return new OpenRouterProvider(config.apiKey, config.models ?? DEFAULT_MODELS);
 }
 
 export function createEmbeddingProvider(
@@ -108,7 +126,14 @@ class OpenRouterEmbeddingProvider implements EmbeddingProvider {
 }
 
 class OpenRouterProvider implements AiProvider {
-  constructor(private readonly apiKey: string) {}
+  constructor(
+    private readonly apiKey: string,
+    private readonly models: readonly string[],
+  ) {
+    if (models.length === 0) {
+      throw new Error("At least one OpenRouter model is required");
+    }
+  }
 
   async validateConnection(): Promise<void> {
     await withTimeout(async (signal) => {
@@ -148,9 +173,14 @@ class OpenRouterProvider implements AiProvider {
           "X-Title": "my-bookmark",
         },
         body: JSON.stringify({
-          model: PRESET_MODEL,
+          preset: PRESET_NAME,
+          models: this.models,
           max_tokens: 2048,
-          provider: { require_parameters: true },
+          provider: {
+            require_parameters: true,
+            only: ALLOWED_PROVIDERS,
+            data_collection: "deny",
+          },
           messages: [
             { role: "system", content: systemPrompt() },
             { role: "user", content: userContent },
@@ -200,7 +230,7 @@ class OpenRouterProvider implements AiProvider {
 
       return {
         analysis,
-        model: parsed.model || PRESET_MODEL,
+        model: parsed.model || PRESET_LABEL,
         isByok: parsed.usage?.is_byok ?? null,
       };
     }, CATEGORIZE_TIMEOUT_MS);

@@ -3,7 +3,7 @@ import type {
   AnalyzeResult,
   EmbeddingProvider,
 } from "@my-bookmark/ai";
-import { PRESET_MODEL } from "@my-bookmark/ai";
+import { PRESET_LABEL } from "@my-bookmark/ai";
 import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
 import {
@@ -209,7 +209,7 @@ export async function categorizeBookmark({
       console.warn("AI categorization request failed", error);
       await recordUsage?.({
         provider: "openrouter",
-        model: PRESET_MODEL,
+        model: PRESET_LABEL,
         bookmarkId,
         status: "failed",
         errorCode: extractErrorCode(error),

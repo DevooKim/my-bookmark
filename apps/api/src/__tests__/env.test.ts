@@ -32,6 +32,47 @@ describe("parseEnv", () => {
     ).toBe("or-key");
   });
 
+  describe("OPEN_ROUTER_MODELS", () => {
+    const parse = (value?: string) =>
+      parseEnv({
+        NODE_ENV: "test",
+        ...(value === undefined ? {} : { OPEN_ROUTER_MODELS: value }),
+      }).OPEN_ROUTER_MODELS;
+
+    it("defaults to the Gemini then luna fallback order", () => {
+      expect(parse()).toEqual([
+        "google/gemini-3.5-flash-lite",
+        "openai/gpt-6-luna",
+      ]);
+      expect(parse("")).toEqual([
+        "google/gemini-3.5-flash-lite",
+        "openai/gpt-6-luna",
+      ]);
+      expect(parse("  ")).toEqual([
+        "google/gemini-3.5-flash-lite",
+        "openai/gpt-6-luna",
+      ]);
+    });
+
+    it("parses a comma separated list, trimming blanks and keeping order", () => {
+      expect(
+        parse(" openai/gpt-6-luna , google/gemini-3.5-flash-lite,, "),
+      ).toEqual(["openai/gpt-6-luna", "google/gemini-3.5-flash-lite"]);
+      expect(parse("google/gemma-3-27b-it:free")).toEqual([
+        "google/gemma-3-27b-it:free",
+      ]);
+    });
+
+    it("rejects malformed, empty-after-trim, or duplicate model ids", () => {
+      expect(() => parse(",")).toThrow();
+      expect(() => parse("gpt-6-luna")).toThrow("Invalid model id");
+      expect(() => parse("openai/gpt-6-luna,not a model")).toThrow();
+      expect(() => parse("openai/gpt-6-luna,openai/gpt-6-luna")).toThrow(
+        "Duplicate model id",
+      );
+    });
+  });
+
   it("rejects invalid WEB_ORIGIN", () => {
     expect(() =>
       parseEnv({ NODE_ENV: "test", WEB_ORIGIN: "not-a-url" }),

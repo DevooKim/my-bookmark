@@ -1,8 +1,11 @@
 export {
+  ALLOWED_PROVIDERS,
   createAiProvider,
   createEmbeddingProvider,
+  DEFAULT_MODELS,
   EMBEDDING_MODEL,
-  PRESET_MODEL,
+  PRESET_LABEL,
+  PRESET_NAME,
 } from "./providers";
 export {
   categorizeResponseSchema,

@@ -69,6 +69,8 @@ export interface AnalyzeResult {
 
 export interface AiProviderConfig {
   apiKey: string;
+  // 분석 호출의 폴백 순서. 비우면 DEFAULT_MODELS.
+  models?: readonly string[];
 }
 
 export interface EmbeddingProviderConfig {

@@ -490,8 +490,7 @@ export function AiSection() {
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="font-bold">AI 분류</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        분류는 OpenRouter preset이 담당합니다. 모델·폴백·파라미터는
-        openrouter.ai 대시보드에서 관리하세요.
+        분류 모델과 폴백 순서는 서버 환경변수 OPEN_ROUTER_MODELS로 관리합니다.
       </p>
       {aiQuery.isError ? (
         <p className="mt-3 text-sm text-red-600">
