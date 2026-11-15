@@ -29,6 +29,7 @@ services:
         # browser-facing URLs: keep host-reachable defaults for local use
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
+        VITE_NAVER_MAP_CLIENT_ID: ${VITE_NAVER_MAP_CLIENT_ID:-}
     environment:
       NODE_ENV: production
       PORT: "3000"

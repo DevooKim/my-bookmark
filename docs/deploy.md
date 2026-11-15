@@ -22,6 +22,7 @@
 | `SUPABASE_URL` | Supabase 프로젝트 URL | |
 | `SUPABASE_SECRET_KEY` | secret key (`sb_secret_…`) | **서버 전용. 절대 클라이언트 노출 금지** |
 | `OPEN_ROUTER_API_KEY` | OpenRouter API 키 | https://openrouter.ai/keys 에서 발급. **서버 전용**. 미설정 시 AI 비활성 모드로 기동 |
+| `NAVER_SEARCH_CLIENT_ID` / `NAVER_SEARCH_CLIENT_SECRET` | NAVER API HUB 지역 검색 Client ID/Secret | 국내 장소 좌표 조회용. **서버 전용**. 미설정 시 좌표 조회를 건너뛰고 장소는 `pending`으로 남는다 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push 서명키 | 아래 생성 절차 |
 | `VAPID_SUBJECT` | `mailto:…` | |
 | `TRUST_PROXY` | 리버스 프록시 hop 수 | Caddy 등 프록시 뒤에서는 `1` — 미설정 시 rate limit이 프록시 IP를 클라이언트로 본다 |
@@ -31,6 +32,7 @@
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key (`sb_publishable_…`) | 공개 가능 |
 | `VITE_API_URL` | 브라우저가 접근하는 api 주소 | 배포 시 `https://bm.example.com/api`가 아니라 **api 서버의 공개 주소** (예: `https://api.bm.example.com` 또는 리버스 프록시 경유 동일 도메인) |
 | `VITE_VAPID_PUBLIC_KEY` | 푸시 구독용 공개키 | `VAPID_PUBLIC_KEY`와 동일 값 |
+| `VITE_NAVER_MAP_CLIENT_ID` | 네이버 클라우드 플랫폼 Maps 인증 키 ID (`/map` 지도용) | 빌드 시점에 번들에 포함. 공개 가능. 비어 있으면 `/map`은 지도 대신 안내 문구만 표시. 콘솔의 Web 서비스 URL에 배포 도메인을 등록해야 한다 |
 
 주의: `VITE_*` 값은 **web 이미지 빌드 시점**에 번들로 구워진다. 값을 바꾸면 `docker compose build web`을 다시 해야 한다.
 
@@ -68,7 +70,7 @@ Vercel 프로젝트 설정:
 2. 저장소 루트의 `bun.lock`으로 Bun 설치가 자동 감지되는지 배포 로그에서 확인한다.
 3. Build Command는 package script인 `bun run build`를 사용한다. `VERCEL=1` 환경에서 Nitro가 Vercel preset을 자동 선택한다.
 4. `apps/web/vercel.json`의 `bunVersion: "1.x"`가 Vercel Functions를 Bun Runtime Beta로 실행한다.
-5. `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`, `VITE_VAPID_PUBLIC_KEY`를 Preview와 Production 환경에 설정한다.
+5. `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`, `VITE_VAPID_PUBLIC_KEY`, `VITE_NAVER_MAP_CLIENT_ID`를 Preview와 Production 환경에 설정한다.
 
 `VITE_API_URL`은 브라우저에서 접근 가능한 HTTPS API origin이어야 한다. 배포 로그에는 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions` 생성이 나타나야 한다.
 
