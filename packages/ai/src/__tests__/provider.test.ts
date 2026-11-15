@@ -143,6 +143,34 @@ describe("OpenRouter preset provider", () => {
     });
   });
 
+  it("accepts analysis wrapped in a markdown code fence", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          completionResponse(
+            `\`\`\`json\n${JSON.stringify(analysis, null, 2)}\n\`\`\``,
+          ),
+        ),
+    );
+    const provider = createAiProvider({ apiKey: "or-key" });
+
+    const outcome = await provider.categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+
+    expect(outcome.analysis).toEqual(analysis);
+  });
+
+  it("embeds the response schema in the system prompt", () => {
+    const prompt = systemPrompt();
+    expect(prompt).toContain('"required":["category","summaryTitle"');
+    expect(prompt).toContain("코드펜스");
+  });
+
   it("throws with status attached on non-2xx", async () => {
     vi.stubGlobal(
       "fetch",

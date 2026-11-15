@@ -4,6 +4,7 @@ import {
   openRouterEmbeddingSchema,
   parseAnalyzeResponse,
   systemPrompt,
+  unwrapJsonContent,
   userPrompt,
   withTimeout,
 } from "./schema";
@@ -178,7 +179,7 @@ class OpenRouterProvider implements AiProvider {
 
       let json: unknown;
       try {
-        json = JSON.parse(content);
+        json = JSON.parse(unwrapJsonContent(content));
       } catch (error) {
         if (error instanceof SyntaxError) {
           console.warn("AI JSON parse failed", error);

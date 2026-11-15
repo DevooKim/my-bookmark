@@ -5,7 +5,7 @@
 ## 현재 상태
 
 - **현재 Phase**: MCP + pgvector 시맨틱 검색 구현 완료. 원격 migration·백필·실연결은 사용자 확인 대기 중이다.
-- **최종 갱신**: 2026-09-23 (IndexedDB 쿼리 캐시 영속화 — 로컬 우선 표시)
+- **최종 갱신**: 2026-11-15 (AI 분류 실패 수정 — preset 경유 시 response_format 미적용 대응)
 
 ## Phase 체크리스트
 
@@ -31,6 +31,7 @@
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-11-15 | AI 응답 JSON Schema를 system prompt에도 포함하고, ```` ```json ```` 코드펜스로 감싼 응답은 본문만 꺼내 파싱한다. `response_format`(strict json_schema)과 preset 단일 호출 구조는 그대로 유지한다. | 2026-11-01부터 `@preset/my-bookmark` 경유 호출에서 `response_format`이 업스트림에 적용되지 않아(같은 모델 직접 호출은 정상, 실측) 코드펜스·스키마 불일치 응답으로 분류가 전부 실패했다. preset 설정은 openrouter.ai 대시보드 소관이라 코드에서 고칠 수 없으므로, 스키마 강제 여부와 무관하게 같은 형태를 받도록 했고 zod 경계 검증은 유지된다. 수정 후 preset 실호출 8/8 통과. |
 | 2026-09-23 | 로컬 우선 표시는 전체 로컬 복제본/델타 sync가 아니라 TanStack Query 캐시의 IndexedDB 영속화(`@tanstack/react-query-persist-client` 5.101.2 + `idb-keyval`)로 구현했다. `PersistQueryClientProvider` 대신 `persistQueryClientRestore/Subscribe`를 `_authed` 레이아웃에서 dynamic import로 호출한다. | 사용자 선택(추천안). 서버/DB 변경 없이 콜드 스타트 첫 화면을 채운다. 루트에 provider를 두면 persist 코드가 초기 번들에 들어가 150KB 예산을 넘기므로 세션 확인 대기 구간에 별도 청크(2.1KB gz)로 로드·복원한다. persist-client는 설치된 `@tanstack/react-query` 5.101.2와 peer를 맞추려 정확한 버전으로 고정했다. |
 | 2026-09-23 | persister는 `createAsyncStoragePersister` 대신 자체 throttled persister(1초 합치기, 무한 목록 첫 페이지만 저장)로 작성했고, buster는 빌드 시각 `__BUILD_ID__`를 쓴다. | `persistQueryClientSubscribe`는 fetch 상태 변화까지 매 이벤트마다 저장한다. 복원된 N페이지 무한 쿼리는 시작 시 N번 순차 요청한다. 복원 데이터는 zod를 다시 거치지 않으므로 배포마다 캐시를 무효화해 응답 스키마 드리프트로 인한 렌더 오류를 막는다. |
 | 2026-09-23 | `bun add`가 `latest` 지정 의존성(TanStack Start/Router, nitro nightly, vitest 등)을 재해석해 lockfile을 대량 변경했다. lockfile은 새 패키지 3개 항목만 수동 추가했고 `bun install --frozen-lockfile`로 확인했다. | 기능과 무관한 프레임워크 버전 이동을 섞지 않기 위함. `latest` 스펙 고정 여부는 별도 결정 사항이다. |
