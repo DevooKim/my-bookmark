@@ -31,8 +31,10 @@ const config = defineConfig({
       rollupConfig: { external: [/^@sentry\//] },
       compressPublicAssets: { gzip: true, brotli: true },
       routeRules: {
+        // 해시 없는 고정 URL이라 배포마다 내용이 바뀐다. 매번 ETag로 재검증해
+        // (변경 없으면 304) 배포 직후에도 새 CSS가 바로 적용되게 한다.
         "/assets/app-styles.css": {
-          headers: { "cache-control": "public, max-age=3600" },
+          headers: { "cache-control": "no-cache" },
         },
         "/assets/**": {
           headers: { "cache-control": "public, max-age=31536000, immutable" },

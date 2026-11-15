@@ -49,7 +49,7 @@
 
 ## 웹 서버/전송
 
-- TanStack Start SSR 산출물의 Node 서버 사용. 정적 자산 캐시 헤더: `/assets/*`는 `max-age=31536000, immutable`, `sw.js`는 `no-cache` (업데이트 즉시 반영), manifest/아이콘은 `max-age=3600`.
+- TanStack Start SSR 산출물의 Node 서버 사용. 정적 자산 캐시 헤더: `/assets/*`는 `max-age=31536000, immutable`, 해시 없는 고정 URL `/assets/app-styles.css`는 `no-cache`(매번 ETag 재검증, 변경 없으면 304 — 배포 직후 새 CSS가 즉시 적용되도록; 과거 `max-age=3600`은 최대 1시간 옛 CSS를 내보냈다), `sw.js`는 `no-cache` (업데이트 즉시 반영), manifest/아이콘은 `max-age=3600`.
 - 배포 시 리버스 프록시(Caddy)에서 HTTP/2 + TLS. (HTTPS는 PWA 필수이기도 함)
 
 ## 검증 절차 (Phase 7 수용 기준과 연동)

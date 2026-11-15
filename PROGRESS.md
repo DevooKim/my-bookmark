@@ -32,6 +32,7 @@
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-11-15 | `/assets/app-styles.css`의 cache-control을 `public, max-age=3600`에서 `no-cache`로 바꿨다(2026-07-10 결정 번복). 해시 자산·manifest·아이콘은 그대로. link href에 빌드 id 쿼리를 붙이는 방식은 쓰지 않았다. | 고정 URL이라 서비스 워커(network-first)의 네트워크 요청마저 브라우저 HTTP 캐시에서 최대 1시간 옛 CSS를 받아, 배포 직후 새 클래스(`.map-zoom-group`)가 스타일 없이 보였다. `no-cache`는 매번 ETag로 재검증하고 변경이 없으면 304라 비용이 작다. 쿼리 방식은 SSR/클라이언트 빌드의 `__BUILD_ID__`가 달라 hydration 불일치 위험이 있다. |
 | 2026-11-15 | `/map` 줌 UI는 SDK 기본 `zoomControl`을 끄고 자체 +/− 버튼(어댑터 `zoomIn`/`zoomOut`/`subscribeZoom`)으로 교체했고 `scaleControl: false`로 축척 바를 없앴다. 로고·저작권 컨트롤은 약관상 유지. | 앱 디자인 일관성 요청. 버튼은 `icon-button`(unlayered CSS의 `rounded-full`이 유틸리티를 이기므로) 대신 전용 `.map-zoom-button` 클래스를 썼다. |
 | 2026-11-15 | `/map` 개별 장소 숨김은 그룹 숨김과 별도 `localStorage` 키(`my-bookmark:map-hidden-places`, 장소 id 배열)에 저장하고 그룹 숨김이 우선한다. "숨긴 n개 모두 표시"의 n은 검색 결과 그룹의 숨김 그룹 수 + 그 그룹들의 개별 숨김 장소 수다. | 기존 저장값과 하위 호환을 유지하고, 그룹을 다시 표시해도 개별 선택이 보존되도록 상태를 분리했다. |
 | 2026-11-15 | `/map` 그룹 숨김 상태는 서버·DB가 아니라 `localStorage`(북마크 id 배열, 키 `my-bookmark:map-hidden-groups`)에 둔다. 숨긴 그룹 수·「모두 표시」는 현재 검색 결과 범위로 센다. | 숨김은 지도를 보는 기기·상황에 따른 편의 설정이라 계정 데이터로 동기화할 이유가 없고, 테이블·API 추가(아키텍처 변경)를 피할 수 있다. 저장소가 막혀도 동작하도록 읽기·쓰기를 try/catch로 감쌌고 값은 zod로 검증한다. 삭제된 북마크 id는 남아도 무해해 따로 정리하지 않는다. SSR 하이드레이션 불일치를 피하려고 마운트 후에 읽는다. |
