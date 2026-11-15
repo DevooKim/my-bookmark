@@ -38,6 +38,7 @@ import {
   OPEN_BOOKMARK_DIALOG_EVENT,
 } from "../../lib/bookmark-dialog";
 import { BookmarkMetadata } from "./-components/bookmark-metadata";
+import { BookmarkPlaces } from "./-components/bookmark-places";
 
 const BookmarkDialog = lazy(() =>
   import("./-components/bookmark-dialogs").then((module) => ({
@@ -473,6 +474,11 @@ function BookmarkCard({
             compact
             interactive={bookmark.kind === "image"}
             metadata={bookmark.metadata}
+          />
+          <BookmarkPlaces
+            collapsible
+            interactive={bookmark.kind === "image"}
+            places={bookmark.places}
           />
           <p className="mt-2 truncate text-sm text-zinc-500">
             {bookmark.kind === "image"

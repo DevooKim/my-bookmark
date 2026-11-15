@@ -76,6 +76,7 @@ const bookmark: Bookmark = {
   metadata: {},
   aiStatus: "done",
   aiModel: null,
+  places: [],
   createdAt: "2026-07-12T00:00:00.000Z",
   updatedAt: "2026-07-12T00:00:00.000Z",
 };
@@ -159,6 +160,34 @@ describe("HomePage", () => {
     expect(websiteLink.className).toContain("hover:bg-blue-700");
     expect(websiteLink.className).toContain("hover:text-white");
     expect(websiteLink.className).not.toContain("hover:bg-[#03c75a]");
+  });
+
+  it("renders place chips under the metadata and collapses beyond three", async () => {
+    vi.mocked(listCategories).mockResolvedValue({ items: [] });
+    const places = [1, 2, 3, 4].map((index) => ({
+      id: `00000000-0000-4000-8000-00000000010${index}`,
+      name: `서촌 카페 ${index}`,
+      locality: "서촌",
+      countryCode: "KR",
+      lat: null,
+      lng: null,
+      address: null,
+      mapProvider: "naver" as const,
+      mapUrl: `https://map.naver.com/p/search/cafe-${index}`,
+    }));
+    vi.mocked(listBookmarks).mockResolvedValue({
+      items: [{ ...bookmark, places }],
+      nextCursor: null,
+    });
+
+    renderHome();
+
+    expect(
+      await screen.findByRole("link", { name: "서촌 카페 1" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "서촌 카페 4" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "장소 1개 더 보기" }));
+    expect(screen.getByRole("link", { name: "서촌 카페 4" })).toBeTruthy();
   });
 
   it("renders search controls without a library hero", async () => {

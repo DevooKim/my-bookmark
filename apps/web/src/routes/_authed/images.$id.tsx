@@ -12,6 +12,7 @@ import {
 } from "../../lib/api-client";
 import { EditBookmarkDialog } from "./-components/bookmark-dialogs";
 import { BookmarkMetadata } from "./-components/bookmark-metadata";
+import { BookmarkPlaces } from "./-components/bookmark-places";
 
 export const Route = createFileRoute("/_authed/images/$id")({
   component: ImageDetailPage,
@@ -235,6 +236,7 @@ export function ImageDetailView({
           </p>
         ) : null}
         <BookmarkMetadata metadata={bookmark.metadata} />
+        <BookmarkPlaces places={bookmark.places} />
         {bookmark.tags.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {bookmark.tags.map((tag) => (

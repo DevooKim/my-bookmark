@@ -32,6 +32,7 @@ const imageBookmark: Extract<Bookmark, { kind: "image" }> = {
   },
   aiStatus: "done",
   aiModel: "openrouter/test",
+  places: [],
   createdAt: "2026-07-12T00:00:00.000Z",
   updatedAt: "2026-07-12T00:00:00.000Z",
 };
@@ -143,5 +144,34 @@ describe("ImageDetailView", () => {
     expect(screen.getByText("미리보기를 불러오지 못했어요.")).toBeTruthy();
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.queryByRole("link", { name: "원본 다운로드" })).toBeNull();
+  });
+
+  it("shows every place without collapsing", () => {
+    const places = [1, 2, 3, 4, 5].map((index) => ({
+      id: `00000000-0000-4000-8000-00000000020${index}`,
+      name: `교토 카페 ${index}`,
+      locality: "Kyoto",
+      countryCode: "JP",
+      lat: null,
+      lng: null,
+      address: null,
+      mapProvider: "google" as const,
+      mapUrl: `https://www.google.com/maps/search/?api=1&query=cafe-${index}`,
+    }));
+
+    render(
+      <ImageDetailView
+        bookmark={{ ...imageBookmark, places }}
+        categoryName={null}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onMediaError={vi.fn()}
+        onMediaSourceChange={vi.fn()}
+        onRecategorize={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "교토 카페 5" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /더 보기/ })).toBeNull();
   });
 });
