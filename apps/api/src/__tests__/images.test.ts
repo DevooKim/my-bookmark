@@ -1,11 +1,11 @@
 import express from "express";
-import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { requireAuth } from "../middleware/auth";
 import { errorMiddleware } from "../middleware/error";
 import { createImagesRouter } from "../routes/images";
 import { ImageProcessingError } from "../services/image-processing";
 import type { ImageStorageBucket } from "../services/image-storage";
+import { request } from "./support/loopback-request";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const bookmarkId = "22222222-2222-4222-8222-222222222222";

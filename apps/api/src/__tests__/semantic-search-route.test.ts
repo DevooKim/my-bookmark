@@ -3,10 +3,10 @@ import express, {
   type Request,
   type Response,
 } from "express";
-import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { errorMiddleware } from "../middleware/error";
 import { bookmarksRouter } from "../routes/bookmarks";
+import { request } from "./support/loopback-request";
 
 const fake = vi.hoisted(() => ({
   embed: vi.fn(),

@@ -1,6 +1,7 @@
-import request from "supertest";
+import type { Response as SupertestResponse } from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app";
+import { request } from "./support/loopback-request";
 
 describe("app auth routing order", () => {
   it("does not let bearer-only routers intercept API-key bookmark requests", async () => {
@@ -24,7 +25,7 @@ describe("app auth routing order", () => {
 
   it("keeps API-key-disallowed routes at 401 even after many X-API-Key requests", async () => {
     const app = createApp();
-    let response: request.Response | undefined;
+    let response: SupertestResponse | undefined;
 
     for (let i = 0; i < 61; i += 1) {
       response = await request(app)
@@ -38,7 +39,7 @@ describe("app auth routing order", () => {
 
   it("returns the common JSON error shape when API-key rate limit is exceeded", async () => {
     const app = createApp();
-    let response: request.Response | undefined;
+    let response: SupertestResponse | undefined;
 
     for (let i = 0; i < 61; i += 1) {
       response = await request(app)
@@ -70,7 +71,7 @@ describe("app auth routing order", () => {
 
   it("rate limits API-key requests to the unified share endpoint", async () => {
     const app = createApp();
-    let response: request.Response | undefined;
+    let response: SupertestResponse | undefined;
 
     for (let i = 0; i < 61; i += 1) {
       response = await request(app)
@@ -85,7 +86,7 @@ describe("app auth routing order", () => {
 
   it("does not bypass the share rate limit with a trailing slash", async () => {
     const app = createApp();
-    let response: request.Response | undefined;
+    let response: SupertestResponse | undefined;
 
     for (let i = 0; i < 61; i += 1) {
       response = await request(app)

@@ -1,7 +1,7 @@
-import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { createReadinessService } from "../services/readiness";
+import { request } from "./support/loopback-request";
 
 describe("GET /api/health", () => {
   it("returns ok true", async () => {

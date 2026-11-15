@@ -1,8 +1,8 @@
 import express from "express";
-import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireAuth } from "../middleware/auth";
 import { errorMiddleware } from "../middleware/error";
+import { request } from "./support/loopback-request";
 
 const usageMocks = vi.hoisted(() => ({
   select: vi.fn(),

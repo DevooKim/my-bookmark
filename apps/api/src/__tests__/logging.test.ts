@@ -1,7 +1,7 @@
 import express from "express";
-import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createHttpLogger } from "../app";
+import { request } from "./support/loopback-request";
 
 function createLogCapture() {
   const chunks: string[] = [];

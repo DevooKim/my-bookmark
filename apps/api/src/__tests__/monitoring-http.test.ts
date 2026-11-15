@@ -1,12 +1,13 @@
 import { API_ERROR_CODES } from "@my-bookmark/shared";
 import express from "express";
-import request from "supertest";
+import type { Response as SupertestResponse } from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../app";
 import { createErrorMiddleware, HttpError } from "../middleware/error";
 import { createSecurityMonitor } from "../middleware/security-monitor";
 import type { AlertDispatcher } from "../services/alerting";
 import type { OperationalMonitor } from "../services/operational-monitor";
+import { request } from "./support/loopback-request";
 
 function operationalMonitor(): OperationalMonitor {
   return {
@@ -23,7 +24,7 @@ describe("monitoring HTTP boundary", () => {
       notify: vi.fn().mockResolvedValue(undefined),
     };
     const app = createApp({ alerts, operationalMonitor: operationalMonitor() });
-    let response: request.Response | undefined;
+    let response: SupertestResponse | undefined;
 
     for (let index = 0; index < 5; index += 1) {
       response = await request(app)

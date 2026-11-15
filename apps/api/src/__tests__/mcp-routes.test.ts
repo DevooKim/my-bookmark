@@ -1,12 +1,12 @@
 import { API_ERROR_CODES } from "@my-bookmark/shared";
 import express from "express";
-import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BOOKMARK_DB_COLUMNS } from "../lib/db-mappers";
 import { buildMcpServer } from "../mcp/server";
 import { errorMiddleware, HttpError } from "../middleware/error";
 import { getBookmarkForUser } from "../routes/bookmarks";
 import { createMcpRouter, type McpRouterDeps } from "../routes/mcp";
+import { request } from "./support/loopback-request";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const bookmarkId = "22222222-2222-4222-8222-222222222222";

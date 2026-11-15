@@ -1,8 +1,8 @@
 import express from "express";
-import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createSecurityMonitor } from "../middleware/security-monitor";
 import type { AlertDispatcher } from "../services/alerting";
+import { request } from "./support/loopback-request";
 
 function setup() {
   let now = new Date("2026-07-19T12:00:00.000Z");

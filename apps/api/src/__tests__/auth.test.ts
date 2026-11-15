@@ -1,6 +1,5 @@
 import express from "express";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import request from "supertest";
 import { describe, expect, it } from "vitest";
 import {
   type BearerVerifier,
@@ -11,6 +10,7 @@ import {
   requireAuth,
 } from "../middleware/auth";
 import { errorMiddleware } from "../middleware/error";
+import { request } from "./support/loopback-request";
 
 async function createAuthFixture() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");

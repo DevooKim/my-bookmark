@@ -1,9 +1,9 @@
 import express from "express";
-import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { requireAuth } from "../middleware/auth";
 import { errorMiddleware } from "../middleware/error";
 import { createPushRouter } from "../routes/push";
+import { request } from "./support/loopback-request";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 
