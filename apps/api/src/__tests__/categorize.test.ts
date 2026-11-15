@@ -11,6 +11,8 @@ import {
 import type { PlaceGeocoder } from "../services/place-geocoder";
 
 interface PlaceRow extends Record<string, unknown> {
+  position: number;
+  name: string;
   geocode_status: string;
 }
 
@@ -56,6 +58,10 @@ class FakeDb {
           this.places.push(
             ...rows.map((row) => ({
               ...row,
+              // biome-ignore lint/complexity/useLiteralKeys: index access is required by noPropertyAccessFromIndexSignature.
+              position: Number(row["position"]),
+              // biome-ignore lint/complexity/useLiteralKeys: index access is required by noPropertyAccessFromIndexSignature.
+              name: String(row["name"]),
               // biome-ignore lint/complexity/useLiteralKeys: index access is required by noPropertyAccessFromIndexSignature.
               geocode_status: String(row["geocode_status"]),
             })),
@@ -248,7 +254,7 @@ describe("applyCategorizeResult", () => {
       place("이키야", { confidence: 0.85 }),
     ]);
 
-    expect(db.places.map((row) => [row["position"], row["name"]])).toEqual([
+    expect(db.places.map((row) => [row.position, row.name])).toEqual([
       [0, "신죠오 사사게요"],
       [1, "이키야"],
     ]);
@@ -259,7 +265,7 @@ describe("applyCategorizeResult", () => {
     await apply(db, [place("옛날 식당"), place("옛날 카페")]);
     db.bookmark.ai_status = "pending";
     await apply(db, [place("새 식당")]);
-    expect(db.places.map((row) => row["name"])).toEqual(["새 식당"]);
+    expect(db.places.map((row) => row.name)).toEqual(["새 식당"]);
 
     db.bookmark.ai_status = "pending";
     await apply(db, []);
@@ -271,7 +277,7 @@ describe("applyCategorizeResult", () => {
     await apply(db, [place("기존 식당")]);
     db.bookmark.ai_status = "idle";
     await apply(db, [place("덮어쓰면 안 되는 식당")]);
-    expect(db.places.map((row) => row["name"])).toEqual(["기존 식당"]);
+    expect(db.places.map((row) => row.name)).toEqual(["기존 식당"]);
   });
 
   it("keeps the finished analysis when saving places fails", async () => {
@@ -315,7 +321,7 @@ describe("applyCategorizeResult", () => {
         name: "호랑이식당",
         locality: "서울 성동구",
       });
-      expect(db.places.map((row) => row["geocode_status"])).toEqual([
+      expect(db.places.map((row) => row.geocode_status)).toEqual([
         "resolved",
         "not_found",
         "skipped",
@@ -331,9 +337,7 @@ describe("applyCategorizeResult", () => {
     it("leaves places pending when no geocoder is configured", async () => {
       const db = new FakeDb();
       await apply(db, [place("호랑이식당")]);
-      expect(db.places.map((row) => row["geocode_status"])).toEqual([
-        "pending",
-      ]);
+      expect(db.places.map((row) => row.geocode_status)).toEqual(["pending"]);
     });
 
     it("keeps the analysis and leaves the place pending when geocoding fails", async () => {
@@ -343,9 +347,7 @@ describe("applyCategorizeResult", () => {
       await apply(db, [place("호랑이식당")], undefined, { geocode });
 
       expect(db.bookmark.ai_status).toBe("done");
-      expect(db.places.map((row) => row["geocode_status"])).toEqual([
-        "pending",
-      ]);
+      expect(db.places.map((row) => row.geocode_status)).toEqual(["pending"]);
       expect(warn).toHaveBeenCalled();
       warn.mockRestore();
     });

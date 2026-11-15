@@ -75,6 +75,7 @@ describe("bookmark route security helpers", () => {
       bookmarkId,
       provider,
       embeddingProvider: null,
+      placeGeocoder: null,
       recordUsage: expect.any(Function),
       imageLoader: expect.any(Function),
     });
@@ -99,6 +100,7 @@ describe("bookmark route security helpers", () => {
       bookmarkId,
       provider: null,
       embeddingProvider: null,
+      placeGeocoder: null,
       recordUsage: expect.any(Function),
       imageLoader: expect.any(Function),
     });
