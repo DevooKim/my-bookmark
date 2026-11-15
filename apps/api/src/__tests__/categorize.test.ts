@@ -1,4 +1,8 @@
-import type { AiProvider, AnalyzeResult } from "@my-bookmark/ai";
+import type {
+  AiProvider,
+  AnalyzeResult,
+  PlaceCandidate,
+} from "@my-bookmark/ai";
 import { describe, expect, it, vi } from "vitest";
 import {
   applyCategorizeResult,
@@ -23,8 +27,32 @@ class FakeDb {
     ai_model: null as string | null,
   };
   bookmarkUpdates: Record<string, unknown>[] = [];
+  places: Record<string, unknown>[] = [];
+  placeInsertError: { message: string } | null = null;
 
   from(table: string) {
+    if (table === "bookmark_places") {
+      return {
+        delete: () => ({
+          eq: () => ({
+            eq: () => {
+              this.places = [];
+              return Promise.resolve({ data: null, error: null });
+            },
+          }),
+        }),
+        insert: (rows: Record<string, unknown>[]) => {
+          if (this.placeInsertError) {
+            return Promise.resolve({
+              data: null,
+              error: this.placeInsertError,
+            });
+          }
+          this.places.push(...rows);
+          return Promise.resolve({ data: null, error: null });
+        },
+      };
+    }
     if (table === "bookmarks") {
       return {
         select: () => ({
@@ -41,10 +69,20 @@ class FakeDb {
             eq: () => ({
               eq: () => ({
                 eq: (_field: string, value: string) => {
-                  if (value === this.bookmark.ai_status) {
+                  const matched = value === this.bookmark.ai_status;
+                  if (matched) {
                     Object.assign(this.bookmark, values);
                   }
-                  return Promise.resolve({ data: null, error: null });
+                  return Object.assign(
+                    Promise.resolve({ data: null, error: null }),
+                    {
+                      select: () =>
+                        Promise.resolve({
+                          data: matched ? [{ id: this.bookmark.id }] : [],
+                          error: null,
+                        }),
+                    },
+                  );
                 },
               }),
             }),
@@ -89,8 +127,22 @@ const successResult: AnalyzeResult = {
 };
 
 describe("applyCategorizeResult", () => {
-  it("adds a server-built Naver Map link for a confident place", async () => {
-    const db = new FakeDb();
+  const place = (
+    name: string,
+    overrides: Partial<PlaceCandidate> = {},
+  ): PlaceCandidate => ({
+    name,
+    locality: "서울 성동구",
+    countryCode: "KR",
+    confidence: 0.9,
+    ...overrides,
+  });
+
+  async function apply(
+    db: FakeDb,
+    places: PlaceCandidate[] | null | undefined,
+    tags?: string[],
+  ) {
     await applyCategorizeResult(
       db,
       "user",
@@ -98,48 +150,133 @@ describe("applyCategorizeResult", () => {
       db.categories,
       {
         ...analysis({ type: "none" }),
-        place: {
-          name: "호랑이식당 성수점",
-          locality: "서울 성동구",
-          confidence: 0.85,
-        },
+        ...(tags ? { tags } : {}),
+        places,
       },
       "google/gemini-3.1-flash-lite-20260507",
       db.bookmark.metadata,
     );
+  }
 
-    expect(db.bookmarkUpdates.at(-1)).toMatchObject({
-      metadata: {
-        예약메모: "창가 자리",
-        네이버지도:
-          "https://map.naver.com/p/search/%ED%98%B8%EB%9E%91%EC%9D%B4%EC%8B%9D%EB%8B%B9%20%EC%84%B1%EC%88%98%EC%A0%90%20%EC%84%9C%EC%9A%B8%20%EC%84%B1%EB%8F%99%EA%B5%AC",
+  it("stores every confident place in order with a geocode status by country", async () => {
+    const db = new FakeDb();
+    await apply(db, [
+      place("호랑이식당 성수점"),
+      place("% Arabica 嵐山", { locality: "Kyoto", countryCode: "JP" }),
+      place("국가 미상 카페", { locality: null, countryCode: null }),
+    ]);
+
+    expect(db.places).toEqual([
+      {
+        user_id: "user",
+        bookmark_id: "bookmark",
+        position: 0,
+        name: "호랑이식당 성수점",
+        locality: "서울 성동구",
+        country_code: "KR",
+        geocode_status: "pending",
       },
-    });
+      {
+        user_id: "user",
+        bookmark_id: "bookmark",
+        position: 1,
+        name: "% Arabica 嵐山",
+        locality: "Kyoto",
+        country_code: "JP",
+        geocode_status: "skipped",
+      },
+      {
+        user_id: "user",
+        bookmark_id: "bookmark",
+        position: 2,
+        name: "국가 미상 카페",
+        locality: null,
+        country_code: null,
+        geocode_status: "pending",
+      },
+    ]);
+    expect(db.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
   });
 
-  it("removes exact normalized restaurant names from generated tags", async () => {
+  it("drops low-confidence places and duplicate names", async () => {
     const db = new FakeDb();
-    await applyCategorizeResult(
+    await apply(db, [
+      place("아마도 식당", { confidence: 0.849 }),
+      place("신죠오 사사게요"),
+      place("신죠오·사사게요", { locality: "다른 동네" }),
+      place("이키야", { confidence: 0.85 }),
+    ]);
+
+    expect(db.places.map((row) => [row["position"], row["name"]])).toEqual([
+      [0, "신죠오 사사게요"],
+      [1, "이키야"],
+    ]);
+  });
+
+  it("replaces the previous places when the bookmark is analyzed again", async () => {
+    const db = new FakeDb();
+    await apply(db, [place("옛날 식당"), place("옛날 카페")]);
+    db.bookmark.ai_status = "pending";
+    await apply(db, [place("새 식당")]);
+    expect(db.places.map((row) => row["name"])).toEqual(["새 식당"]);
+
+    db.bookmark.ai_status = "pending";
+    await apply(db, []);
+    expect(db.places).toEqual([]);
+  });
+
+  it("leaves places untouched when the pending update did not apply", async () => {
+    const db = new FakeDb();
+    await apply(db, [place("기존 식당")]);
+    db.bookmark.ai_status = "idle";
+    await apply(db, [place("덮어쓰면 안 되는 식당")]);
+    expect(db.places.map((row) => row["name"])).toEqual(["기존 식당"]);
+  });
+
+  it("keeps the finished analysis when saving places fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const db = new FakeDb();
+    db.placeInsertError = { message: "insert failed" };
+    await apply(db, [place("호랑이식당")]);
+    expect(db.bookmark.ai_status).toBe("done");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("removes a previously auto-generated Naver Map search link only", async () => {
+    const generated = new FakeDb();
+    generated.bookmark.metadata = {
+      예약메모: "창가 자리",
+      네이버지도: "https://map.naver.com/p/search/%EC%8B%9D%EB%8B%B9",
+    };
+    await apply(generated, []);
+    expect(generated.bookmarkUpdates.at(-1)?.["metadata"]).toEqual({
+      예약메모: "창가 자리",
+    });
+
+    const custom = new FakeDb();
+    custom.bookmark.metadata = {
+      네이버지도: "https://naver.me/abcdef",
+    };
+    await apply(custom, []);
+    expect(custom.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
+  });
+
+  it("removes exact normalized names of every place from generated tags", async () => {
+    const db = new FakeDb();
+    await apply(
       db,
-      "user",
-      "bookmark",
-      db.categories,
-      {
-        ...analysis({ type: "none" }),
-        tags: [
-          "신죠오 사사게요 천호점",
-          "신죠오·사사게요-천호점",
-          "미소카츠",
-          "천호",
-        ],
-        place: {
-          name: "신죠오 사사게요 천호점",
-          locality: "서울 강동구",
-          confidence: 0.9,
-        },
-      },
-      "google/gemini-3.1-flash-lite-20260507",
-      db.bookmark.metadata,
+      [
+        place("신죠오 사사게요 천호점", { locality: "서울 강동구" }),
+        place("이키야 나고야식 미소카츠"),
+      ],
+      [
+        "신죠오 사사게요 천호점",
+        "신죠오·사사게요-천호점",
+        "이키야 나고야식 미소카츠",
+        "미소카츠",
+        "천호",
+      ],
     );
 
     expect(db.bookmarkUpdates.at(-1)).toMatchObject({
@@ -147,28 +284,6 @@ describe("applyCategorizeResult", () => {
       tags: ["미소카츠", "천호"],
       ai_status: "done",
     });
-  });
-
-  it("leaves metadata unchanged below the place confidence threshold", async () => {
-    const db = new FakeDb();
-    await applyCategorizeResult(
-      db,
-      "user",
-      "bookmark",
-      db.categories,
-      {
-        ...analysis({ type: "none" }),
-        place: {
-          name: "아마도 식당",
-          locality: null,
-          confidence: 0.849,
-        },
-      },
-      "google/gemini-3.1-flash-lite-20260507",
-      db.bookmark.metadata,
-    );
-
-    expect(db.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
   });
 
   it("adds a verified GitHub source only for image bookmarks", async () => {
@@ -211,7 +326,7 @@ describe("applyCategorizeResult", () => {
     expect(linkDb.bookmarkUpdates.at(-1)).not.toHaveProperty("metadata");
   });
 
-  it("preserves both place and source metadata for an image", async () => {
+  it("keeps the source metadata and stores places for an image", async () => {
     const db = new FakeDb();
     await applyCategorizeResult(
       db,
@@ -220,11 +335,7 @@ describe("applyCategorizeResult", () => {
       db.categories,
       {
         ...analysis({ type: "none" }),
-        place: {
-          name: "호랑이식당",
-          locality: "서울",
-          confidence: 0.9,
-        },
+        places: [place("호랑이식당")],
         source: {
           platform: "instagram",
           handle: "tiger.restaurant",
@@ -241,10 +352,13 @@ describe("applyCategorizeResult", () => {
     expect(db.bookmarkUpdates.at(-1)).toMatchObject({
       metadata: {
         예약메모: "창가 자리",
-        네이버지도: expect.stringContaining("map.naver.com"),
         인스타그램: "https://www.instagram.com/tiger.restaurant/",
       },
     });
+    expect(db.bookmarkUpdates.at(-1)?.["metadata"]).not.toHaveProperty(
+      "네이버지도",
+    );
+    expect(db.places).toHaveLength(1);
   });
 
   it("finishes analysis while omitting an invalid source", async () => {

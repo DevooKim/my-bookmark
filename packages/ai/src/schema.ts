@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { AnalyzeResult, CategorizeInput, CategorizeResult } from "./types";
-import { EMBEDDING_DIMENSIONS, sourcePlatforms } from "./types";
+import {
+  EMBEDDING_DIMENSIONS,
+  MAX_PLACES_PER_BOOKMARK,
+  sourcePlatforms,
+} from "./types";
 
 export const categorizeResponseSchema = z.discriminatedUnion("type", [
   z.object({
@@ -35,6 +39,40 @@ export function parseCategorizeResponse(value: unknown): CategorizeResult {
   return parsed.data;
 }
 
+export const placeCandidateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  locality: z.string().trim().min(1).max(120).nullable(),
+  countryCode: z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z]{2}$/))
+    .nullable(),
+  confidence: z.number().min(0).max(1),
+});
+
+// 항목 하나가 스키마에 어긋나도 분석 전체를 실패시키지 않도록 요소별로 파싱하고
+// 통과한 것만 남긴다. 최대 개수를 넘는 분량은 잘라낸다.
+const placesSchema = z
+  .array(z.unknown())
+  .nullable()
+  .optional()
+  .transform((items) => {
+    if (!items) {
+      return items;
+    }
+    const places: z.infer<typeof placeCandidateSchema>[] = [];
+    for (const item of items) {
+      const parsed = placeCandidateSchema.safeParse(item);
+      if (parsed.success) {
+        places.push(parsed.data);
+      } else {
+        console.warn("AI place candidate parse failed", parsed.error);
+      }
+    }
+    return places.slice(0, MAX_PLACES_PER_BOOKMARK);
+  });
+
 export const analyzeResponseSchema = z.object({
   category: categorizeResponseSchema,
   summaryTitle: z.string().trim().min(1).max(40),
@@ -44,14 +82,7 @@ export const analyzeResponseSchema = z.object({
     .min(2)
     .max(5)
     .refine((tags) => new Set(tags).size === tags.length),
-  place: z
-    .object({
-      name: z.string().trim().min(1).max(120),
-      locality: z.string().trim().min(1).max(120).nullable(),
-      confidence: z.number().min(0).max(1),
-    })
-    .nullable()
-    .optional(),
+  places: placesSchema,
   source: z
     .object({
       platform: z.enum(sourcePlatforms),
@@ -98,15 +129,20 @@ export const jsonSchema = {
       minItems: 2,
       maxItems: 5,
     },
-    place: {
-      type: ["object", "null"] as const,
-      properties: {
-        name: { type: "string" as const },
-        locality: { type: ["string", "null"] as const },
-        confidence: { type: "number" as const, minimum: 0, maximum: 1 },
+    places: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          name: { type: "string" as const },
+          locality: { type: ["string", "null"] as const },
+          countryCode: { type: ["string", "null"] as const },
+          confidence: { type: "number" as const, minimum: 0, maximum: 1 },
+        },
+        required: ["name", "locality", "countryCode", "confidence"],
+        additionalProperties: false,
       },
-      required: ["name", "locality", "confidence"],
-      additionalProperties: false,
+      maxItems: MAX_PLACES_PER_BOOKMARK,
     },
     source: {
       type: ["object", "null"] as const,
@@ -121,7 +157,7 @@ export const jsonSchema = {
       additionalProperties: false,
     },
   },
-  required: ["category", "summaryTitle", "summary", "tags", "place", "source"],
+  required: ["category", "summaryTitle", "summary", "tags", "places", "source"],
   additionalProperties: false,
 };
 
@@ -161,9 +197,9 @@ export function systemPrompt(): string {
     "10. 식당 상호와 지점명은 tags에서 제외한다. 음식 종류·가장 유용한 지역·방문 목적처럼 다른 항목에도 재사용 가능한 검색어만 쓴다.",
     "11. summary는 원문의 핵심을 한국어 1~3문장으로 요약한다. 불필요한 수식 없이 정보만 담고, 전체 300자 이내로 한다.",
     "12. 해당 없는 필드(categoryId, name)는 null로 채운다.",
-    "13. 식당·카페·주점 등 방문 가능한 음식점의 상호가 본문이나 이미지에 직접 확인될 때만 place를 반환한다.",
-    "14. 음식 사진만으로 상호를 추측하지 않는다. 상호가 불명확하거나 여러 장소가 섞이면 place는 null이다.",
-    "15. 지점명은 place.name에 포함하고 확인 가능한 동네·도시·주소 단서는 place.locality에 넣는다.",
+    "13. 식당·카페·주점·매장·관광지·숙소·전시 공간 등 방문 가능한 장소의 고유 이름이 본문이나 이미지에 직접 확인되면 places에 모두 넣는다. 게시물이 여러 장소를 소개하면 본문 등장 순서대로 각각을 항목으로 넣고 최대 15개까지 반환한다.",
+    "14. 사진만 보고 장소 이름을 추측하지 않는다. '서촌 카페', '교토 맛집'처럼 고유 이름이 아닌 일반 표현과 도시·동네·국가 자체는 places에 넣지 않는다. 확인되는 장소가 없으면 places는 빈 배열이다.",
+    "15. 지점명은 places[].name에 포함하고 name은 원문 표기를 유지한다(해외 장소는 현지어·영문 표기 그대로). 확인 가능한 동네·도시는 places[].locality에 넣는다. places[].countryCode는 장소가 있는 국가의 ISO 3166-1 alpha-2 대문자 코드(한국 KR, 일본 JP)이며 본문 단서로 판단할 수 없으면 null이다.",
     "16. YouTube, Instagram, Threads, X, TikTok, GitHub의 handle, 게시물 URL·ID, GitHub owner/repository가 이미지에 직접 보일 때만 source를 반환한다.",
     "17. 표시명이나 로고만으로 계정을 추측하지 않는다. 직접 확인할 수 없으면 source는 null이다.",
     "18. source.postUrl은 게시물 URL이나 ID가 직접 보일 때만 넣고, GitHub 저장소는 source.repository에 owner/repository로 넣는다.",

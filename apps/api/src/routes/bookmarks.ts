@@ -3,6 +3,7 @@ import {
   API_ERROR_CODES,
   type Bookmark,
   type BookmarkListQuery,
+  type BookmarkPlace,
   bookmarkListQuerySchema,
   bookmarksResponseSchema,
   type CreateBookmarkRequest,
@@ -28,6 +29,7 @@ import {
   createLinkBookmark,
   type LinkBookmarkCreationDeps,
 } from "../services/bookmark-creation";
+import { loadPlacesByBookmarkId } from "../services/bookmark-places";
 import { categorizeBookmark } from "../services/categorize";
 import { updateBookmarkEmbedding } from "../services/embedding";
 import { getEmbeddingProvider } from "../services/embedding-provider";
@@ -92,6 +94,7 @@ interface SemanticSearchDependencies {
   db?: SemanticSearchDb;
   embeddingProvider?: EmbeddingProvider | null;
   mapBookmark?: typeof mapBookmarkWithSignedMedia;
+  loadPlaces?: (bookmarkIds: string[]) => Promise<Map<string, BookmarkPlace[]>>;
 }
 
 interface MetadataUpdateDb {
@@ -154,7 +157,7 @@ bookmarksRouter.post("/bookmarks/:id/categorize", async (request, response) => {
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
-  const bookmark = await mapBookmarkWithSignedMedia(data, false);
+  const bookmark = await mapBookmarkWithPlaces(userId, data, false);
   void categorizeBookmarkForUser({
     db,
     userId,
@@ -283,7 +286,7 @@ bookmarksRouter.patch("/bookmarks/:id", async (request, response) => {
     );
   }
   response.json({
-    bookmark: await mapBookmarkWithSignedMedia(data, true),
+    bookmark: await mapBookmarkWithPlaces(userId, data, true),
   });
 });
 
@@ -333,14 +336,25 @@ function getImageStorage(): ImageStorageBucket {
 async function mapBookmarkWithSignedMedia(
   row: BookmarkDbRow,
   includeOriginal: boolean,
+  places: readonly BookmarkPlace[] = [],
 ): Promise<Bookmark> {
   if (row.kind !== "image") {
-    return mapBookmark(row);
+    return mapBookmark(row, {}, places);
   }
   return mapBookmark(
     row,
     await signBookmarkMedia(row, getImageStorage(), includeOriginal),
+    places,
   );
+}
+
+async function mapBookmarkWithPlaces(
+  userId: string,
+  row: BookmarkDbRow,
+  includeOriginal: boolean,
+): Promise<Bookmark> {
+  const places = await loadPlacesByBookmarkId(getDb(), userId, [row.id]);
+  return mapBookmarkWithSignedMedia(row, includeOriginal, places.get(row.id));
 }
 
 export interface BookmarkListResult {
@@ -364,9 +378,16 @@ export async function listBookmarksForUser(
   const rows = Array.isArray(data) ? data : [];
   const pageRows: BookmarkDbRow[] = rows.slice(0, query.limit);
   const next = rows.length > query.limit ? pageRows.at(-1) : undefined;
+  const places = await loadPlacesByBookmarkId(
+    db,
+    userId,
+    pageRows.map((row) => row.id),
+  );
   return {
     bookmarks: await Promise.all(
-      pageRows.map((row) => mapBookmarkWithSignedMedia(row, false)),
+      pageRows.map((row) =>
+        mapBookmarkWithSignedMedia(row, false, places.get(row.id)),
+      ),
     ),
     nextCursor: next ? encodeCursor(next.created_at, next.id) : null,
   };
@@ -406,9 +427,17 @@ export async function searchSemanticBookmarksForUser(
   }
 
   const mapBookmark = dependencies.mapBookmark ?? mapBookmarkWithSignedMedia;
+  const loadPlaces =
+    dependencies.loadPlaces ??
+    ((bookmarkIds: string[]) =>
+      loadPlacesByBookmarkId(getDb(), userId, bookmarkIds));
   const rows = Array.isArray(data) ? data : [];
+  // RPC는 setof bookmarks만 돌려주므로 장소는 in 조회 한 번으로 붙인다.
+  const places = await loadPlaces(rows.map((row) => row.id));
   return {
-    bookmarks: await Promise.all(rows.map((row) => mapBookmark(row, false))),
+    bookmarks: await Promise.all(
+      rows.map((row) => mapBookmark(row, false, places.get(row.id))),
+    ),
     nextCursor: null,
   };
 }
@@ -429,7 +458,7 @@ export async function getBookmarkForUser(
   if (!data) {
     throw new HttpError(404, API_ERROR_CODES.NOT_FOUND, "Bookmark not found");
   }
-  return mapBookmarkWithSignedMedia(data, true);
+  return mapBookmarkWithPlaces(userId, data, true);
 }
 
 export async function createLinkBookmarkForUser(input: {

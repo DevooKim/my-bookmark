@@ -31,6 +31,7 @@ function createMappedBookmark(): Bookmark {
     metadata: {},
     aiStatus: "idle",
     aiModel: null,
+    places: [],
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
   };
@@ -44,6 +45,18 @@ describe("semantic bookmark search", () => {
       .mockResolvedValue({ data: [{ id: "row" }], error: null });
     const rpc = vi.fn().mockReturnValue({ select });
     const mapBookmark = vi.fn().mockResolvedValue(createMappedBookmark());
+    const place = {
+      id: "33333333-3333-4333-8333-333333333333",
+      name: "식당",
+      locality: null,
+      countryCode: "KR",
+      lat: null,
+      lng: null,
+      address: null,
+      mapProvider: "naver" as const,
+      mapUrl: "https://map.naver.com/p/search/%EC%8B%9D%EB%8B%B9",
+    };
+    const loadPlaces = vi.fn().mockResolvedValue(new Map([["row", [place]]]));
 
     const result = await searchSemanticBookmarksForUser(
       userId,
@@ -52,6 +65,7 @@ describe("semantic bookmark search", () => {
         db: { rpc },
         embeddingProvider: provider,
         mapBookmark,
+        loadPlaces,
       },
     );
 
@@ -62,7 +76,8 @@ describe("semantic bookmark search", () => {
       p_limit: 10,
     });
     expect(select).toHaveBeenCalledWith(BOOKMARK_DB_COLUMNS);
-    expect(mapBookmark).toHaveBeenCalledWith({ id: "row" }, false);
+    expect(loadPlaces).toHaveBeenCalledWith(["row"]);
+    expect(mapBookmark).toHaveBeenCalledWith({ id: "row" }, false, [place]);
     expect(result).toEqual({
       bookmarks: [createMappedBookmark()],
       nextCursor: null,

@@ -15,7 +15,18 @@ const fake = vi.hoisted(() => ({
 }));
 
 vi.mock("../lib/supabase", () => ({
-  supabaseAdmin: { rpc: fake.rpc },
+  supabaseAdmin: {
+    rpc: fake.rpc,
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          in: () => ({
+            order: () => Promise.resolve({ data: [], error: null }),
+          }),
+        }),
+      }),
+    }),
+  },
 }));
 vi.mock("../middleware/auth", () => ({
   getUserId: () => fake.userId,

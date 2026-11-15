@@ -1,6 +1,9 @@
 import {
   type Bookmark,
+  type BookmarkPlace,
+  bookmarkPlaceSchema,
   bookmarkSchema,
+  buildPlaceMapLink,
   type Category,
   type CategoryWithCount,
   categorySchema,
@@ -41,6 +44,25 @@ export interface BookmarkDbRow {
   updated_at: string;
 }
 
+export const BOOKMARK_PLACE_DB_COLUMNS =
+  "id,user_id,bookmark_id,position,name,locality,country_code,geocode_status,lat,lng,address,road_address,created_at";
+
+export interface BookmarkPlaceDbRow {
+  id: string;
+  user_id: string;
+  bookmark_id: string;
+  position: number;
+  name: string;
+  locality: string | null;
+  country_code: string | null;
+  geocode_status: "pending" | "resolved" | "not_found" | "skipped";
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  road_address: string | null;
+  created_at: string;
+}
+
 interface CategoryDbRow {
   id: string;
   user_id: string;
@@ -65,9 +87,29 @@ interface ReminderWithBookmarkDbRow {
   bookmarks: Pick<BookmarkDbRow, "id" | "kind" | "url" | "title"> | null;
 }
 
+export function mapBookmarkPlace(row: BookmarkPlaceDbRow): BookmarkPlace {
+  const link = buildPlaceMapLink({
+    name: row.name,
+    locality: row.locality,
+    countryCode: row.country_code,
+  });
+  return bookmarkPlaceSchema.parse({
+    id: row.id,
+    name: row.name,
+    locality: row.locality,
+    countryCode: row.country_code,
+    lat: row.lat,
+    lng: row.lng,
+    address: row.road_address ?? row.address,
+    mapProvider: link.provider,
+    mapUrl: link.url,
+  });
+}
+
 export function mapBookmark(
   row: BookmarkDbRow,
   media: { thumbnailUrl?: string | null; originalUrl?: string | null } = {},
+  places: readonly BookmarkPlace[] = [],
 ): Bookmark {
   return bookmarkSchema.parse({
     id: row.id,
@@ -96,6 +138,7 @@ export function mapBookmark(
     metadata: row.metadata ?? {},
     aiStatus: row.ai_status,
     aiModel: row.ai_model,
+    places,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });

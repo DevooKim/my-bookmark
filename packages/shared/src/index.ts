@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./places";
+
 export const API_ERROR_CODES = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   UNAUTHORIZED: "UNAUTHORIZED",
@@ -88,6 +90,19 @@ export const imageMetadataSchema = z.object({
   filename: z.string().min(1),
 });
 
+export const bookmarkPlaceSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  locality: z.string().nullable(),
+  countryCode: z.string().nullable(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  // road_address 우선, 없으면 address
+  address: z.string().nullable(),
+  mapProvider: z.enum(["naver", "google"]),
+  mapUrl: z.url(),
+});
+
 const bookmarkCommonSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
@@ -101,6 +116,7 @@ const bookmarkCommonSchema = z.object({
   metadata: bookmarkMetadataSchema.default({}),
   aiStatus: aiStatusSchema,
   aiModel: z.string().nullable(),
+  places: z.array(bookmarkPlaceSchema),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -371,6 +387,7 @@ export const reminderResponseSchema = z.object({
   reminder: reminderWithBookmarkSchema,
 });
 
+export type BookmarkPlace = z.infer<typeof bookmarkPlaceSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type CategoryWithCount = z.infer<typeof categoryWithCountSchema>;
 export type Bookmark = z.infer<typeof bookmarkSchema>;

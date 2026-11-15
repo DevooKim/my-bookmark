@@ -12,12 +12,30 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   update: vi.fn(),
   updateBookmarkEmbedding: vi.fn(),
+  placeRows: [] as Record<string, unknown>[],
+  placeIn: vi.fn(),
 }));
 
 vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     rpc: mocks.rpc,
-    from: vi.fn(() => ({ update: mocks.update })),
+    from: vi.fn((table: string) =>
+      table === "bookmark_places"
+        ? {
+            select: () => ({
+              eq: () => ({
+                in: (field: string, ids: string[]) => {
+                  mocks.placeIn(field, ids);
+                  return {
+                    order: () =>
+                      Promise.resolve({ data: mocks.placeRows, error: null }),
+                  };
+                },
+              }),
+            }),
+          }
+        : { update: mocks.update },
+    ),
   },
 }));
 
@@ -107,6 +125,8 @@ beforeEach(() => {
   mocks.update.mockReset();
   mocks.updateBookmarkEmbedding.mockReset();
   mocks.updateBookmarkEmbedding.mockResolvedValue(undefined);
+  mocks.placeRows = [];
+  mocks.placeIn.mockReset();
 });
 
 describe("bookmark tags API", () => {

@@ -54,6 +54,7 @@ describe("domain schemas", () => {
         tags: [],
         aiStatus: "idle",
         aiModel: null,
+        places: [],
         createdAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
       }),

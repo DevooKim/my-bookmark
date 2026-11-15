@@ -7,11 +7,14 @@ const analysis = {
   summaryTitle: "React 19 핵심 변경 사항",
   summary: "React 19의 핵심 변경을 정리한다.",
   tags: ["React", "프론트엔드", "자바스크립트"],
-  place: {
-    name: "호랑이식당 성수점",
-    locality: "서울 성동구",
-    confidence: 0.92,
-  },
+  places: [
+    {
+      name: "호랑이식당 성수점",
+      locality: "서울 성동구",
+      countryCode: "KR",
+      confidence: 0.92,
+    },
+  ],
   source: null,
 };
 
@@ -65,10 +68,19 @@ describe("OpenRouter preset provider", () => {
     expect(
       body.response_format.json_schema.schema.properties.category.required,
     ).toEqual(["type", "categoryId", "name", "confidence"]);
-    expect(body.response_format.json_schema.schema.required).toContain("place");
+    expect(body.response_format.json_schema.schema.required).toContain(
+      "places",
+    );
     expect(
-      body.response_format.json_schema.schema.properties.place.type,
-    ).toEqual(["object", "null"]);
+      body.response_format.json_schema.schema.properties.places,
+    ).toMatchObject({
+      type: "array",
+      maxItems: 15,
+      items: {
+        required: ["name", "locality", "countryCode", "confidence"],
+        additionalProperties: false,
+      },
+    });
     expect(body.response_format.json_schema.schema.required).toContain(
       "source",
     );
@@ -199,22 +211,62 @@ describe("AI analysis response parsing", () => {
     warn.mockRestore();
   });
 
-  it("parses a nullable, validated place candidate", () => {
-    expect(parseAnalyzeResponse({ ...analysis, place: null })).toMatchObject({
-      place: null,
+  describe("places", () => {
+    const place = analysis.places[0];
+
+    it("parses several places in order", () => {
+      const second = { ...place, name: "서촌 커피", countryCode: "kr" };
+      expect(
+        parseAnalyzeResponse({ ...analysis, places: [place, second] })?.places,
+      ).toEqual([place, { ...second, countryCode: "KR" }]);
     });
-    expect(
-      parseAnalyzeResponse({
+
+    it("accepts an empty array, null, and a missing field", () => {
+      expect(parseAnalyzeResponse({ ...analysis, places: [] })?.places).toEqual(
+        [],
+      );
+      expect(
+        parseAnalyzeResponse({ ...analysis, places: null })?.places,
+      ).toBeNull();
+      const { places: _omitted, ...withoutPlaces } = analysis;
+      expect(parseAnalyzeResponse(withoutPlaces)?.places).toBeUndefined();
+    });
+
+    it("drops invalid items without failing the whole analysis", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const result = parseAnalyzeResponse({
         ...analysis,
-        place: { ...analysis.place, confidence: 1.1 },
-      }),
-    ).toBeNull();
-    expect(
-      parseAnalyzeResponse({
-        ...analysis,
-        place: { ...analysis.place, name: " " },
-      }),
-    ).toBeNull();
+        places: [
+          { ...place, confidence: 1.1 },
+          { ...place, name: " " },
+          { ...place, countryCode: "Japan" },
+          { name: "필드 누락" },
+          "문자열",
+          place,
+        ],
+      });
+      expect(result?.places).toEqual([place]);
+      warn.mockRestore();
+    });
+
+    it("keeps only the first 15 places", () => {
+      const places = Array.from({ length: 20 }, (_, index) => ({
+        ...place,
+        name: `장소 ${index}`,
+      }));
+      const result = parseAnalyzeResponse({ ...analysis, places });
+      expect(result?.places).toHaveLength(15);
+      expect(result?.places?.at(-1)?.name).toBe("장소 14");
+    });
+
+    it("allows a null country code", () => {
+      expect(
+        parseAnalyzeResponse({
+          ...analysis,
+          places: [{ ...place, countryCode: null }],
+        })?.places?.[0]?.countryCode,
+      ).toBeNull();
+    });
   });
 
   it("parses directly evidenced social and GitHub source candidates", () => {
@@ -281,8 +333,11 @@ describe("AI analysis response parsing", () => {
     ).toBeNull();
   });
 
-  it("forbids guessing a restaurant from food alone", () => {
-    expect(systemPrompt()).toContain("음식 사진만으로 상호를 추측하지 않는다");
+  it("forbids guessing places from photos or generic expressions", () => {
+    const prompt = systemPrompt();
+    expect(prompt).toContain("사진만 보고 장소 이름을 추측하지 않는다");
+    expect(prompt).toContain("'서촌 카페', '교토 맛집'");
+    expect(prompt).toContain("places는 빈 배열이다");
   });
 
   it("forbids guessing source accounts from names or logos", () => {

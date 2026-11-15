@@ -105,6 +105,7 @@ describe("EditBookmarkDialog", () => {
       metadata: { 지역: " 서울 " },
       aiStatus: "done",
       aiModel: null,
+      places: [],
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:00:00.000Z",
     };
@@ -156,6 +157,7 @@ describe("EditBookmarkDialog", () => {
       metadata: { 지역: "서울" },
       aiStatus: "done",
       aiModel: null,
+      places: [],
       createdAt: "2026-07-12T00:00:00.000Z",
       updatedAt: "2026-07-12T00:00:00.000Z",
     };

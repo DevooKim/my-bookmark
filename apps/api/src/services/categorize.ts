@@ -6,6 +6,10 @@ import type {
 import { PRESET_MODEL } from "@my-bookmark/ai";
 import { bookmarkMetadataSchema } from "@my-bookmark/shared";
 import { domainFromUrl } from "../lib/url";
+import {
+  replaceBookmarkPlaces,
+  selectPlaceCandidates,
+} from "./bookmark-places";
 import { updateBookmarkEmbedding } from "./embedding";
 import { fetchMetadata, type PageMetadata } from "./metadata";
 import { buildSourceMetadataEntry } from "./source-link";
@@ -66,6 +70,9 @@ interface CategorizeOptions {
     base64: string;
   }>;
 }
+
+const LEGACY_NAVER_MAP_KEY = "네이버지도";
+const LEGACY_NAVER_MAP_URL_PREFIX = "https://map.naver.com/p/search/";
 
 // 성공한 모델 id의 vendor prefix를 provider 컬럼에 기록한다
 // ("google/gemini-..." -> "google"). 실패 시엔 어떤 모델이 시도됐는지
@@ -160,7 +167,9 @@ export async function categorizeBookmark({
       });
       const embeddingTags = removePlaceNameTags(
         outcome.analysis.tags,
-        outcome.analysis.place?.name,
+        selectPlaceCandidates(outcome.analysis.places).map(
+          (place) => place.name,
+        ),
       );
       await applyCategorizeResult(
         db,
@@ -252,25 +261,16 @@ export async function applyCategorizeResult(
 
   let metadata: Record<string, string> | undefined;
   let mergedMetadata = currentMetadata;
-  if (result.place && result.place.confidence >= 0.85) {
-    const query = [result.place.name.trim(), result.place.locality?.trim()]
-      .filter((part): part is string => Boolean(part))
-      .join(" ");
-    if (query.length > 0) {
-      const parsed = bookmarkMetadataSchema.safeParse({
-        ...mergedMetadata,
-        네이버지도: `https://map.naver.com/p/search/${encodeURIComponent(query)}`,
-      });
-      if (parsed.success) {
-        mergedMetadata = parsed.data;
-        metadata = parsed.data;
-      } else {
-        console.warn("Generated metadata merge failed", {
-          bookmarkId,
-          stage: "naver-map",
-        });
-      }
-    }
+  // 과거에 AI가 자동 생성한 네이버지도 검색 링크만 지운다. 사용자가 직접 넣은
+  // 다른 값은 건드리지 않는다.
+  if (
+    mergedMetadata[LEGACY_NAVER_MAP_KEY]?.startsWith(
+      LEGACY_NAVER_MAP_URL_PREFIX,
+    )
+  ) {
+    const { [LEGACY_NAVER_MAP_KEY]: _legacy, ...rest } = mergedMetadata;
+    mergedMetadata = rest;
+    metadata = rest;
   }
 
   if (bookmarkKind === "image") {
@@ -292,18 +292,32 @@ export async function applyCategorizeResult(
     }
   }
 
-  await markDone(
+  const places = selectPlaceCandidates(result.places);
+  const transitioned = await markDone(
     db,
     userId,
     bookmarkId,
     categoryId,
     {
       ...result,
-      tags: removePlaceNameTags(result.tags, result.place?.name),
+      tags: removePlaceNameTags(
+        result.tags,
+        places.map((place) => place.name),
+      ),
     },
     aiModel,
     metadata,
   );
+  // 조건부 UPDATE가 0행이면(사용자가 그 사이 수동 편집) 장소도 건드리지 않는다.
+  if (!transitioned) {
+    return;
+  }
+  // 장소 저장이 실패해도 이미 완료된 분석 결과는 되돌리지 않는다.
+  try {
+    await replaceBookmarkPlaces(db, userId, bookmarkId, places);
+  } catch (error) {
+    console.warn("bookmark places save failed", { bookmarkId, error });
+  }
 }
 
 function normalizeTagIdentity(value: string): string {
@@ -312,14 +326,16 @@ function normalizeTagIdentity(value: string): string {
 
 export function removePlaceNameTags(
   tags: string[],
-  placeName: string | null | undefined,
+  placeNames: readonly string[],
 ): string[] {
-  if (!placeName) {
+  const normalizedPlaceNames = new Set(
+    placeNames.map(normalizeTagIdentity).filter((name) => name.length > 0),
+  );
+  if (normalizedPlaceNames.size === 0) {
     return tags;
   }
-  const normalizedPlaceName = normalizeTagIdentity(placeName);
   return tags.filter(
-    (tag) => normalizeTagIdentity(tag) !== normalizedPlaceName,
+    (tag) => !normalizedPlaceNames.has(normalizeTagIdentity(tag)),
   );
 }
 
@@ -376,6 +392,7 @@ async function updateMetadata(
   }
 }
 
+// 조건부 UPDATE가 실제로 행을 바꿨는지(pending -> done 전이) 반환한다.
 async function markDone(
   db: BookmarkCategorizeDb,
   userId: string,
@@ -384,8 +401,8 @@ async function markDone(
   result: AnalyzeResult,
   aiModel: string,
   metadata?: Record<string, string>,
-): Promise<void> {
-  const { error } = await (db.from("bookmarks") as BookmarkUpdateTable)
+): Promise<boolean> {
+  const { data, error } = await (db.from("bookmarks") as BookmarkDoneTable)
     .update({
       category_id: categoryId,
       title: result.summaryTitle,
@@ -397,10 +414,12 @@ async function markDone(
     })
     .eq("user_id", userId)
     .eq("id", bookmarkId)
-    .eq("ai_status", "pending");
+    .eq("ai_status", "pending")
+    .select("id");
   if (error) {
     throw error;
   }
+  return (data?.length ?? 0) > 0;
 }
 
 async function markFailed(
@@ -493,6 +512,27 @@ interface BookmarkUpdateTable {
         value: string,
       ): {
         eq(field: string, value: string): QueryResult<null>;
+      };
+    };
+  };
+}
+
+interface BookmarkDoneTable {
+  update(values: Record<string, unknown>): {
+    eq(
+      field: string,
+      value: string,
+    ): {
+      eq(
+        field: string,
+        value: string,
+      ): {
+        eq(
+          field: string,
+          value: string,
+        ): {
+          select(columns: string): QueryResult<{ id: string }[] | null>;
+        };
       };
     };
   };

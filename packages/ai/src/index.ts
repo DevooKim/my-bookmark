@@ -18,7 +18,8 @@ export type {
   CategorizeResult,
   EmbeddingProvider,
   EmbeddingProviderConfig,
+  PlaceCandidate,
   SourceCandidate,
   SourcePlatform,
 } from "./types";
-export { EMBEDDING_DIMENSIONS } from "./types";
+export { EMBEDDING_DIMENSIONS, MAX_PLACES_PER_BOOKMARK } from "./types";

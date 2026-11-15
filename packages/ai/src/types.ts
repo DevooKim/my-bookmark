@@ -30,9 +30,12 @@ export type CategorizeResult =
   | { type: "new"; name: string; confidence: number }
   | { type: "none" };
 
+export const MAX_PLACES_PER_BOOKMARK = 15;
+
 export interface PlaceCandidate {
   name: string;
   locality: string | null;
+  countryCode: string | null;
   confidence: number;
 }
 
@@ -60,7 +63,7 @@ export interface AnalyzeResult {
   summaryTitle: string;
   summary?: string | null | undefined;
   tags: string[];
-  place?: PlaceCandidate | null | undefined;
+  places?: PlaceCandidate[] | null | undefined;
   source?: SourceCandidate | null | undefined;
 }
 

@@ -164,7 +164,8 @@ X-NCP-APIGW-API-KEY-ID: {NAVER_SEARCH_CLIENT_ID}
 X-NCP-APIGW-API-KEY: {NAVER_SEARCH_CLIENT_SECRET}
 ```
 
-- 위 호스트·경로·헤더는 2차 자료(이관 안내 글)에서 확인한 것이다. **구현 전에 NAVER API HUB 공식 문서(api.ncloud-docs.com의 NAVER API HUB > Search > 지역)에서 경로, 쿼리 파라미터(`format` 등), 응답 필드, 좌표 형식을 확인한다.** 기억에 의존하지 않는다. 설계 시점의 이해: `items[].title`(`<b>` 태그 포함 가능), `address`, `roadAddress`, `mapx`/`mapy`(WGS84 경도·위도에 10^7을 곱한 정수 문자열). 실제 키로 1회 호출해 좌표가 한국 범위(위도 33~39, 경도 124~132)로 변환되는지 확인하고, 다르면 문서 기준으로 고친다.
+- **실측 확인(2026-11-15)**: 발급한 키로 위 요청이 HTTP 200을 반환했다. 응답은 `{ lastBuildDate, total, start, display, items[] }`이고 항목은 `title`(`<b>` 태그 포함), `link`, `category`, `description`, `telephone`, `address`, `roadAddress`, `mapx`, `mapy`다. `mapx`/`mapy`는 경도·위도에 10^7을 곱한 정수 문자열이다(예: `"1270284390"`, `"374977110"` → 경도 127.0284390, 위도 37.4977110). 한도는 일 25,000건, 월 775,000건(한시적 무료).
+- 위 호스트·경로·헤더는 2차 자료(이관 안내 글)에서 가져와 실측으로 확인한 것이다. **구현 전에 NAVER API HUB 공식 문서(api.ncloud-docs.com의 NAVER API HUB > Search > 지역)에서 경로, 쿼리 파라미터(`format` 등), 응답 필드, 좌표 형식을 확인한다.** 기억에 의존하지 않는다. 설계 시점의 이해: `items[].title`(`<b>` 태그 포함 가능), `address`, `roadAddress`, `mapx`/`mapy`(WGS84 경도·위도에 10^7을 곱한 정수 문자열). 실제 키로 1회 호출해 좌표가 한국 범위(위도 33~39, 경도 124~132)로 변환되는지 확인하고, 다르면 문서 기준으로 고친다.
 - 응답은 zod 스키마로 파싱한다. 타임아웃 5초.
 - 매칭 규칙(오탐 방지 우선):
   1. `query = name + " " + locality`(locality 없으면 name만)로 검색한다.
