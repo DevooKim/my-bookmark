@@ -32,6 +32,7 @@
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-11-15 | AI 응답의 `summaryTitle`(40자)·`summary`(300자) 길이 초과는 응답 전체를 거부하지 않고 trim 후 `Intl.Segmenter` grapheme 경계에서 잘라 받는다(말줄임표 없음, 끝 공백 제거). 한도는 UTF-16 길이가 아니라 grapheme 수 기준이다. 빈 값·공백뿐인 값·비문자열은 그대로 거부하고 `tags` 등 다른 규칙과 프롬프트 지시는 유지한다. | 백필(354건 실패 중 일부)과 일반 분석에서 장소·카테고리·태그가 멀쩡한데 제목이 41자라는 이유만으로 `AI analysis response is malformed`로 버려졌기 때문. 한도 초과는 형식 오류가 아니라 모델의 사소한 지시 위반이다. |
 | 2026-11-15 | `/assets/app-styles.css`의 cache-control을 `public, max-age=3600`에서 `no-cache`로 바꿨다(2026-07-10 결정 번복). 해시 자산·manifest·아이콘은 그대로. link href에 빌드 id 쿼리를 붙이는 방식은 쓰지 않았다. | 고정 URL이라 서비스 워커(network-first)의 네트워크 요청마저 브라우저 HTTP 캐시에서 최대 1시간 옛 CSS를 받아, 배포 직후 새 클래스(`.map-zoom-group`)가 스타일 없이 보였다. `no-cache`는 매번 ETag로 재검증하고 변경이 없으면 304라 비용이 작다. 쿼리 방식은 SSR/클라이언트 빌드의 `__BUILD_ID__`가 달라 hydration 불일치 위험이 있다. |
 | 2026-11-15 | `/map` 줌 UI는 SDK 기본 `zoomControl`을 끄고 자체 +/− 버튼(어댑터 `zoomIn`/`zoomOut`/`subscribeZoom`)으로 교체했고 `scaleControl: false`로 축척 바를 없앴다. 로고·저작권 컨트롤은 약관상 유지. | 앱 디자인 일관성 요청. 버튼은 `icon-button`(unlayered CSS의 `rounded-full`이 유틸리티를 이기므로) 대신 전용 `.map-zoom-button` 클래스를 썼다. |
 | 2026-11-15 | `/map` 개별 장소 숨김은 그룹 숨김과 별도 `localStorage` 키(`my-bookmark:map-hidden-places`, 장소 id 배열)에 저장하고 그룹 숨김이 우선한다. "숨긴 n개 모두 표시"의 n은 검색 결과 그룹의 숨김 그룹 수 + 그 그룹들의 개별 숨김 장소 수다. | 기존 저장값과 하위 호환을 유지하고, 그룹을 다시 표시해도 개별 선택이 보존되도록 상태를 분리했다. |

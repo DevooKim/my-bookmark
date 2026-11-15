@@ -280,7 +280,7 @@ describe("AI analysis response parsing", () => {
     expect(
       parseAnalyzeResponse({
         category: { type: "none" },
-        summaryTitle: "가".repeat(41),
+        summaryTitle: "",
         tags: ["하나", "둘"],
       }),
     ).toBeNull();
@@ -293,10 +293,108 @@ describe("AI analysis response parsing", () => {
       ...analysis,
       category: { type: "new", name: "📰 국제 뉴스 요약", confidence: 0.7 },
     });
-    expect(
-      parseAnalyzeResponse({ ...analysis, summary: "가".repeat(301) }),
-    ).toBeNull();
+    expect(parseAnalyzeResponse({ ...analysis, summary: "" })).toBeNull();
     warn.mockRestore();
+  });
+
+  describe("length overflow", () => {
+    it("truncates a title over 40 characters instead of rejecting the analysis", () => {
+      const result = parseAnalyzeResponse({
+        ...analysis,
+        summaryTitle: `  ${"가".repeat(41)}  `,
+      });
+      expect(result?.summaryTitle).toBe("가".repeat(40));
+      expect(result?.tags).toEqual(analysis.tags);
+      expect(result?.places).toEqual(analysis.places);
+      expect(result?.category).toEqual(analysis.category);
+    });
+
+    it("keeps a title of exactly 40 characters and appends no ellipsis", () => {
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: "가".repeat(40) })
+          ?.summaryTitle,
+      ).toBe("가".repeat(40));
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: "나".repeat(100) })
+          ?.summaryTitle,
+      ).not.toMatch(/[….]$/);
+    });
+
+    it("truncates a summary over 300 characters", () => {
+      const result = parseAnalyzeResponse({
+        ...analysis,
+        summary: "가".repeat(301),
+      });
+      expect(result?.summary).toBe("가".repeat(300));
+      expect(result?.tags).toEqual(analysis.tags);
+    });
+
+    it("drops whitespace left at the cut point", () => {
+      const title = `${"가".repeat(39)} 나다라`;
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: title })
+          ?.summaryTitle,
+      ).toBe("가".repeat(39));
+    });
+
+    it("never splits an emoji sequence at the cut point", () => {
+      const family = "👨‍👩‍👧‍👦";
+      const flag = "🇰🇷";
+      for (const emoji of [family, flag, "👍🏽"]) {
+        const result = parseAnalyzeResponse({
+          ...analysis,
+          summaryTitle: `${"가".repeat(39)}${emoji}${emoji}`,
+        });
+        expect(result?.summaryTitle).toBe(`${"가".repeat(39)}${emoji}`);
+      }
+      const summary = parseAnalyzeResponse({
+        ...analysis,
+        summary: `${"가".repeat(299)}${family}${family}`,
+      })?.summary;
+      expect(summary).toBe(`${"가".repeat(299)}${family}`);
+    });
+
+    it("never splits combining marks or decomposed Hangul", () => {
+      const decomposed = "한".normalize("NFD");
+      expect(decomposed.length).toBe(3);
+      const result = parseAnalyzeResponse({
+        ...analysis,
+        summaryTitle: decomposed.repeat(41),
+      });
+      expect(result?.summaryTitle).toBe(decomposed.repeat(40));
+
+      const accented = "e\u0301";
+      expect(
+        parseAnalyzeResponse({
+          ...analysis,
+          summaryTitle: accented.repeat(41),
+        })?.summaryTitle,
+      ).toBe(accented.repeat(40));
+    });
+
+    it("still rejects genuine format errors", () => {
+      const warn = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: "   " }),
+      ).toBeNull();
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: 123 }),
+      ).toBeNull();
+      expect(
+        parseAnalyzeResponse({ ...analysis, summaryTitle: undefined }),
+      ).toBeNull();
+      expect(parseAnalyzeResponse({ ...analysis, summary: "  " })).toBeNull();
+      expect(parseAnalyzeResponse({ ...analysis, summary: 42 })).toBeNull();
+      expect(
+        parseAnalyzeResponse({ ...analysis, summary: null })?.summary,
+      ).toBeNull();
+      expect(
+        parseAnalyzeResponse({ ...analysis, tags: ["가".repeat(21), "둘"] }),
+      ).toBeNull();
+      warn.mockRestore();
+    });
   });
 
   describe("places", () => {

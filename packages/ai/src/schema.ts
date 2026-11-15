@@ -73,10 +73,43 @@ const placesSchema = z
     return places.slice(0, MAX_PLACES_PER_BOOKMARK);
   });
 
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
+
+// grapheme(사용자가 하나로 보는 글자) 경계에서 최대 `max`개까지 남긴다.
+// 이모지 ZWJ 시퀀스·결합 문자·국기가 중간에서 깨지지 않는다.
+export function truncateGraphemes(value: string, max: number): string {
+  // UTF-16 길이가 한도 이하면 grapheme 수도 한도 이하다.
+  if (value.length <= max) {
+    return value;
+  }
+  let count = 0;
+  let end = 0;
+  for (const { segment } of graphemeSegmenter.segment(value)) {
+    if (count === max) {
+      return value.slice(0, end);
+    }
+    count += 1;
+    end += segment.length;
+  }
+  return value;
+}
+
+// 길이 초과는 모델이 프롬프트 지시를 살짝 어긴 것일 뿐이라 분석 전체를 버리지 않고
+// 잘라서 받는다. 비어 있거나 문자열이 아닌 값은 진짜 형식 오류로 계속 거부한다.
+function truncatedText(max: number) {
+  return z
+    .string()
+    .trim()
+    .transform((value) => truncateGraphemes(value, max).trimEnd())
+    .pipe(z.string().min(1));
+}
+
 export const analyzeResponseSchema = z.object({
   category: categorizeResponseSchema,
-  summaryTitle: z.string().trim().min(1).max(40),
-  summary: z.string().trim().min(1).max(300).nullish(),
+  summaryTitle: truncatedText(40),
+  summary: truncatedText(300).nullish(),
   tags: z
     .array(z.string().trim().min(1).max(20))
     .min(2)
