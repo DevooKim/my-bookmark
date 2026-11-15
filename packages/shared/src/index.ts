@@ -134,6 +134,33 @@ export const bookmarkSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+export const placeGroupBookmarkSchema = z.discriminatedUnion("kind", [
+  z.object({
+    id: uuidSchema,
+    kind: z.literal("link"),
+    title: z.string(),
+    url: z.url(),
+    thumbnailUrl: z.null(),
+  }),
+  z.object({
+    id: uuidSchema,
+    kind: z.literal("image"),
+    title: z.string(),
+    url: z.null(),
+    thumbnailUrl: z.url().nullable(),
+  }),
+]);
+
+// 지도 화면용: 좌표가 있는 장소를 하나 이상 가진 북마크와 그 장소들.
+export const placeGroupSchema = z.object({
+  bookmark: placeGroupBookmarkSchema,
+  places: z.array(bookmarkPlaceSchema).min(1),
+});
+
+export const placeGroupsResponseSchema = z.object({
+  items: z.array(placeGroupSchema),
+});
+
 export const reminderStatusSchema = z.enum(["pending", "sent", "cancelled"]);
 export const reminderRecurrenceSchema = z.enum([
   "none",
@@ -388,6 +415,8 @@ export const reminderResponseSchema = z.object({
 });
 
 export type BookmarkPlace = z.infer<typeof bookmarkPlaceSchema>;
+export type PlaceGroup = z.infer<typeof placeGroupSchema>;
+export type PlaceGroupsResponse = z.infer<typeof placeGroupsResponseSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type CategoryWithCount = z.infer<typeof categoryWithCountSchema>;
 export type Bookmark = z.infer<typeof bookmarkSchema>;

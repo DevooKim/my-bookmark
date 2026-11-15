@@ -10,6 +10,10 @@ import {
 } from "../services/categorize";
 import type { PlaceGeocoder } from "../services/place-geocoder";
 
+interface PlaceRow extends Record<string, unknown> {
+  geocode_status: string;
+}
+
 class FakeDb {
   categories = [{ id: "cat-dev", name: "개발" }];
   bookmark = {
@@ -28,7 +32,7 @@ class FakeDb {
     ai_model: null as string | null,
   };
   bookmarkUpdates: Record<string, unknown>[] = [];
-  places: Record<string, unknown>[] = [];
+  places: PlaceRow[] = [];
   placeInsertError: { message: string } | null = null;
 
   from(table: string) {
@@ -49,7 +53,13 @@ class FakeDb {
               error: this.placeInsertError,
             });
           }
-          this.places.push(...rows);
+          this.places.push(
+            ...rows.map((row) => ({
+              ...row,
+              // biome-ignore lint/complexity/useLiteralKeys: index access is required by noPropertyAccessFromIndexSignature.
+              geocode_status: String(row["geocode_status"]),
+            })),
+          );
           return Promise.resolve({ data: null, error: null });
         },
         select: () => ({

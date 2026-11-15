@@ -12,6 +12,16 @@ describe("app auth routing order", () => {
     expect(response.body.error.message).not.toBe("Missing bearer token");
   });
 
+  it("mounts /api/places as a bearer-only route", async () => {
+    const app = createApp();
+    const apiKeyResponse = await request(app)
+      .get("/api/places")
+      .set("X-API-Key", "bm_test");
+    expect(apiKeyResponse.status).toBe(401);
+    expect(apiKeyResponse.body.error.message).toBe("Missing bearer token");
+    expect((await request(app).get("/api/places")).status).toBe(401);
+  });
+
   it("keeps API-key-disallowed routes at 401 even after many X-API-Key requests", async () => {
     const app = createApp();
     let response: request.Response | undefined;

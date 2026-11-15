@@ -17,6 +17,7 @@ import { imagesRouter } from "./routes/images";
 import { keysRouter } from "./routes/keys";
 import { mcpRouter } from "./routes/mcp";
 import { meRouter } from "./routes/me";
+import { placesRouter } from "./routes/places";
 import { pushRouter } from "./routes/push";
 import { remindersRouter } from "./routes/reminders";
 import { shareRouter } from "./routes/share";
@@ -111,6 +112,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api", categoriesRouter);
   app.use("/api", bookmarksRouter);
   app.use("/api", imagesRouter);
+  app.use("/api", placesRouter);
   app.use("/api", shareRouter);
   app.use("/api", remindersRouter);
   app.use("/api", pushRouter);
