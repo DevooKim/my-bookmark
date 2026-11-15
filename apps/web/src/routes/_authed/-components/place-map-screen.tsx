@@ -1,11 +1,12 @@
 import type { BookmarkPlace, PlaceGroup } from "@my-bookmark/shared";
-import { Eye, EyeOff, MapPin, Search, X } from "lucide-react";
+import { Eye, EyeOff, MapPin, Minus, Plus, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   groupColor,
   type MapAdapter,
   type MapAdapterFactory,
   type MapMarkerView,
+  type MapZoomState,
 } from "../../../lib/map-adapter";
 import { computeFitPoints, computeMapMarkers } from "../../../lib/map-view";
 import { loadHiddenIds, saveHiddenIds } from "../../../lib/map-visibility";
@@ -48,6 +49,10 @@ export function PlaceMapScreen({
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [adapter, setAdapter] = useState<MapAdapter | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [zoomState, setZoomState] = useState<MapZoomState>({
+    canZoomIn: true,
+    canZoomOut: true,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 그룹 색은 검색 전후로 바뀌지 않도록 전체 목록 기준 순서로 고정한다.
@@ -163,6 +168,8 @@ export function PlaceMapScreen({
     };
   }, [createAdapter]);
 
+  useEffect(() => adapter?.subscribeZoom(setZoomState), [adapter]);
+
   const markers = useMemo<MapMarkerView[]>(
     () =>
       computeMapMarkers({
@@ -219,6 +226,29 @@ export function PlaceMapScreen({
           // 부모를 채우는 일은 바깥 absolute 래퍼가 맡고 컨테이너는 크기만 채운다.
           <div className="absolute inset-0">
             <div className="h-full w-full" ref={containerRef} />
+          </div>
+        ) : null}
+        {adapter && !mapError ? (
+          // 우하단 네이버 로고·저작권과 겹치지 않도록 위로 띄운다.
+          <div className="map-zoom-group">
+            <button
+              aria-label="확대"
+              className="map-zoom-button"
+              disabled={!zoomState.canZoomIn}
+              onClick={() => adapter.zoomIn()}
+              type="button"
+            >
+              <Plus aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <button
+              aria-label="축소"
+              className="map-zoom-button"
+              disabled={!zoomState.canZoomOut}
+              onClick={() => adapter.zoomOut()}
+              type="button"
+            >
+              <Minus aria-hidden="true" className="h-5 w-5" />
+            </button>
           </div>
         ) : null}
         {!createAdapter || mapError ? (

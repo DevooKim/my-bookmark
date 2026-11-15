@@ -85,8 +85,10 @@ export function createNaverMapAdapterFactory(
     const map = new naver.maps.Map(container, {
       center: new naver.maps.LatLng(37.5665, 126.978),
       zoom: 11,
-      zoomControl: true,
-      zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
+      // 줌은 앱 자체 버튼으로 대체한다. 로고·저작권(logoControl, mapDataControl)은
+      // 약관상 기본값(표시)을 유지한다.
+      zoomControl: false,
+      scaleControl: false,
     });
     const markers = new Map<string, naver.maps.Marker>();
     const signatures = new Map<string, string>();
@@ -170,6 +172,28 @@ export function createNaverMapAdapterFactory(
       },
       panTo(point) {
         map.panTo(new naver.maps.LatLng(point.lat, point.lng));
+      },
+      zoomIn() {
+        map.setZoom(Math.min(map.getZoom() + 1, map.getMaxZoom()), true);
+      },
+      zoomOut() {
+        map.setZoom(Math.max(map.getZoom() - 1, map.getMinZoom()), true);
+      },
+      subscribeZoom(listener) {
+        const emit = () => {
+          const zoom = map.getZoom();
+          listener({
+            canZoomIn: zoom < map.getMaxZoom(),
+            canZoomOut: zoom > map.getMinZoom(),
+          });
+        };
+        const zoomListener = naver.maps.Event.addListener(
+          map,
+          "zoom_changed",
+          emit,
+        );
+        emit();
+        return () => naver.maps.Event.removeListener(zoomListener);
       },
       destroy() {
         naver.maps.Event.removeListener(listeners);

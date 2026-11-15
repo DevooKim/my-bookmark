@@ -25,10 +25,20 @@ export interface MapAdapterHandlers {
   onAuthFailure(): void;
 }
 
+export interface MapZoomState {
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+}
+
 export interface MapAdapter {
   setMarkers(markers: readonly MapMarkerView[]): void;
   fitTo(points: readonly MapPoint[]): void;
   panTo(point: MapPoint): void;
+  // 현재 줌에서 ±1(애니메이션). 최소·최대 줌을 넘지 않는다.
+  zoomIn(): void;
+  zoomOut(): void;
+  // 즉시 현재 상태로 한 번 호출하고 이후 줌이 바뀔 때마다 호출한다. 반환값은 구독 해제.
+  subscribeZoom(listener: (state: MapZoomState) => void): () => void;
   destroy(): void;
 }
 

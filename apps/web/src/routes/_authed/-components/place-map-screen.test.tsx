@@ -18,6 +18,7 @@ import {
   type MapAdapterHandlers,
   type MapMarkerView,
   type MapPoint,
+  type MapZoomState,
 } from "../../../lib/map-adapter";
 import { PlaceMapScreen, type PlaceMapScreenProps } from "./place-map-screen";
 
@@ -68,10 +69,19 @@ const groups = [cafes, ramen, walk];
 
 function createFakeMap() {
   let handlers: MapAdapterHandlers | null = null;
+  let zoomListener: ((state: MapZoomState) => void) | null = null;
+  const unsubscribeZoom = vi.fn();
   const adapter = {
     setMarkers: vi.fn<(markers: readonly MapMarkerView[]) => void>(),
     fitTo: vi.fn<(points: readonly MapPoint[]) => void>(),
     panTo: vi.fn<(point: MapPoint) => void>(),
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    subscribeZoom: vi.fn((listener: (state: MapZoomState) => void) => {
+      zoomListener = listener;
+      listener({ canZoomIn: true, canZoomOut: true });
+      return unsubscribeZoom;
+    }),
     destroy: vi.fn(),
   } satisfies MapAdapter;
   const factory: MapAdapterFactory = vi.fn(async (_container, next) => {
@@ -81,6 +91,8 @@ function createFakeMap() {
   return {
     adapter,
     factory,
+    unsubscribeZoom,
+    emitZoom: (state: MapZoomState) => zoomListener?.(state),
     handlers: () => {
       if (!handlers) {
         throw new Error("adapter not created");
@@ -293,6 +305,7 @@ describe("PlaceMapScreen", () => {
       ),
     );
     expect(screen.getByRole("list", { name: "게시물 그룹" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "확대" })).toBeNull();
 
     cleanup();
     const { map } = renderScreen();
@@ -301,6 +314,44 @@ describe("PlaceMapScreen", () => {
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toContain("인증에 실패"),
     );
+    expect(screen.queryByRole("button", { name: "확대" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "축소" })).toBeNull();
+  });
+
+  describe("zoom buttons", () => {
+    it("calls the adapter zoom API", async () => {
+      const { map } = renderScreen();
+      fireEvent.click(await screen.findByRole("button", { name: "확대" }));
+      expect(map.adapter.zoomIn).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: "축소" }));
+      expect(map.adapter.zoomOut).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables a button at the zoom limit and re-enables it when the zoom changes", async () => {
+      const { map } = renderScreen();
+      const zoomIn = await screen.findByRole("button", { name: "확대" });
+      const zoomOut = screen.getByRole("button", { name: "축소" });
+      expect((zoomIn as HTMLButtonElement).disabled).toBe(false);
+
+      act(() => map.emitZoom({ canZoomIn: false, canZoomOut: true }));
+      expect((zoomIn as HTMLButtonElement).disabled).toBe(true);
+      expect((zoomOut as HTMLButtonElement).disabled).toBe(false);
+
+      act(() => map.emitZoom({ canZoomIn: true, canZoomOut: false }));
+      expect((zoomIn as HTMLButtonElement).disabled).toBe(false);
+      expect((zoomOut as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("is hidden without a map key and unsubscribes on unmount", async () => {
+      renderScreen({ createAdapter: null });
+      expect(screen.queryByRole("button", { name: "확대" })).toBeNull();
+      cleanup();
+
+      const { map, unmount } = renderScreen();
+      await screen.findByRole("button", { name: "확대" });
+      unmount();
+      expect(map.unsubscribeZoom).toHaveBeenCalled();
+    });
   });
 
   it("shows empty, loading, and error states", () => {
