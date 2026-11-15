@@ -226,7 +226,7 @@ X-NCP-APIGW-API-KEY: {NAVER_SEARCH_CLIENT_SECRET}
   - 필터 로직은 순수 함수(`lib/place-search.ts`)로 분리하고 단위 테스트한다: 게시글 일치, 장소 일치, 지역 일치, 다중 단어 AND, 무결과.
 - `/map?bookmark=<id>`로 진입하면 그 게시물 그룹을 선택한 상태로 연다. 검색 파라미터는 zod로 검증한다. 카드·상세의 장소 목록에 좌표가 있는 장소가 하나라도 있으면 "지도에서 보기" 링크를 둔다.
 - **네이버지도 열기 규칙** (`lib/naver-map-link.ts`, 순수 함수 + 테스트):
-  - 모바일(iOS/Android UA) + 좌표 있음: `nmap://place?lat={lat}&lng={lng}&name={encodeURIComponent(name)}&appname={location.host}`로 이동을 시도하고, 1.5초 뒤에도 문서가 보이는 상태(`document.visibilityState === 'visible'`)면 `mapUrl`(웹 검색 링크)을 연다.
+  - 모바일(iOS/Android UA) + 좌표 있음: (2026-11-16 이후 `nmap://search?query=…`로 대체됨, docs/07-ui.md 참조) `nmap://place?lat={lat}&lng={lng}&name={encodeURIComponent(name)}&appname={location.host}`로 이동을 시도하고, 1.5초 뒤에도 문서가 보이는 상태(`document.visibilityState === 'visible'`)면 `mapUrl`(웹 검색 링크)을 연다.
   - 그 외: `mapUrl`을 새 탭으로 연다.
 - 빈 상태: 좌표가 있는 장소가 없으면 "지도에 표시할 장소가 없습니다" 안내.
 - 서비스 워커: `/api/places`는 기존 API 캐시 정책을 따른다. 지도 SDK·타일 요청(네이버 도메인)은 서비스 워커가 가로채지 않는지 확인한다.
