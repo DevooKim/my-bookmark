@@ -5,7 +5,7 @@ import {
 } from "@my-bookmark/shared";
 import { type RequestHandler, Router } from "express";
 import { z } from "zod";
-import { type BookmarkPlaceDbRow, mapBookmarkPlace } from "../lib/db-mappers";
+import { mapBookmarkPlace } from "../lib/db-mappers";
 import { supabaseAdmin } from "../lib/supabase";
 import { domainFromUrl } from "../lib/url";
 import { getUserId, requireAuth } from "../middleware/auth";
@@ -28,9 +28,24 @@ const embeddedBookmarkSchema = z.object({
   created_at: z.string(),
 });
 
-export type PlaceGroupRow = BookmarkPlaceDbRow & {
-  bookmarks: z.infer<typeof embeddedBookmarkSchema>;
-};
+const placeGroupRowSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  bookmark_id: z.string(),
+  position: z.number().int(),
+  name: z.string(),
+  locality: z.string().nullable(),
+  country_code: z.string().nullable(),
+  geocode_status: z.enum(["pending", "resolved", "not_found", "skipped"]),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  address: z.string().nullable(),
+  road_address: z.string().nullable(),
+  created_at: z.string(),
+  bookmarks: embeddedBookmarkSchema,
+});
+
+export type PlaceGroupRow = z.infer<typeof placeGroupRowSchema>;
 
 export interface PlacesDeps {
   // 사용자의 resolved 장소를 북마크 정보와 함께 position 오름차순으로 돌려준다.
@@ -152,16 +167,7 @@ export function createSupabasePlacesDeps(): PlacesDeps {
         if (error) {
           throw error;
         }
-        const page = (data ?? []).map((row) => {
-          const { bookmarks, ...place } =
-            row as unknown as BookmarkPlaceDbRow & {
-              bookmarks: unknown;
-            };
-          return {
-            ...place,
-            bookmarks: embeddedBookmarkSchema.parse(bookmarks),
-          };
-        });
+        const page = placeGroupRowSchema.array().parse(data ?? []);
         rows.push(...page);
         if (page.length < PLACE_PAGE_SIZE) {
           return rows;
