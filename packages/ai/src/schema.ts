@@ -167,7 +167,17 @@ export function systemPrompt(): string {
     "16. YouTube, Instagram, Threads, X, TikTok, GitHub의 handle, 게시물 URL·ID, GitHub owner/repository가 이미지에 직접 보일 때만 source를 반환한다.",
     "17. 표시명이나 로고만으로 계정을 추측하지 않는다. 직접 확인할 수 없으면 source는 null이다.",
     "18. source.postUrl은 게시물 URL이나 ID가 직접 보일 때만 넣고, GitHub 저장소는 source.repository에 owner/repository로 넣는다.",
+    // preset 경유 호출은 response_format이 업스트림에 전달되지 않을 수 있다
+    // (실측 2026-11-15). 스키마를 프롬프트에도 실어 강제 여부와 무관하게 같은 형태를 받는다.
+    "19. 응답은 아래 JSON Schema를 정확히 따르는 JSON 객체 하나만 출력한다. 모든 필드를 포함하고, 코드펜스(```)나 설명 문장을 붙이지 않는다.",
+    JSON.stringify(jsonSchema),
   ].join("\n");
+}
+
+// 모델이 JSON을 ```json 코드펜스로 감싸 반환하는 경우 본문만 꺼낸다.
+export function unwrapJsonContent(content: string): string {
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/i.exec(content.trim());
+  return fenced?.[1] ?? content;
 }
 
 export function userPrompt(input: CategorizeInput): string {
