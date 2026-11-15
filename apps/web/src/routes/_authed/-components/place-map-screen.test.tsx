@@ -21,7 +21,11 @@ import {
 } from "../../../lib/map-adapter";
 import { PlaceMapScreen, type PlaceMapScreenProps } from "./place-map-screen";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+});
 
 function place(id: string, name: string, locality: string, lat: number) {
   return {
@@ -127,7 +131,9 @@ describe("PlaceMapScreen", () => {
       { lat: 37.58, lng: 127 },
     ]);
     const list = screen.getByRole("list", { name: "게시물 그룹" });
-    expect(within(list).getAllByRole("button")).toHaveLength(3);
+    expect(
+      within(list).getAllByRole("button", { name: /카페|라멘|산책/ }),
+    ).toHaveLength(3);
     expect(screen.getByText("장소 2곳")).toBeTruthy();
   });
 
@@ -218,7 +224,7 @@ describe("PlaceMapScreen", () => {
     ).toEqual(cafes.places.map((item) => [item.id, GROUP_COLORS[0]]));
     expect(
       within(screen.getByRole("list", { name: "게시물 그룹" })).getAllByRole(
-        "button",
+        "listitem",
       ),
     ).toHaveLength(1);
   });
@@ -333,6 +339,233 @@ describe("PlaceMapScreen", () => {
     const field = input.closest("label");
     expect(field?.classList.contains("search-field")).toBe(true);
     expect(field?.querySelector("svg")).not.toBeNull();
+  });
+
+  describe("hover highlight", () => {
+    const ramenRow = () =>
+      screen
+        .getByRole("button", { name: /대전 라멘 지도/ })
+        .closest("li") as HTMLElement;
+
+    it("highlights the hovered post like a selection without moving the map, then restores", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.fitTo).toHaveBeenCalledTimes(1));
+
+      fireEvent.pointerEnter(ramenRow(), { pointerType: "mouse" });
+      await waitFor(() =>
+        expect(map.lastMarkers().map((marker) => marker.state)).toEqual([
+          "dim",
+          "dim",
+          "active",
+          "dim",
+        ]),
+      );
+      expect(map.adapter.fitTo).toHaveBeenCalledTimes(1);
+
+      fireEvent.pointerLeave(ramenRow());
+      await waitFor(() =>
+        expect(
+          map.lastMarkers().every((marker) => marker.state === "normal"),
+        ).toBe(true),
+      );
+      expect(map.adapter.fitTo).toHaveBeenCalledTimes(1);
+    });
+
+    it("applies the same highlight on keyboard focus and blur", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+      fireEvent.focus(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+      await waitFor(() =>
+        expect(
+          map.lastMarkers().filter((m) => m.state === "active"),
+        ).toHaveLength(1),
+      );
+
+      fireEvent.blur(screen.getByRole("button", { name: /대전 라멘 지도/ }), {
+        relatedTarget: document.body,
+      });
+      await waitFor(() =>
+        expect(
+          map.lastMarkers().every((marker) => marker.state === "normal"),
+        ).toBe(true),
+      );
+    });
+
+    it("ignores touch pointers", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+      fireEvent.pointerEnter(ramenRow(), { pointerType: "touch" });
+
+      expect(
+        map.lastMarkers().every((marker) => marker.state === "normal"),
+      ).toBe(true);
+    });
+
+    it("emphasizes just the hovered place marker inside a selected post", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+      fireEvent.click(
+        screen.getByRole("button", { name: /서촌 카페 6곳 추천/ }),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("list", { name: "장소" })).toBeTruthy(),
+      );
+
+      const row = within(
+        screen.getByRole("list", { name: "장소" }),
+      ).getAllByRole("listitem")[1];
+      fireEvent.pointerEnter(row as HTMLElement, { pointerType: "mouse" });
+      await waitFor(() =>
+        expect(
+          map
+            .lastMarkers()
+            .filter((marker) => marker.emphasized)
+            .map((m) => m.id),
+        ).toEqual([cafes.places[1]?.id]),
+      );
+
+      fireEvent.pointerLeave(row as HTMLElement);
+      await waitFor(() =>
+        expect(map.lastMarkers().some((marker) => marker.emphasized)).toBe(
+          false,
+        ),
+      );
+      expect(
+        map.lastMarkers().filter((marker) => marker.state === "active"),
+      ).toHaveLength(2);
+    });
+  });
+
+  describe("map visibility toggle", () => {
+    const toggleOf = (title: RegExp) =>
+      within(
+        screen
+          .getByRole("button", { name: title })
+          .closest("li") as HTMLElement,
+      ).getByRole("button", { name: /지도에서 숨기기|지도에 표시/ });
+
+    it("removes a hidden post's markers and fit points, keeps it in the list dimmed, and persists it", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.fitTo).toHaveBeenCalledTimes(1));
+
+      const toggle = toggleOf(/서촌 카페 6곳 추천/);
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+      fireEvent.click(toggle);
+
+      await waitFor(() =>
+        expect(map.lastMarkers().map((marker) => marker.groupId)).toEqual([
+          ramen.bookmark.id,
+          walk.bookmark.id,
+        ]),
+      );
+      expect(map.adapter.fitTo).toHaveBeenLastCalledWith([
+        { lat: 36.35, lng: 127 },
+        { lat: 37.58, lng: 127 },
+      ]);
+      // 그룹 색은 전체 목록 기준이라 그대로다.
+      expect(map.lastMarkers().map((marker) => marker.color)).toEqual([
+        GROUP_COLORS[1],
+        GROUP_COLORS[2],
+      ]);
+      const hiddenToggle = toggleOf(/서촌 카페 6곳 추천/);
+      expect(hiddenToggle.getAttribute("aria-label")).toBe("지도에 표시");
+      expect(hiddenToggle.getAttribute("aria-pressed")).toBe("true");
+      expect(
+        screen.getByRole("button", { name: /서촌 카페 6곳 추천/ }).className,
+      ).toContain("opacity-50");
+      expect(
+        JSON.parse(
+          window.localStorage.getItem("my-bookmark:map-hidden-groups") ?? "[]",
+        ),
+      ).toEqual([cafes.bookmark.id]);
+    });
+
+    it("restores everything with the 'show all hidden' button", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+      expect(screen.queryByRole("button", { name: /모두 표시/ })).toBeNull();
+
+      fireEvent.click(toggleOf(/서촌 카페 6곳 추천/));
+      fireEvent.click(toggleOf(/대전 라멘 지도/));
+      const showAll = await screen.findByRole("button", {
+        name: "숨긴 2개 모두 표시",
+      });
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(1));
+
+      fireEvent.click(showAll);
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+      expect(screen.queryByRole("button", { name: /모두 표시/ })).toBeNull();
+      expect(
+        window.localStorage.getItem("my-bookmark:map-hidden-groups"),
+      ).toBeNull();
+    });
+
+    it("shows a hidden post again when it is selected", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+      fireEvent.click(toggleOf(/대전 라멘 지도/));
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+
+      fireEvent.click(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+
+      await waitFor(() =>
+        expect(
+          map.lastMarkers().filter((marker) => marker.state === "active"),
+        ).toHaveLength(1),
+      );
+      expect(
+        window.localStorage.getItem("my-bookmark:map-hidden-groups"),
+      ).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "선택 해제" }));
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+    });
+
+    it("reads the hidden set from localStorage on open", async () => {
+      window.localStorage.setItem(
+        "my-bookmark:map-hidden-groups",
+        JSON.stringify([walk.bookmark.id]),
+      );
+      const { map } = renderScreen();
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+      expect(
+        screen.getByRole("button", { name: "숨긴 1개 모두 표시" }),
+      ).toBeTruthy();
+    });
+
+    it("counts hidden posts among the search results only", async () => {
+      window.localStorage.setItem(
+        "my-bookmark:map-hidden-groups",
+        JSON.stringify([walk.bookmark.id, ramen.bookmark.id]),
+      );
+      renderScreen({ query: "서촌" });
+
+      // "서촌"은 카페 게시물과 산책 게시물(통인시장 · 서촌)에 걸리고, 산책만 숨김이다.
+      expect(
+        await screen.findByRole("button", { name: "숨긴 1개 모두 표시" }),
+      ).toBeTruthy();
+    });
+
+    it("keeps working when localStorage is blocked", async () => {
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError");
+      });
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError");
+      });
+      vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError");
+      });
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+
+      fireEvent.click(toggleOf(/서촌 카페 6곳 추천/));
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(2));
+    });
   });
 
   it("destroys the map on unmount", async () => {

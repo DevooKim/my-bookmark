@@ -9,6 +9,8 @@ export interface MapMarkerView {
   color: string;
   label: string;
   state: MarkerState;
+  // 장소 행 호버처럼 한 마커만 더 크게·앞으로 보여 줄 때
+  emphasized: boolean;
 }
 
 export interface MapPoint {

@@ -59,13 +59,16 @@ function markerContent(view: MapMarkerView): HTMLElement {
     `border:${active ? 3 : 2}px solid #fff`,
     `box-shadow:0 1px 4px rgb(0 0 0/${active ? 0.55 : 0.35})`,
     `opacity:${view.state === "dim" ? 0.35 : 1}`,
-    `transform:scale(${active ? 1.25 : 1})`,
+    `transform:scale(${view.emphasized ? 1.6 : active ? 1.25 : 1})`,
     "cursor:pointer",
   ].join(";");
   return element;
 }
 
 function zIndexFor(view: MapMarkerView): number {
+  if (view.emphasized) {
+    return 2000;
+  }
   if (view.state === "active") {
     return 1000;
   }
@@ -104,7 +107,7 @@ export function createNaverMapAdapterFactory(
           }
         }
         for (const view of views) {
-          const signature = `${view.color}|${view.label}|${view.state}|${view.lat}|${view.lng}`;
+          const signature = `${view.color}|${view.label}|${view.state}|${view.emphasized}|${view.lat}|${view.lng}`;
           const icon = {
             content: markerContent(view),
             anchor: new naver.maps.Point(MARKER_SIZE / 2, MARKER_SIZE / 2),

@@ -1,12 +1,14 @@
 import type { BookmarkPlace, PlaceGroup } from "@my-bookmark/shared";
-import { MapPin, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Eye, EyeOff, MapPin, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   groupColor,
   type MapAdapter,
   type MapAdapterFactory,
   type MapMarkerView,
 } from "../../../lib/map-adapter";
+import { computeFitPoints, computeMapMarkers } from "../../../lib/map-view";
+import { loadHiddenIds, saveHiddenIds } from "../../../lib/map-visibility";
 import { filterPlaceGroups } from "../../../lib/place-search";
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -38,6 +40,12 @@ export function PlaceMapScreen({
   const [selectedId, setSelectedId] = useState<string | null>(
     initialBookmarkId ?? null,
   );
+  // 지도에서 숨긴 게시물. 저장소는 클라이언트에서만 읽을 수 있어 마운트 후 불러온다.
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+  const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [adapter, setAdapter] = useState<MapAdapter | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,6 +62,27 @@ export function PlaceMapScreen({
   const selected =
     results.find((result) => result.group.bookmark.id === selectedId) ?? null;
 
+  useEffect(() => {
+    setHiddenIds(loadHiddenIds());
+  }, []);
+
+  const updateHiddenIds = useCallback(
+    (update: (next: Set<string>) => void) => {
+      const next = new Set(hiddenIds);
+      update(next);
+      setHiddenIds(next);
+      saveHiddenIds(next);
+    },
+    [hiddenIds],
+  );
+
+  // 선택이 바뀌면 이전 화면의 호버 상태는 의미가 없다(행이 언마운트되어 leave가 오지 않는다).
+  const selectGroup = useCallback((id: string | null) => {
+    setSelectedId(id);
+    setHoveredGroupId(null);
+    setHoveredPlaceId(null);
+  }, []);
+
   // 입력은 200ms 디바운스해 URL 검색 파라미터에 반영한다.
   useEffect(() => {
     if (input === query) {
@@ -69,9 +98,16 @@ export function PlaceMapScreen({
   // 선택된 게시물이 결과에서 빠지면 선택을 해제한다(데이터 로딩 중에는 유지).
   useEffect(() => {
     if (selectedId && !isLoading && !selected) {
-      setSelectedId(null);
+      selectGroup(null);
     }
-  }, [selectedId, isLoading, selected]);
+  }, [selectedId, isLoading, selected, selectGroup]);
+
+  // 숨긴 게시물을 선택하면 자동으로 다시 표시한다(마커 계산은 이미 선택을 우선한다).
+  useEffect(() => {
+    if (selectedId && hiddenIds.has(selectedId)) {
+      updateHiddenIds((next) => next.delete(selectedId));
+    }
+  }, [selectedId, hiddenIds, updateHiddenIds]);
 
   const handlersRef = useRef({
     selectGroupOfPlace: (_placeId: string) => {},
@@ -84,10 +120,10 @@ export function PlaceMapScreen({
         group.places.some((place) => place.id === placeId),
       );
       if (owner) {
-        setSelectedId(owner.bookmark.id);
+        selectGroup(owner.bookmark.id);
       }
     },
-    clearSelection: () => setSelectedId(null),
+    clearSelection: () => selectGroup(null),
     failAuth: () =>
       setMapError(
         "네이버 지도 인증에 실패했어요. 인증 키와 서비스 URL 등록을 확인해 주세요.",
@@ -129,43 +165,33 @@ export function PlaceMapScreen({
 
   const markers = useMemo<MapMarkerView[]>(
     () =>
-      results.flatMap(({ group, places }) =>
-        places.map((place) => ({
-          id: place.id,
-          groupId: group.bookmark.id,
-          // API는 좌표가 있는 장소만 내려 주므로 null이면 건너뛴다.
-          lat: place.lat ?? Number.NaN,
-          lng: place.lng ?? Number.NaN,
-          color: groupColor(colorIndex.get(group.bookmark.id) ?? 0),
-          label: String(
-            group.places.findIndex((candidate) => candidate.id === place.id) +
-              1,
-          ),
-          state: !selectedId
-            ? ("normal" as const)
-            : selectedId === group.bookmark.id
-              ? ("active" as const)
-              : ("dim" as const),
-        })),
-      ),
-    [results, colorIndex, selectedId],
+      computeMapMarkers({
+        results,
+        colorIndex,
+        selectedId,
+        hoveredGroupId,
+        hoveredPlaceId,
+        hiddenIds,
+      }),
+    [
+      results,
+      colorIndex,
+      selectedId,
+      hoveredGroupId,
+      hoveredPlaceId,
+      hiddenIds,
+    ],
   );
 
   useEffect(() => {
-    adapter?.setMarkers(markers.filter((marker) => !Number.isNaN(marker.lat)));
+    adapter?.setMarkers(markers);
   }, [adapter, markers]);
 
-  // 선택이 있으면 그 그룹, 없으면 현재 결과 전체가 보이도록 맞춘다.
+  // 선택이 있으면 그 그룹, 없으면 숨기지 않은 현재 결과 전체가 보이도록 맞춘다.
+  // 호버는 좌표 계산에 들어가지 않으므로 지도가 움직이지 않는다.
   const fitPoints = useMemo(
-    () =>
-      (selected ? [selected] : results).flatMap(({ places }) =>
-        places.flatMap((place) =>
-          place.lat !== null && place.lng !== null
-            ? [{ lat: place.lat, lng: place.lng }]
-            : [],
-        ),
-      ),
-    [selected, results],
+    () => computeFitPoints({ results, selectedId, hiddenIds }),
+    [results, selectedId, hiddenIds],
   );
   const fitKey = fitPoints
     .map((point) => `${point.lat},${point.lng}`)
@@ -178,6 +204,9 @@ export function PlaceMapScreen({
   }, [adapter, fitKey]);
 
   const searching = query.trim().length > 0;
+  const hiddenInResults = results
+    .map(({ group }) => group.bookmark.id)
+    .filter((id) => hiddenIds.has(id));
 
   return (
     <div className="flex flex-col gap-3 sm:h-[calc(100dvh-8.5rem)] sm:flex-row">
@@ -237,8 +266,9 @@ export function PlaceMapScreen({
         ) : selected ? (
           <SelectedGroup
             color={groupColor(colorIndex.get(selected.group.bookmark.id) ?? 0)}
-            onClose={() => setSelectedId(null)}
+            onClose={() => selectGroup(null)}
             onOpenNaverMap={onOpenNaverMap}
+            onPlaceHover={setHoveredPlaceId}
             onPlaceFocus={(place) => {
               if (place.lat !== null && place.lng !== null) {
                 adapter?.panTo({ lat: place.lat, lng: place.lng });
@@ -247,46 +277,103 @@ export function PlaceMapScreen({
             result={selected}
           />
         ) : (
-          <ul aria-label="게시물 그룹" className="flex flex-col gap-1">
-            {results.map(({ group, places, titleMatched }) => (
-              <li key={group.bookmark.id}>
-                <button
-                  className="flex w-full min-w-0 items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  onClick={() => setSelectedId(group.bookmark.id)}
-                  type="button"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                    style={{
-                      background: groupColor(
-                        colorIndex.get(group.bookmark.id) ?? 0,
-                      ),
+          <>
+            {hiddenInResults.length > 0 ? (
+              <button
+                className="btn-secondary self-start px-3 text-xs"
+                onClick={() =>
+                  updateHiddenIds((next) => {
+                    for (const id of hiddenInResults) {
+                      next.delete(id);
+                    }
+                  })
+                }
+                type="button"
+              >
+                숨긴 {hiddenInResults.length}개 모두 표시
+              </button>
+            ) : null}
+            <ul aria-label="게시물 그룹" className="flex flex-col gap-1">
+              {results.map(({ group, places, titleMatched }) => {
+                const id = group.bookmark.id;
+                const isGroupHidden = hiddenIds.has(id);
+                return (
+                  <li
+                    className="flex items-start gap-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    key={id}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget)) {
+                        setHoveredGroupId(null);
+                      }
                     }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {group.bookmark.title}
-                    </span>
-                    <span className="block text-xs text-zinc-500">
-                      장소 {group.places.length}곳
-                    </span>
-                    {searching && !titleMatched ? (
-                      <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-300">
-                        {places
-                          .map((place) =>
-                            [place.name, place.locality]
-                              .filter(Boolean)
-                              .join(" · "),
-                          )
-                          .join(", ")}
+                    onFocus={() => setHoveredGroupId(id)}
+                    onPointerEnter={(event) => {
+                      if (event.pointerType !== "touch") {
+                        setHoveredGroupId(id);
+                      }
+                    }}
+                    onPointerLeave={() => setHoveredGroupId(null)}
+                  >
+                    <button
+                      className={`flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2 py-2 text-left ${
+                        isGroupHidden ? "opacity-50" : ""
+                      }`}
+                      onClick={() => selectGroup(id)}
+                      type="button"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                        style={{
+                          background: groupColor(colorIndex.get(id) ?? 0),
+                        }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {group.bookmark.title}
+                        </span>
+                        <span className="block text-xs text-zinc-500">
+                          장소 {group.places.length}곳
+                        </span>
+                        {searching && !titleMatched ? (
+                          <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-300">
+                            {places
+                              .map((place) =>
+                                [place.name, place.locality]
+                                  .filter(Boolean)
+                                  .join(" · "),
+                              )
+                              .join(", ")}
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    </button>
+                    <button
+                      aria-label={
+                        isGroupHidden ? "지도에 표시" : "지도에서 숨기기"
+                      }
+                      aria-pressed={isGroupHidden}
+                      className="icon-button mt-1 shrink-0"
+                      onClick={() =>
+                        updateHiddenIds((next) => {
+                          if (!next.delete(id)) {
+                            next.add(id);
+                          }
+                        })
+                      }
+                      type="button"
+                    >
+                      {isGroupHidden ? (
+                        <EyeOff aria-hidden="true" className="h-4 w-4" />
+                      ) : (
+                        <Eye aria-hidden="true" className="h-4 w-4" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </aside>
     </div>
@@ -298,12 +385,14 @@ function SelectedGroup({
   color,
   onClose,
   onPlaceFocus,
+  onPlaceHover,
   onOpenNaverMap,
 }: {
   result: { group: PlaceGroup; places: BookmarkPlace[] };
   color: string;
   onClose(): void;
   onPlaceFocus(place: BookmarkPlace): void;
+  onPlaceHover(placeId: string | null): void;
   onOpenNaverMap(place: BookmarkPlace): void;
 }) {
   const { group, places } = result;
@@ -341,6 +430,18 @@ function SelectedGroup({
           <li
             className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             key={place.id}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                onPlaceHover(null);
+              }
+            }}
+            onFocus={() => onPlaceHover(place.id)}
+            onPointerEnter={(event) => {
+              if (event.pointerType !== "touch") {
+                onPlaceHover(place.id);
+              }
+            }}
+            onPointerLeave={() => onPlaceHover(null)}
           >
             <button
               className="flex min-w-0 flex-1 items-start gap-2 text-left"
