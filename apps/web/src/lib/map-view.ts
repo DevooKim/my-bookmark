@@ -10,20 +10,38 @@ export interface MapViewInput {
   hoveredGroupId: string | null;
   // 선택된 게시물의 장소 행에 올라간 장소.
   hoveredPlaceId: string | null;
+  // 숨긴 게시물. 개별 장소 상태와 무관하게 그 그룹의 핀을 모두 숨긴다(그룹 숨김 우선).
   hiddenIds: ReadonlySet<string>;
+  // 개별로 숨긴 장소. 그룹이 보이는 동안 그 핀만 뺀다.
+  hiddenPlaceIds: ReadonlySet<string>;
 }
 
 // 선택된 게시물은 숨김이어도 보인다(선택하면 자동으로 다시 표시되므로).
-function isHidden(input: MapViewInput, groupId: string): boolean {
+function isGroupHidden(
+  input: Pick<MapViewInput, "hiddenIds" | "selectedId">,
+  groupId: string,
+): boolean {
   return input.hiddenIds.has(groupId) && input.selectedId !== groupId;
+}
+
+function visiblePlaces(
+  input: Pick<MapViewInput, "hiddenIds" | "hiddenPlaceIds" | "selectedId">,
+  result: PlaceSearchResult,
+): PlaceSearchResult["places"] {
+  if (isGroupHidden(input, result.group.bookmark.id)) {
+    return [];
+  }
+  return result.places.filter((place) => !input.hiddenPlaceIds.has(place.id));
 }
 
 export function computeMapMarkers(input: MapViewInput): MapMarkerView[] {
   const { results, colorIndex, selectedId, hoveredGroupId, hoveredPlaceId } =
     input;
-  const visible = results.filter(
-    ({ group }) => !isHidden(input, group.bookmark.id),
-  );
+  // 보이는 핀이 하나도 없는 그룹은 호버 강조 대상이 아니다.
+  const visible = results.flatMap((result) => {
+    const places = visiblePlaces(input, result);
+    return places.length > 0 ? [{ group: result.group, places }] : [];
+  });
   const highlightedId =
     selectedId ??
     (hoveredGroupId &&
@@ -63,12 +81,17 @@ export function computeMapMarkers(input: MapViewInput): MapMarkerView[] {
 
 // 선택이 있으면 그 그룹, 없으면 숨기지 않은 결과 전체가 보이도록 맞출 좌표.
 export function computeFitPoints(
-  input: Pick<MapViewInput, "results" | "selectedId" | "hiddenIds">,
+  input: Pick<
+    MapViewInput,
+    "results" | "selectedId" | "hiddenIds" | "hiddenPlaceIds"
+  >,
 ): MapPoint[] {
-  const { results, selectedId, hiddenIds } = input;
-  const targets = selectedId
-    ? results.filter(({ group }) => group.bookmark.id === selectedId)
-    : results.filter(({ group }) => !hiddenIds.has(group.bookmark.id));
+  const { results, selectedId } = input;
+  const targets = (
+    selectedId
+      ? results.filter(({ group }) => group.bookmark.id === selectedId)
+      : results
+  ).map((result) => ({ places: visiblePlaces(input, result) }));
   return targets.flatMap(({ places }) =>
     places.flatMap((place) =>
       place.lat !== null && place.lng !== null

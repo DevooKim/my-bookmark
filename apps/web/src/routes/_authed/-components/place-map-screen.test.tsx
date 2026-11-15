@@ -619,6 +619,123 @@ describe("PlaceMapScreen", () => {
     });
   });
 
+  describe("individual place visibility", () => {
+    const PLACES_KEY = "my-bookmark:map-hidden-places";
+    const cafeIds = cafes.places.map((item) => item.id);
+    const [firstCafe, secondCafe] = cafeIds as [string, string];
+
+    const selectCafes = () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: /서촌 카페 6곳 추천/ }),
+      );
+    const placeToggles = () =>
+      within(screen.getByRole("list", { name: "장소" })).getAllByRole(
+        "button",
+        {
+          name: /이 장소 지도에서 숨기기|이 장소 지도에 표시/,
+        },
+      );
+    const groupToggle = (title: RegExp) =>
+      within(
+        screen
+          .getByRole("button", { name: title })
+          .closest("li") as HTMLElement,
+      ).getByRole("button", { name: /^지도에서 숨기기$|^지도에 표시$/ });
+
+    it("hides one pin from markers and fit points, dims the row, persists it, and shows the count on the group row", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+      selectCafes();
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+
+      const [toggle] = placeToggles();
+      expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+      fireEvent.click(toggle as HTMLElement);
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+      expect(map.lastMarkers().map((marker) => marker.id)).not.toContain(
+        firstCafe,
+      );
+      expect(map.adapter.fitTo).toHaveBeenLastCalledWith([
+        { lat: 37.57, lng: 127 },
+      ]);
+      const [hiddenToggle] = placeToggles();
+      expect(hiddenToggle?.getAttribute("aria-label")).toBe(
+        "이 장소 지도에 표시",
+      );
+      expect(hiddenToggle?.getAttribute("aria-pressed")).toBe("true");
+      expect(
+        screen.getByRole("button", { name: /^대오서점(?! 네이버)/ }).className,
+      ).toContain("opacity-50");
+      expect(
+        JSON.parse(window.localStorage.getItem(PLACES_KEY) ?? "[]"),
+      ).toEqual([firstCafe]);
+
+      fireEvent.click(screen.getByRole("button", { name: "선택 해제" }));
+      const row = screen
+        .getByRole("button", { name: /서촌 카페 6곳 추천/ })
+        .closest("li") as HTMLElement;
+      expect(row.textContent).toContain("장소 2곳 (1곳 숨김)");
+      expect(
+        screen.getByRole("button", { name: "숨긴 1개 모두 표시" }),
+      ).toBeTruthy();
+    });
+
+    it("shows the pin again when toggled back", async () => {
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+      selectCafes();
+      fireEvent.click(placeToggles()[0] as HTMLElement);
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+
+      fireEvent.click(placeToggles()[0] as HTMLElement);
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+      expect(window.localStorage.getItem(PLACES_KEY)).toBeNull();
+    });
+
+    it("lets a hidden group win and keeps the individual state when the group is shown again", async () => {
+      window.localStorage.setItem(PLACES_KEY, JSON.stringify([secondCafe]));
+      const { map } = renderScreen();
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+
+      fireEvent.click(groupToggle(/서촌 카페 6곳 추천/));
+      await waitFor(() =>
+        expect(map.lastMarkers().map((marker) => marker.groupId)).toEqual([
+          ramen.bookmark.id,
+          walk.bookmark.id,
+        ]),
+      );
+
+      fireEvent.click(groupToggle(/서촌 카페 6곳 추천/));
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(3));
+      expect(map.lastMarkers().map((marker) => marker.id)).not.toContain(
+        secondCafe,
+      );
+    });
+
+    it("clears both group and place hiding with the 'show all hidden' button", async () => {
+      window.localStorage.setItem(PLACES_KEY, JSON.stringify([secondCafe]));
+      window.localStorage.setItem(
+        "my-bookmark:map-hidden-groups",
+        JSON.stringify([walk.bookmark.id]),
+      );
+      const { map } = renderScreen();
+      const showAll = await screen.findByRole("button", {
+        name: "숨긴 2개 모두 표시",
+      });
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(2));
+
+      fireEvent.click(showAll);
+
+      await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+      expect(window.localStorage.getItem(PLACES_KEY)).toBeNull();
+      expect(
+        window.localStorage.getItem("my-bookmark:map-hidden-groups"),
+      ).toBeNull();
+    });
+  });
+
   it("destroys the map on unmount", async () => {
     const { map, unmount } = renderScreen();
     await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());

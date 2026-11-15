@@ -1,7 +1,9 @@
 import { z } from "zod";
 
-// 지도에서 숨긴 게시물(북마크) id 목록. 기기별 편의 설정이라 서버가 아닌 localStorage에만 둔다.
+// 지도에서 숨긴 게시물(북마크)·장소 id 목록. 기기별 편의 설정이라 서버가 아닌 localStorage에만 둔다.
+// 장소는 그룹 숨김과 별도 키(기존 저장값과 하위 호환)에 장소 id 배열로 저장한다.
 export const HIDDEN_GROUPS_STORAGE_KEY = "my-bookmark:map-hidden-groups";
+export const HIDDEN_PLACES_STORAGE_KEY = "my-bookmark:map-hidden-places";
 
 const hiddenIdsSchema = z.array(z.string().min(1).max(64));
 
@@ -23,27 +25,38 @@ export function parseHiddenIds(raw: string | null): Set<string> {
 }
 
 // 저장소가 막혀 있어도(시크릿 모드, 사이트 데이터 차단 등) 예외를 밖으로 내지 않는다.
-export function loadHiddenIds(): Set<string> {
+function load(key: string): Set<string> {
   try {
-    return parseHiddenIds(
-      window.localStorage.getItem(HIDDEN_GROUPS_STORAGE_KEY),
-    );
+    return parseHiddenIds(window.localStorage.getItem(key));
   } catch {
     return new Set();
   }
 }
 
-export function saveHiddenIds(ids: ReadonlySet<string>): void {
+function save(key: string, ids: ReadonlySet<string>): void {
   try {
     if (ids.size === 0) {
-      window.localStorage.removeItem(HIDDEN_GROUPS_STORAGE_KEY);
+      window.localStorage.removeItem(key);
     } else {
-      window.localStorage.setItem(
-        HIDDEN_GROUPS_STORAGE_KEY,
-        serializeHiddenIds(ids),
-      );
+      window.localStorage.setItem(key, serializeHiddenIds(ids));
     }
   } catch {
     // 저장 실패는 이번 세션 동안만 숨김이 유지된다는 뜻일 뿐이다.
   }
+}
+
+export function loadHiddenIds(): Set<string> {
+  return load(HIDDEN_GROUPS_STORAGE_KEY);
+}
+
+export function saveHiddenIds(ids: ReadonlySet<string>): void {
+  save(HIDDEN_GROUPS_STORAGE_KEY, ids);
+}
+
+export function loadHiddenPlaceIds(): Set<string> {
+  return load(HIDDEN_PLACES_STORAGE_KEY);
+}
+
+export function saveHiddenPlaceIds(ids: ReadonlySet<string>): void {
+  save(HIDDEN_PLACES_STORAGE_KEY, ids);
 }

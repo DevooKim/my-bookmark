@@ -9,7 +9,12 @@ import {
   type MapZoomState,
 } from "../../../lib/map-adapter";
 import { computeFitPoints, computeMapMarkers } from "../../../lib/map-view";
-import { loadHiddenIds, saveHiddenIds } from "../../../lib/map-visibility";
+import {
+  loadHiddenIds,
+  loadHiddenPlaceIds,
+  saveHiddenIds,
+  saveHiddenPlaceIds,
+} from "../../../lib/map-visibility";
 import { filterPlaceGroups } from "../../../lib/place-search";
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -45,6 +50,10 @@ export function PlaceMapScreen({
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // 개별로 숨긴 장소. 그룹 숨김과는 별도 상태·저장 키이고, 그룹 숨김이 우선한다.
+  const [hiddenPlaceIds, setHiddenPlaceIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
   const [hoveredPlaceId, setHoveredPlaceId] = useState<string | null>(null);
   const [adapter, setAdapter] = useState<MapAdapter | null>(null);
@@ -69,6 +78,7 @@ export function PlaceMapScreen({
 
   useEffect(() => {
     setHiddenIds(loadHiddenIds());
+    setHiddenPlaceIds(loadHiddenPlaceIds());
   }, []);
 
   const updateHiddenIds = useCallback(
@@ -79,6 +89,16 @@ export function PlaceMapScreen({
       saveHiddenIds(next);
     },
     [hiddenIds],
+  );
+
+  const updateHiddenPlaceIds = useCallback(
+    (update: (next: Set<string>) => void) => {
+      const next = new Set(hiddenPlaceIds);
+      update(next);
+      setHiddenPlaceIds(next);
+      saveHiddenPlaceIds(next);
+    },
+    [hiddenPlaceIds],
   );
 
   // 선택이 바뀌면 이전 화면의 호버 상태는 의미가 없다(행이 언마운트되어 leave가 오지 않는다).
@@ -179,6 +199,7 @@ export function PlaceMapScreen({
         hoveredGroupId,
         hoveredPlaceId,
         hiddenIds,
+        hiddenPlaceIds,
       }),
     [
       results,
@@ -187,6 +208,7 @@ export function PlaceMapScreen({
       hoveredGroupId,
       hoveredPlaceId,
       hiddenIds,
+      hiddenPlaceIds,
     ],
   );
 
@@ -197,8 +219,8 @@ export function PlaceMapScreen({
   // 선택이 있으면 그 그룹, 없으면 숨기지 않은 현재 결과 전체가 보이도록 맞춘다.
   // 호버는 좌표 계산에 들어가지 않으므로 지도가 움직이지 않는다.
   const fitPoints = useMemo(
-    () => computeFitPoints({ results, selectedId, hiddenIds }),
-    [results, selectedId, hiddenIds],
+    () => computeFitPoints({ results, selectedId, hiddenIds, hiddenPlaceIds }),
+    [results, selectedId, hiddenIds, hiddenPlaceIds],
   );
   const fitKey = fitPoints
     .map((point) => `${point.lat},${point.lng}`)
@@ -214,6 +236,12 @@ export function PlaceMapScreen({
   const hiddenInResults = results
     .map(({ group }) => group.bookmark.id)
     .filter((id) => hiddenIds.has(id));
+  // 검색 결과 그룹에 속한 개별 숨김 장소(그룹 숨김과 따로 센다).
+  const hiddenPlacesInResults = results
+    .flatMap(({ group }) => group.places)
+    .filter((place) => hiddenPlaceIds.has(place.id))
+    .map((place) => place.id);
+  const hiddenCount = hiddenInResults.length + hiddenPlacesInResults.length;
 
   return (
     <div className="flex flex-col gap-3 sm:h-[calc(100dvh-8.5rem)] sm:flex-row">
@@ -299,6 +327,14 @@ export function PlaceMapScreen({
             onClose={() => selectGroup(null)}
             onOpenNaverMap={onOpenNaverMap}
             onPlaceHover={setHoveredPlaceId}
+            hiddenPlaceIds={hiddenPlaceIds}
+            onTogglePlaceHidden={(placeId) =>
+              updateHiddenPlaceIds((next) => {
+                if (!next.delete(placeId)) {
+                  next.add(placeId);
+                }
+              })
+            }
             onPlaceFocus={(place) => {
               if (place.lat !== null && place.lng !== null) {
                 adapter?.panTo({ lat: place.lat, lng: place.lng });
@@ -308,25 +344,37 @@ export function PlaceMapScreen({
           />
         ) : (
           <>
-            {hiddenInResults.length > 0 ? (
+            {hiddenCount > 0 ? (
               <button
                 className="btn-secondary self-start px-3 text-xs"
-                onClick={() =>
-                  updateHiddenIds((next) => {
-                    for (const id of hiddenInResults) {
-                      next.delete(id);
-                    }
-                  })
-                }
+                onClick={() => {
+                  if (hiddenInResults.length > 0) {
+                    updateHiddenIds((next) => {
+                      for (const id of hiddenInResults) {
+                        next.delete(id);
+                      }
+                    });
+                  }
+                  if (hiddenPlacesInResults.length > 0) {
+                    updateHiddenPlaceIds((next) => {
+                      for (const id of hiddenPlacesInResults) {
+                        next.delete(id);
+                      }
+                    });
+                  }
+                }}
                 type="button"
               >
-                숨긴 {hiddenInResults.length}개 모두 표시
+                숨긴 {hiddenCount}개 모두 표시
               </button>
             ) : null}
             <ul aria-label="게시물 그룹" className="flex flex-col gap-1">
               {results.map(({ group, places, titleMatched }) => {
                 const id = group.bookmark.id;
                 const isGroupHidden = hiddenIds.has(id);
+                const hiddenPlaceCount = group.places.filter((place) =>
+                  hiddenPlaceIds.has(place.id),
+                ).length;
                 return (
                   <li
                     className="flex items-start gap-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -364,6 +412,9 @@ export function PlaceMapScreen({
                         </span>
                         <span className="block text-xs text-zinc-500">
                           장소 {group.places.length}곳
+                          {hiddenPlaceCount > 0
+                            ? ` (${hiddenPlaceCount}곳 숨김)`
+                            : ""}
                         </span>
                         {searching && !titleMatched ? (
                           <span className="mt-0.5 block text-xs text-zinc-600 dark:text-zinc-300">
@@ -416,6 +467,8 @@ function SelectedGroup({
   onClose,
   onPlaceFocus,
   onPlaceHover,
+  hiddenPlaceIds,
+  onTogglePlaceHidden,
   onOpenNaverMap,
 }: {
   result: { group: PlaceGroup; places: BookmarkPlace[] };
@@ -423,6 +476,8 @@ function SelectedGroup({
   onClose(): void;
   onPlaceFocus(place: BookmarkPlace): void;
   onPlaceHover(placeId: string | null): void;
+  hiddenPlaceIds: ReadonlySet<string>;
+  onTogglePlaceHidden(placeId: string): void;
   onOpenNaverMap(place: BookmarkPlace): void;
 }) {
   const { group, places } = result;
@@ -456,58 +511,80 @@ function SelectedGroup({
         </button>
       </div>
       <ul aria-label="장소" className="flex flex-col gap-1">
-        {places.map((place) => (
-          <li
-            className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            key={place.id}
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                onPlaceHover(null);
-              }
-            }}
-            onFocus={() => onPlaceHover(place.id)}
-            onPointerEnter={(event) => {
-              if (event.pointerType !== "touch") {
-                onPlaceHover(place.id);
-              }
-            }}
-            onPointerLeave={() => onPlaceHover(null)}
-          >
-            <button
-              className="flex min-w-0 flex-1 items-start gap-2 text-left"
-              onClick={() => onPlaceFocus(place)}
-              type="button"
+        {places.map((place) => {
+          const placeHidden = hiddenPlaceIds.has(place.id);
+          return (
+            <li
+              className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              key={place.id}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  onPlaceHover(null);
+                }
+              }}
+              onFocus={() => onPlaceHover(place.id)}
+              onPointerEnter={(event) => {
+                if (event.pointerType !== "touch") {
+                  onPlaceHover(place.id);
+                }
+              }}
+              onPointerLeave={() => onPlaceHover(null)}
             >
-              <span
-                aria-hidden="true"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold text-white"
-                style={{ background: color }}
+              <button
+                className={`flex min-w-0 flex-1 items-start gap-2 text-left ${
+                  placeHidden ? "opacity-50" : ""
+                }`}
+                onClick={() => onPlaceFocus(place)}
+                type="button"
               >
-                {group.places.findIndex(
-                  (candidate) => candidate.id === place.id,
-                ) + 1}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm">{place.name}</span>
-                {place.locality || place.address ? (
-                  <span className="block truncate text-xs text-zinc-500">
-                    {[place.locality, place.address]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-            <button
-              aria-label={`${place.name} 네이버지도에서 열기`}
-              className="btn-secondary shrink-0 gap-1 px-2 text-xs"
-              onClick={() => onOpenNaverMap(place)}
-              type="button"
-            >
-              <MapPin aria-hidden="true" className="h-3 w-3" /> 네이버지도
-            </button>
-          </li>
-        ))}
+                <span
+                  aria-hidden="true"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold text-white"
+                  style={{ background: color }}
+                >
+                  {group.places.findIndex(
+                    (candidate) => candidate.id === place.id,
+                  ) + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm">{place.name}</span>
+                  {place.locality || place.address ? (
+                    <span className="block truncate text-xs text-zinc-500">
+                      {[place.locality, place.address]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+              <button
+                aria-label={
+                  placeHidden
+                    ? "이 장소 지도에 표시"
+                    : "이 장소 지도에서 숨기기"
+                }
+                aria-pressed={placeHidden}
+                className="icon-button shrink-0"
+                onClick={() => onTogglePlaceHidden(place.id)}
+                type="button"
+              >
+                {placeHidden ? (
+                  <EyeOff aria-hidden="true" className="h-4 w-4" />
+                ) : (
+                  <Eye aria-hidden="true" className="h-4 w-4" />
+                )}
+              </button>
+              <button
+                aria-label={`${place.name} 네이버지도에서 열기`}
+                className="btn-secondary shrink-0 gap-1 px-2 text-xs"
+                onClick={() => onOpenNaverMap(place)}
+                type="button"
+              >
+                <MapPin aria-hidden="true" className="h-3 w-3" /> 네이버지도
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

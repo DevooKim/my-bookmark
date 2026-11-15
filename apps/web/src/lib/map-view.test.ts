@@ -51,6 +51,7 @@ function input(overrides: Partial<MapViewInput> = {}): MapViewInput {
     hoveredGroupId: null,
     hoveredPlaceId: null,
     hiddenIds: new Set(),
+    hiddenPlaceIds: new Set(),
     ...overrides,
   };
 }
@@ -133,6 +134,45 @@ describe("computeMapMarkers", () => {
     ]);
   });
 
+  it("drops individually hidden places but keeps the remaining labels stable", () => {
+    const markers = computeMapMarkers(
+      input({ hiddenPlaceIds: new Set(["a1"]) }),
+    );
+    expect(markers.map((marker) => [marker.id, marker.label])).toEqual([
+      ["a2", "2"],
+      ["b1", "1"],
+      ["c1", "1"],
+    ]);
+  });
+
+  it("lets a hidden group win over individual place state", () => {
+    const markers = computeMapMarkers(
+      input({ hiddenIds: new Set(["a"]), hiddenPlaceIds: new Set(["b1"]) }),
+    );
+    expect(markers.map((marker) => marker.id)).toEqual(["c1"]);
+  });
+
+  it("still hides individually hidden places inside the selected group", () => {
+    const markers = computeMapMarkers(
+      input({ selectedId: "a", hiddenPlaceIds: new Set(["a1"]) }),
+    );
+    expect(states(markers)).toEqual([
+      ["a2", "active", false],
+      ["b1", "dim", false],
+      ["c1", "dim", false],
+    ]);
+  });
+
+  it("does not dim others when every place of the hovered group is hidden", () => {
+    const markers = computeMapMarkers(
+      input({
+        hoveredGroupId: "a",
+        hiddenPlaceIds: new Set(["a1", "a2"]),
+      }),
+    );
+    expect(markers.every((marker) => marker.state === "normal")).toBe(true);
+  });
+
   it("skips places without coordinates", () => {
     const partial = group("p", [place("p1", null), place("p2", 34)]);
     const markers = computeMapMarkers(
@@ -162,6 +202,23 @@ describe("computeFitPoints", () => {
       { lat: 37.1, lng: 127 },
       { lat: 37.2, lng: 127 },
     ]);
+  });
+
+  it("leaves individually hidden places out, also inside the selected group", () => {
+    const base = input();
+    expect(
+      computeFitPoints({ ...base, hiddenPlaceIds: new Set(["a1", "b1"]) }),
+    ).toEqual([
+      { lat: 37.2, lng: 127 },
+      { lat: 35.1, lng: 127 },
+    ]);
+    expect(
+      computeFitPoints({
+        ...base,
+        selectedId: "a",
+        hiddenPlaceIds: new Set(["a1"]),
+      }),
+    ).toEqual([{ lat: 37.2, lng: 127 }]);
   });
 
   it("is empty when every group is hidden", () => {
