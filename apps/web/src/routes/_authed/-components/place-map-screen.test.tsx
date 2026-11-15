@@ -75,6 +75,7 @@ function createFakeMap() {
     setMarkers: vi.fn<(markers: readonly MapMarkerView[]) => void>(),
     fitTo: vi.fn<(points: readonly MapPoint[]) => void>(),
     panTo: vi.fn<(point: MapPoint) => void>(),
+    resize: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     subscribeZoom: vi.fn((listener: (state: MapZoomState) => void) => {
@@ -741,5 +742,319 @@ describe("PlaceMapScreen", () => {
     await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
     unmount();
     expect(map.adapter.destroy).toHaveBeenCalled();
+  });
+});
+
+function mockViewport(mobile: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: mobile,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }),
+  });
+}
+
+afterEach(() => {
+  Reflect.deleteProperty(window, "matchMedia");
+  document.documentElement.classList.remove("map-screen-lock");
+});
+
+const sheet = () => screen.getByRole("complementary", { name: "장소 목록" });
+const handle = () =>
+  within(sheet()).getByRole("button", { name: /목록 (펼치기|접기)/ });
+const mapSection = () => screen.getByRole("region", { name: "지도" });
+
+describe("PlaceMapScreen on a phone (bottom sheet)", () => {
+  it("starts collapsed with a one-line summary and an inert list", async () => {
+    mockViewport(true);
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+    expect(handle().getAttribute("aria-expanded")).toBe("false");
+    expect(handle().textContent).toContain("게시물 3개");
+    expect(
+      sheet().querySelector("#map-sheet-body")?.hasAttribute("inert"),
+    ).toBe(true);
+    expect(document.documentElement.classList.contains("map-screen-lock")).toBe(
+      true,
+    );
+  });
+
+  it("expands from the handle by tap, keyboard click, and drag, and collapses again", async () => {
+    mockViewport(true);
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    // 탭(포인터 down/up, 이동 없음)
+    fireEvent.pointerDown(handle(), { clientY: 600, pointerId: 1 });
+    fireEvent.pointerUp(handle(), { clientY: 601, pointerId: 1 });
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+    expect(
+      sheet().querySelector("#map-sheet-body")?.hasAttribute("inert"),
+    ).toBe(false);
+
+    // 아래로 끌면 접힘
+    fireEvent.pointerDown(handle(), { clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(handle(), { clientY: 380, pointerId: 1 });
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+
+    // 위로 끌면 펼침
+    fireEvent.pointerDown(handle(), { clientY: 600, pointerId: 1 });
+    fireEvent.pointerUp(handle(), { clientY: 500, pointerId: 1 });
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+
+    // 키보드(Enter/Space는 detail 0 click)
+    fireEvent.click(handle());
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+  });
+
+  it("collapses when the map is tapped or dragged and keeps the selection and its title", async () => {
+    mockViewport(true);
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    act(() => map.handlers().onMarkerClick(ramen.places[0]?.id ?? ""));
+    await waitFor(() =>
+      expect(sheet().getAttribute("data-state")).toBe("expanded"),
+    );
+    expect(
+      within(sheet()).getByRole("link", { name: "대전 라멘 지도" }),
+    ).toBeTruthy();
+
+    act(() => map.handlers().onBackgroundClick());
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+    // 선택은 유지되고 접힌 시트가 선택된 제목을 보여 준다.
+    expect(handle().textContent).toContain("대전 라멘 지도");
+    expect(map.lastMarkers().map((marker) => marker.state)).toContain("active");
+
+    fireEvent.click(handle());
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+    act(() => map.handlers().onMapDragStart());
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+  });
+
+  it("expands the sheet when a post is selected from the list, and collapses it on a place row", async () => {
+    mockViewport(true);
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    fireEvent.click(handle());
+    fireEvent.click(
+      within(sheet()).getByRole("button", { name: /서촌 카페 6곳 추천/ }),
+    );
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+
+    fireEvent.click(within(sheet()).getByText("어니언"));
+    expect(sheet().getAttribute("data-state")).toBe("collapsed");
+    expect(map.adapter.panTo).toHaveBeenCalledWith({ lat: 37.57, lng: 127 });
+  });
+
+  it("opens expanded when a post or a query is already requested", () => {
+    mockViewport(true);
+    renderScreen({ initialBookmarkId: walk.bookmark.id });
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+    cleanup();
+    renderScreen({ query: "서촌" });
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+  });
+
+  it("moves the search box onto the map: it expands the sheet, and X clears it", async () => {
+    mockViewport(true);
+    const { map, props } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    const input = screen.getByRole("searchbox", { name: "지도 검색" });
+    expect(mapSection().contains(input)).toBe(true);
+    expect(sheet().contains(input)).toBe(false);
+    expect(screen.getAllByRole("searchbox")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "검색어 지우기" })).toBeNull();
+
+    fireEvent.change(input, { target: { value: "서촌" } });
+    expect(sheet().getAttribute("data-state")).toBe("expanded");
+    const clear = screen.getByRole("button", { name: "검색어 지우기" });
+
+    fireEvent.click(clear);
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(screen.queryByRole("button", { name: "검색어 지우기" })).toBeNull();
+    expect(props.onQueryChange).not.toHaveBeenCalledWith("서촌");
+  });
+
+  it("pushes an emptied search into the URL query after the debounce", async () => {
+    mockViewport(true);
+    const { props } = renderScreen({ query: "서촌" });
+    const input = screen.getByRole("searchbox", {
+      name: "지도 검색",
+    }) as HTMLInputElement;
+    expect(input.value).toBe("서촌");
+
+    fireEvent.click(screen.getByRole("button", { name: "검색어 지우기" }));
+    expect(input.value).toBe("");
+    await waitFor(() => expect(props.onQueryChange).toHaveBeenCalledWith(""));
+  });
+
+  it("keeps the zoom buttons and the search bar apart on the map", async () => {
+    mockViewport(true);
+    renderScreen();
+    const zoom = await screen.findByRole("button", { name: "확대" });
+    expect(zoom.closest(".map-zoom-group")?.classList).toContain(
+      "glass-surface",
+    );
+    expect(
+      screen.getByRole("searchbox", { name: "지도 검색" }).closest("div")
+        ?.classList,
+    ).toContain("map-search-bar");
+  });
+
+  it("tells the SDK to resize when the map container changes size", async () => {
+    mockViewport(true);
+    let notify: (() => void) | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe = observe;
+        disconnect = disconnect;
+      },
+    );
+    const { map, unmount } = renderScreen();
+    await waitFor(() => expect(observe).toHaveBeenCalled());
+
+    act(() => notify?.());
+    expect(map.adapter.resize).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("PlaceMapScreen on desktop keeps its layout", () => {
+  it("has no sheet handle or floating search bar and clears the selection on a background click", async () => {
+    mockViewport(false);
+    const { map } = renderScreen({ initialBookmarkId: ramen.bookmark.id });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    expect(
+      screen.queryByRole("button", { name: /목록 (펼치기|접기)/ }),
+    ).toBeNull();
+    expect(
+      sheet().contains(screen.getByRole("searchbox", { name: "지도 검색" })),
+    ).toBe(true);
+    expect(sheet().classList).toContain("surface");
+    expect(sheet().classList).not.toContain("glass-surface");
+    expect(document.documentElement.classList.contains("map-screen-lock")).toBe(
+      false,
+    );
+
+    act(() => map.handlers().onBackgroundClick());
+    await waitFor(() =>
+      expect(
+        map.lastMarkers().every((marker) => marker.state === "normal"),
+      ).toBe(true),
+    );
+  });
+});
+
+describe("only the selected post (shared by phone and desktop)", () => {
+  const ONLY_KEY = "my-bookmark:map-only-selected";
+  const toggle = () =>
+    screen.getByRole("switch", { name: "선택한 게시물만 보기" });
+
+  it("shows the switch only while a post is selected, in the selection panel header area", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    expect(screen.queryByRole("switch")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+    // 제목 링크와 장소 목록 사이에 있다.
+    const title = screen.getByRole("link", { name: "대전 라멘 지도" });
+    const places = screen.getByRole("list", { name: "장소" });
+    expect(
+      title.compareDocumentPosition(toggle()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      toggle().compareDocumentPosition(places) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("removes the other posts' markers when on, dims them again when off, and returns to all on deselect", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.state)).toEqual([
+        "dim",
+        "dim",
+        "active",
+        "dim",
+      ]),
+    );
+
+    fireEvent.click(toggle());
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.groupId)).toEqual([
+        ramen.bookmark.id,
+      ]),
+    );
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+    expect(window.localStorage.getItem(ONLY_KEY)).toBe("1");
+
+    fireEvent.click(toggle());
+    await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+    expect(window.localStorage.getItem(ONLY_KEY)).toBeNull();
+
+    fireEvent.click(toggle());
+    await waitFor(() => expect(map.lastMarkers()).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "선택 해제" }));
+    await waitFor(() => expect(map.lastMarkers()).toHaveLength(4));
+    expect(map.lastMarkers().every((marker) => marker.state === "normal")).toBe(
+      true,
+    );
+  });
+
+  it("restores the saved option for the next visit", async () => {
+    window.localStorage.setItem(ONLY_KEY, "1");
+    const { map } = renderScreen({ initialBookmarkId: walk.bookmark.id });
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.groupId)).toEqual([
+        walk.bookmark.id,
+      ]),
+    );
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("keeps individual place hiding and place hover working inside the selected post", async () => {
+    const { map } = renderScreen({ initialBookmarkId: cafes.bookmark.id });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    fireEvent.click(toggle());
+
+    const hideButtons = screen.getAllByRole("button", {
+      name: "이 장소 지도에서 숨기기",
+    });
+    fireEvent.click(hideButtons[0] as HTMLElement);
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.id)).toEqual([
+        cafes.places[1]?.id,
+      ]),
+    );
+
+    const row = screen.getByText("어니언").closest("li") as HTMLElement;
+    fireEvent.pointerEnter(row, { pointerType: "mouse" });
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.emphasized)).toEqual([
+        true,
+      ]),
+    );
   });
 });

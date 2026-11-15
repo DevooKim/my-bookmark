@@ -96,6 +96,9 @@ export function createNaverMapAdapterFactory(
       naver.maps.Event.addListener(map, "click", () =>
         handlers.onBackgroundClick(),
       ),
+      naver.maps.Event.addListener(map, "dragstart", () =>
+        handlers.onMapDragStart(),
+      ),
     ];
 
     const adapter: MapAdapter = {
@@ -169,6 +172,9 @@ export function createNaverMapAdapterFactory(
             maxZoom: 17,
           },
         );
+      },
+      resize() {
+        map.autoResize();
       },
       panTo(point) {
         map.panTo(new naver.maps.LatLng(point.lat, point.lng));

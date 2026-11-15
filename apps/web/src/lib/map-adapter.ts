@@ -21,6 +21,8 @@ export interface MapPoint {
 export interface MapAdapterHandlers {
   onMarkerClick(markerId: string): void;
   onBackgroundClick(): void;
+  // 사용자가 지도를 끌기 시작했을 때(모바일에서 하단 시트를 접는 데 쓴다)
+  onMapDragStart(): void;
   // 인증 키·서비스 URL 문제로 SDK가 인증에 실패했을 때
   onAuthFailure(): void;
 }
@@ -34,6 +36,8 @@ export interface MapAdapter {
   setMarkers(markers: readonly MapMarkerView[]): void;
   fitTo(points: readonly MapPoint[]): void;
   panTo(point: MapPoint): void;
+  // 컨테이너 크기가 바뀌었음을 SDK에 알려 타일이 비지 않게 한다.
+  resize(): void;
   // 현재 줌에서 ±1(애니메이션). 최소·최대 줌을 넘지 않는다.
   zoomIn(): void;
   zoomOut(): void;

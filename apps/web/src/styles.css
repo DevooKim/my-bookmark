@@ -18,6 +18,18 @@
   --text: #1d1d1f;
   --secondary: #6e6e73;
   --shadow: 0 16px 50px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.04);
+  /* 지도 위에 떠 있는 리퀴드 글래스(.glass-surface). 배경은 --surface-solid에서 파생한다.
+     대비(WCAG AA)는 배경 알파 0.70 기준으로 흰색~거의 검은 지도 타일 위에서 계산했다
+     (본문 7.9:1 이상, 보조 글자 4.3:1 이상 — 보조 글자는 가장 불리한 순검정 타일에서만 4.3). */
+  --glass-bg: color-mix(in srgb, var(--surface-solid) 70%, transparent);
+  --glass-opaque: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+  --glass-edge: rgb(255 255 255 / 0.72);
+  --glass-highlight: rgb(255 255 255 / 0.9);
+  --glass-shadow:
+    0 12px 32px rgb(15 23 42 / 0.18), 0 2px 8px rgb(15 23 42 / 0.1);
+  --glass-text: var(--text);
+  --glass-secondary: #424245;
+  --glass-danger: #b91c1c;
 }
 
 :root.dark {
@@ -32,6 +44,11 @@
   --text: #f5f5f7;
   --secondary: #a1a1a6;
   --shadow: 0 20px 60px rgb(0 0 0 / 0.42), 0 2px 12px rgb(0 0 0 / 0.25);
+  --glass-edge: rgb(255 255 255 / 0.2);
+  --glass-highlight: rgb(255 255 255 / 0.3);
+  --glass-shadow: 0 14px 36px rgb(0 0 0 / 0.5), 0 2px 10px rgb(0 0 0 / 0.3);
+  --glass-secondary: #e1e1e6;
+  --glass-danger: #fca5a5;
 }
 
 * {
@@ -269,10 +286,7 @@ a[role="button"]:active {
 }
 
 .map-zoom-group {
-  @apply absolute right-3 bottom-10 z-10 flex flex-col overflow-hidden rounded-2xl border;
-  border-color: var(--line);
-  background: var(--surface-solid);
-  box-shadow: var(--shadow);
+  @apply absolute right-3 bottom-10 z-10 flex flex-col overflow-hidden rounded-2xl;
 }
 
 .map-zoom-button {
@@ -280,7 +294,157 @@ a[role="button"]:active {
 }
 
 .map-zoom-button + .map-zoom-button {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid color-mix(in srgb, var(--glass-text) 14%, transparent);
+}
+
+/* 리퀴드 글래스: 지도 오버레이(검색 바, 줌 버튼, 모바일 하단 시트)에만 쓰는 재사용 클래스.
+   반투명 배경 + blur/saturate, 가장자리의 얇은 밝은 테두리와 상단 하이라이트, 부드러운 그림자. */
+.glass-surface {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-bg);
+  color: var(--glass-text);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+}
+
+/* 지도 위에서도 글자 대비가 유지되도록 보조·경고 글자색을 글래스 전용 값으로 바꾼다. */
+.glass-surface .text-zinc-400,
+.glass-surface .text-zinc-500,
+.glass-surface .text-zinc-600,
+.glass-surface .icon-button,
+.glass-surface .map-zoom-button,
+.glass-surface ::placeholder {
+  color: var(--glass-secondary);
+  opacity: 1;
+}
+
+.glass-surface .text-red-600 {
+  color: var(--glass-danger);
+}
+
+.glass-surface .icon-button:hover,
+.glass-surface .map-zoom-button:hover:not(:disabled),
+.glass-surface a:hover {
+  color: var(--glass-text);
+}
+
+.glass-surface a:hover {
+  text-decoration: underline;
+}
+
+@supports not (color: color-mix(in srgb, red, blue)) {
+  :root {
+    --glass-bg: rgb(255 255 255 / 0.7);
+    --glass-opaque: rgb(255 255 255 / 0.96);
+  }
+  :root.dark {
+    --glass-bg: rgb(28 28 30 / 0.7);
+    --glass-opaque: rgb(28 28 30 / 0.96);
+  }
+}
+
+/* backdrop-filter를 지원하지 않으면 뒤가 비쳐 글자가 묻히므로 불투명에 가까운 배경으로 바꾼다. */
+@supports not (
+    (backdrop-filter: blur(1px)) or
+    (-webkit-backdrop-filter: blur(1px))
+  ) {
+  .glass-surface {
+    background: var(--glass-opaque);
+  }
+}
+
+.map-only-toggle {
+  @apply flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-sm font-medium;
+  background: var(--surface-muted);
+}
+
+.map-switch {
+  @apply relative h-6 w-10 shrink-0 rounded-full;
+  background: #8e8e93;
+  transition: background-color 180ms ease;
+}
+
+.map-switch[data-on="true"] {
+  background: var(--accent);
+}
+
+.map-switch-knob {
+  @apply absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 180ms ease;
+}
+
+.map-switch[data-on="true"] .map-switch-knob {
+  transform: translateX(1rem);
+}
+
+.map-search-bar {
+  @apply absolute inset-x-3 z-20 flex min-h-12 items-center gap-2.5 rounded-full px-4;
+  top: calc(0.75rem + env(safe-area-inset-top));
+}
+
+.map-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* 입력칸 자체의 사각 포커스 링 대신 둥근 검색 바 전체에 포커스 링을 그린다. */
+.map-search-input:focus-visible {
+  outline: none;
+}
+
+.map-search-bar:focus-within {
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 0 3px rgb(0 122 255 / 0.38),
+    var(--glass-shadow);
+}
+
+.map-sheet-handle {
+  @apply flex w-full shrink-0 flex-col items-center gap-1.5 px-4 pt-2 select-none;
+  height: var(--sheet-peek, 4.5rem);
+  color: inherit;
+  touch-action: none;
+}
+
+.map-sheet-grabber {
+  @apply block h-[0.3125rem] w-9 rounded-full;
+  background: color-mix(in srgb, var(--glass-text) 28%, transparent);
+}
+
+/* 모바일: 지도가 화면을 채우고 목록은 그 위에 떠 있는 하단 시트다. 접힘은 손잡이 + 한 줄 요약만
+   남기는 translateY라 레이아웃 재계산 없이 전환된다. */
+@media (width < 40rem) {
+  .map-sheet {
+    --sheet-peek: 4.5rem;
+    position: absolute;
+    inset-inline: 0;
+    /* 아래 모서리는 화면(탭 바 위 경계)에 붙여, 접힌 상태에서 손잡이 줄만 정확히 보이게 한다. */
+    bottom: 0;
+    z-index: 20;
+    padding: 0;
+    height: min(60dvh, 100%);
+    border-radius: 1.75rem 1.75rem 0 0;
+    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
+  .map-sheet[data-state="collapsed"] {
+    transform: translateY(calc(100% - var(--sheet-peek)));
+  }
+
+  .map-zoom-group {
+    top: calc(4.5rem + env(safe-area-inset-top));
+    bottom: auto;
+  }
+
+  html.map-screen-lock,
+  html.map-screen-lock body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
 }
 
 .map-zoom-button:focus-visible {
@@ -363,6 +527,12 @@ a[role="button"]:active {
   .bookmark-card:hover {
     transform: none;
   }
+  /* 하단 시트는 애니메이션 없이 즉시 전환한다. */
+  .map-sheet,
+  .map-switch,
+  .map-switch-knob {
+    transition: none;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -370,7 +540,8 @@ a[role="button"]:active {
   .mobile-tab-bar,
   .dialog-scrim-blur,
   .dialog-surface,
-  .popover-surface {
+  .popover-surface,
+  .glass-surface {
     background: var(--surface-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
