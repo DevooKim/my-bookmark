@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAiProvider, PRESET_MODEL } from "../index";
+import { CATEGORIZE_TIMEOUT_MS } from "../providers";
 import { parseAnalyzeResponse, systemPrompt } from "../schema";
 
 const analysis = {
@@ -197,6 +198,65 @@ describe("OpenRouter preset provider", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
       "https://openrouter.ai/api/v1/key",
     );
+  });
+});
+
+describe("categorize timeout", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function hangingFetch() {
+    return vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+          // 느린 응답: 24초 뒤에 정상 응답이 도착한다.
+          setTimeout(() => resolve(completionResponse(analysis)), 24_000);
+        }),
+    );
+  }
+
+  it("waits for a slow (24s) analysis instead of aborting at the 15s default", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", hangingFetch());
+    const outcome = createAiProvider({ apiKey: "or-key" }).categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+
+    await vi.advanceTimersByTimeAsync(24_000);
+    await expect(outcome).resolves.toMatchObject({ analysis });
+  });
+
+  it("aborts once the categorize timeout elapses", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
+          }),
+      ),
+    );
+    const outcome = createAiProvider({ apiKey: "or-key" }).categorize({
+      kind: "link",
+      url: "https://example.com",
+      existingCategories: [],
+    });
+    const assertion = expect(outcome).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    await vi.advanceTimersByTimeAsync(CATEGORIZE_TIMEOUT_MS);
+    await assertion;
   });
 });
 

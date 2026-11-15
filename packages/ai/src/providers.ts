@@ -21,6 +21,9 @@ export const PRESET_MODEL = "@preset/my-bookmark";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
+// 실측 BYOK Gemini 분석 호출이 6~24초라 기본 15초로는 AbortError가 잦았다.
+export const CATEGORIZE_TIMEOUT_MS = 60_000;
+
 export interface HttpError extends Error {
   status: number;
 }
@@ -200,6 +203,6 @@ class OpenRouterProvider implements AiProvider {
         model: parsed.model || PRESET_MODEL,
         isByok: parsed.usage?.is_byok ?? null,
       };
-    });
+    }, CATEGORIZE_TIMEOUT_MS);
   }
 }
