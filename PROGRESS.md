@@ -32,6 +32,8 @@
 
 | 날짜 | 결정 | 이유 |
 | --- | --- | --- |
+| 2026-11-15 | `/map` 줌 UI는 SDK 기본 `zoomControl`을 끄고 자체 +/− 버튼(어댑터 `zoomIn`/`zoomOut`/`subscribeZoom`)으로 교체했고 `scaleControl: false`로 축척 바를 없앴다. 로고·저작권 컨트롤은 약관상 유지. | 앱 디자인 일관성 요청. 버튼은 `icon-button`(unlayered CSS의 `rounded-full`이 유틸리티를 이기므로) 대신 전용 `.map-zoom-button` 클래스를 썼다. |
+| 2026-11-15 | `/map` 개별 장소 숨김은 그룹 숨김과 별도 `localStorage` 키(`my-bookmark:map-hidden-places`, 장소 id 배열)에 저장하고 그룹 숨김이 우선한다. "숨긴 n개 모두 표시"의 n은 검색 결과 그룹의 숨김 그룹 수 + 그 그룹들의 개별 숨김 장소 수다. | 기존 저장값과 하위 호환을 유지하고, 그룹을 다시 표시해도 개별 선택이 보존되도록 상태를 분리했다. |
 | 2026-11-15 | `/map` 그룹 숨김 상태는 서버·DB가 아니라 `localStorage`(북마크 id 배열, 키 `my-bookmark:map-hidden-groups`)에 둔다. 숨긴 그룹 수·「모두 표시」는 현재 검색 결과 범위로 센다. | 숨김은 지도를 보는 기기·상황에 따른 편의 설정이라 계정 데이터로 동기화할 이유가 없고, 테이블·API 추가(아키텍처 변경)를 피할 수 있다. 저장소가 막혀도 동작하도록 읽기·쓰기를 try/catch로 감쌌고 값은 zod로 검증한다. 삭제된 북마크 id는 남아도 무해해 따로 정리하지 않는다. SSR 하이드레이션 불일치를 피하려고 마운트 후에 읽는다. |
 | 2026-11-15 | `/map` 지도 컨테이너는 `absolute inset-0` 래퍼 안의 `h-full w-full` 요소로 두고, 검색 input은 홈과 같은 `.search-field` 패턴(아이콘을 흐름 안에 배치)을 쓴다. | 네이버 SDK가 `Map` 컨테이너의 인라인 style을 `position: relative; overflow: hidden`으로 덮어써 컨테이너 자신의 `absolute inset-0`이 무력화되고 높이가 0으로 접혔다. 또 `.input`은 unlayered CSS(`px-3`)라 Tailwind v4 유틸리티 레이어의 `pl-9`보다 우선해 돋보기와 placeholder가 겹쳤다. `.input` 자체는 다른 화면 때문에 건드리지 않았다. |
 | 2026-11-15 | `/map` 모바일 패널은 하단 고정 시트가 아니라 지도(45dvh) 아래에 이어지는 둥근 상단 패널로 배치했다. 데스크톱은 좌측 사이드 패널이다. | 하단 탭 바(floating)와 겹치는 고정 시트는 safe-area·스크롤 충돌 위험이 커서, 페이지 흐름 안의 패널로 단순화했다. 고정 시트가 필요하면 `place-map-screen.tsx`의 레이아웃만 바꾸면 된다. |
