@@ -17,16 +17,20 @@ import type {
   EmbeddingProviderConfig,
 } from "./types";
 
-// 요청 본문의 `preset` 필드 값과 화면·사용량 기록에 쓰는 표시 라벨.
-// 실측(2026-11-15): `@preset/` 접두어 없는 slug는 OpenRouter가 무시하고(문서에도 명시),
-// 접두어를 붙이면 preset이 적용되지만 그 경우 요청의 `models`가 폴백으로 동작하지 않고
-// 첫 모델의 429가 그대로 반환된다. 그래서 폴백이 되는 이 형태(접두어 없는 slug + models)를 쓰며,
-// preset의 provider 설정은 적용되지 않으므로 요청이 provider 제한을 직접 명시한다.
-export const PRESET_NAME = "my-bookmark";
-export const PRESET_LABEL = `@preset/${PRESET_NAME}`;
+// 설정 화면 표시와 실패 사용량 기록(어떤 모델에서 났는지 알 수 없는 실패)에 쓰는 라벨.
+// 분석 호출은 preset을 쓰지 않는다. 실측(2026-11-15): `model: "@preset/my-bookmark"`나
+// `@preset/` 접두어를 붙인 `preset` 필드는 첫 모델이 429를 내면 폴백하지 않고, 접두어 없는
+// `preset` 값은 OpenRouter가 무시한다. 폴백은 요청의 `models` 배열로만 동작하므로
+// preset이 담당하던 provider 제한과 temperature는 요청이 직접 명시한다.
+export const PRESET_LABEL = "@preset/my-bookmark";
 
+// temperature는 보내지 않는다. preset에는 0.1이 있었지만 openai/gpt-6-luna가 temperature를
+// 지원하지 않아, `require_parameters: true`와 함께 보내면 luna가 라우팅 후보에서 빠져
+// 폴백이 사라진다(실측 2026-11-15: luna 단독 + temperature → 404 "No endpoints found that can
+// handle the requested parameters", Gemini 429 시 폴백 불가). preset의 web_fetch 툴도
+// 크레딧 과금 가능성과 지연 때문에 넣지 않는다.
 // BYOK 키를 등록한 업스트림만 허용하고 학습용 데이터 수집은 거부한다.
-// 요청의 `provider` 객체는 preset의 provider 설정을 통째로 대체하므로 여기서 명시한다.
+// preset을 쓰지 않으므로 요청이 직접 명시한다.
 export const ALLOWED_PROVIDERS: readonly string[] = [
   "google-ai-studio",
   "openai",
@@ -173,7 +177,6 @@ class OpenRouterProvider implements AiProvider {
           "X-Title": "my-bookmark",
         },
         body: JSON.stringify({
-          preset: PRESET_NAME,
           models: this.models,
           max_tokens: 2048,
           provider: {

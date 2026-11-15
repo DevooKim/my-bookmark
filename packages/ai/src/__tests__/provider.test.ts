@@ -4,7 +4,6 @@ import {
   createAiProvider,
   DEFAULT_MODELS,
   PRESET_LABEL,
-  PRESET_NAME,
 } from "../index";
 import { CATEGORIZE_TIMEOUT_MS } from "../providers";
 import { parseAnalyzeResponse, systemPrompt } from "../schema";
@@ -67,15 +66,17 @@ describe("OpenRouter preset provider", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
     const body = JSON.parse(String(init.body));
-    // model 필드 없이 preset + models를 함께 보내야 429에서 다음 모델로 폴백된다.
+    // model·preset 없이 models 배열만 보내야 429에서 다음 모델로 폴백된다.
     expect(body.model).toBeUndefined();
-    expect(body.preset).toBe(PRESET_NAME);
+    expect(body.preset).toBeUndefined();
+    // luna는 temperature를 지원하지 않아 보내면 require_parameters 때문에 폴백이 사라진다.
+    expect(body).not.toHaveProperty("temperature");
     expect(body.models).toEqual([
       "google/gemini-3.5-flash-lite",
       "openai/gpt-6-luna",
     ]);
     expect(body.max_tokens).toBe(2048);
-    // 요청의 provider 객체는 preset의 provider 설정을 대체하므로 제한을 직접 명시한다.
+    // preset을 쓰지 않으므로 provider 제한을 직접 명시한다.
     expect(body.provider).toEqual({
       require_parameters: true,
       only: ["google-ai-studio", "openai"],
