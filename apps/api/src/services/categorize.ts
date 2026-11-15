@@ -322,11 +322,24 @@ export async function applyCategorizeResult(
   // 키가 없거나 조회에 실패한 장소는 pending으로 남는다.
   try {
     await replaceBookmarkPlaces(db, userId, bookmarkId, places);
+  } catch (error) {
+    console.warn("bookmark places save failed", { bookmarkId, error });
+    // markDone이 places_analyzed_at을 이미 기록했다. 장소가 저장되지 않았으므로
+    // 백필이 이 북마크를 다시 시도할 수 있게 되돌린다.
+    await clearPlacesAnalyzedAt(db, userId, bookmarkId).catch((clearError) =>
+      console.warn("places_analyzed_at reset failed", {
+        bookmarkId,
+        error: clearError,
+      }),
+    );
+    return;
+  }
+  try {
     if (placeGeocoder && places.length > 0) {
       await geocodePendingPlaces(db, userId, bookmarkId, placeGeocoder);
     }
   } catch (error) {
-    console.warn("bookmark places save failed", { bookmarkId, error });
+    console.warn("bookmark places geocode failed", { bookmarkId, error });
   }
 }
 
@@ -421,6 +434,8 @@ async function markDone(
       ...(metadata ? { metadata } : {}),
       ai_status: "done",
       ai_model: aiModel,
+      // 장소가 0개여도 분석은 끝났다. 백필이 같은 북마크를 반복 분석하지 않게 한다.
+      places_analyzed_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
     .eq("id", bookmarkId)
@@ -430,6 +445,20 @@ async function markDone(
     throw error;
   }
   return (data?.length ?? 0) > 0;
+}
+
+async function clearPlacesAnalyzedAt(
+  db: BookmarkCategorizeDb,
+  userId: string,
+  bookmarkId: string,
+): Promise<void> {
+  const { error } = await (db.from("bookmarks") as BookmarkClearTable)
+    .update({ places_analyzed_at: null })
+    .eq("user_id", userId)
+    .eq("id", bookmarkId);
+  if (error) {
+    throw error;
+  }
 }
 
 async function markFailed(
@@ -523,6 +552,17 @@ interface BookmarkUpdateTable {
       ): {
         eq(field: string, value: string): QueryResult<null>;
       };
+    };
+  };
+}
+
+interface BookmarkClearTable {
+  update(values: Record<string, unknown>): {
+    eq(
+      field: string,
+      value: string,
+    ): {
+      eq(field: string, value: string): QueryResult<null>;
     };
   };
 }

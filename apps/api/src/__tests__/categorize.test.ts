@@ -32,6 +32,7 @@ class FakeDb {
     metadata: { 예약메모: "창가 자리" } as Record<string, string>,
     ai_status: "pending" as "idle" | "pending" | "done" | "failed",
     ai_model: null as string | null,
+    places_analyzed_at: null as string | null,
   };
   bookmarkUpdates: Record<string, unknown>[] = [];
   places: PlaceRow[] = [];
@@ -109,6 +110,13 @@ class FakeDb {
         }),
         update: (values: Record<string, unknown>) => {
           this.bookmarkUpdates.push(values);
+          // places_analyzed_at 되돌리기는 상태 조건 없이 user_id/id만으로 적용된다.
+          if (
+            Object.keys(values).length === 1 &&
+            Reflect.get(values, "places_analyzed_at") === null
+          ) {
+            this.bookmark.places_analyzed_at = null;
+          }
           return {
             eq: () => ({
               eq: () => ({
@@ -288,6 +296,57 @@ describe("applyCategorizeResult", () => {
     expect(db.bookmark.ai_status).toBe("done");
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  describe("places_analyzed_at", () => {
+    it("is recorded in the same UPDATE that marks the bookmark done", async () => {
+      const db = new FakeDb();
+      await apply(db, [place("호랑이식당")]);
+      const doneUpdate = db.bookmarkUpdates.find(
+        (values) => Reflect.get(values, "ai_status") === "done",
+      );
+      const doneAnalyzedAt = doneUpdate
+        ? Reflect.get(doneUpdate, "places_analyzed_at")
+        : undefined;
+      expect(doneAnalyzedAt).toEqual(expect.any(String));
+      expect(Number.isNaN(Date.parse(String(doneAnalyzedAt)))).toBe(false);
+      expect(db.bookmark.places_analyzed_at).toBe(doneAnalyzedAt);
+    });
+
+    it("is recorded even when the analysis found no places", async () => {
+      const db = new FakeDb();
+      await apply(db, []);
+      expect(db.places).toEqual([]);
+      expect(db.bookmark.places_analyzed_at).toEqual(expect.any(String));
+    });
+
+    it("is not recorded when the pending update did not apply", async () => {
+      const db = new FakeDb();
+      db.bookmark.ai_status = "idle";
+      await apply(db, [place("덮어쓰면 안 되는 식당")]);
+      expect(db.bookmark.places_analyzed_at).toBeNull();
+    });
+
+    it("is reset when saving places fails so the backfill can retry", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const db = new FakeDb();
+      db.placeInsertError = { message: "insert failed" };
+      await apply(db, [place("호랑이식당")]);
+      expect(db.bookmark.ai_status).toBe("done");
+      expect(db.bookmark.places_analyzed_at).toBeNull();
+      warn.mockRestore();
+    });
+
+    it("stays recorded when only geocoding fails", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const db = new FakeDb();
+      await apply(db, [place("호랑이식당")], undefined, {
+        geocode: vi.fn().mockRejectedValue(new Error("network")),
+      });
+      expect(db.places).toHaveLength(1);
+      expect(db.bookmark.places_analyzed_at).toEqual(expect.any(String));
+      warn.mockRestore();
+    });
   });
 
   describe("geocoding", () => {
@@ -517,6 +576,7 @@ describe("applyCategorizeResult", () => {
         tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
         ai_status: "done",
         ai_model: "google/gemini-3.1-flash-lite-20260507",
+        places_analyzed_at: expect.any(String),
       },
     ]);
   });
@@ -543,6 +603,7 @@ describe("applyCategorizeResult", () => {
         tags: ["웹 접근성", "프론트엔드", "사용자 경험"],
         ai_status: "done",
         ai_model: "google/gemini-3.1-flash-lite-20260507",
+        places_analyzed_at: expect.any(String),
       },
     ]);
   });

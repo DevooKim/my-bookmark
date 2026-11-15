@@ -233,7 +233,10 @@ describe("places backfill store", () => {
     );
     expect(withPlaces.calls.inserts).toHaveLength(1);
     expect(withPlaces.calls.metadataUpdates).toEqual([
-      { metadata: { 예약메모: "창가" } },
+      {
+        metadata: { 예약메모: "창가" },
+        places_analyzed_at: expect.any(String),
+      },
     ]);
 
     const withoutPlaces = createClient();
@@ -241,7 +244,9 @@ describe("places backfill store", () => {
       { ...candidate("a"), metadata: legacy },
       [],
     );
-    expect(withoutPlaces.calls.metadataUpdates).toEqual([]);
+    expect(withoutPlaces.calls.metadataUpdates).toEqual([
+      { places_analyzed_at: expect.any(String) },
+    ]);
 
     const custom = createClient();
     await createSupabasePlacesBackfillStore(custom.client).savePlaces(
@@ -251,6 +256,85 @@ describe("places backfill store", () => {
       },
       [place("서촌 커피")],
     );
-    expect(custom.calls.metadataUpdates).toEqual([]);
+    expect(custom.calls.metadataUpdates).toEqual([
+      { places_analyzed_at: expect.any(String) },
+    ]);
+  });
+
+  it("records places_analyzed_at even when no places were found", async () => {
+    const empty = createClient();
+    await createSupabasePlacesBackfillStore(empty.client).savePlaces(
+      candidate("a"),
+      [],
+    );
+    expect(empty.calls.deletes).toBe(1);
+    expect(empty.calls.inserts).toEqual([]);
+    expect(empty.calls.metadataUpdates).toEqual([
+      { places_analyzed_at: expect.any(String) },
+    ]);
+  });
+
+  it("does not record places_analyzed_at when saving places fails", async () => {
+    const failing = createClient();
+    const failingClient = {
+      ...failing.client,
+      from(table: string) {
+        if (table === "bookmark_places") {
+          return {
+            delete: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({ error: null }),
+              }),
+            }),
+            insert: () =>
+              Promise.resolve({ error: { message: "insert failed" } }),
+          };
+        }
+        return failing.client.from(table);
+      },
+    };
+    await expect(
+      createSupabasePlacesBackfillStore(failingClient).savePlaces(
+        candidate("a"),
+        [place("서촌 커피")],
+      ),
+    ).rejects.toMatchObject({ message: "insert failed" });
+    expect(failing.calls.metadataUpdates).toEqual([]);
+  });
+
+  it("selects only done bookmarks whose places analysis is not recorded", async () => {
+    const filters: unknown[][] = [];
+    const rows = [
+      { ...candidate("a"), metadata: {} },
+      { ...candidate("b"), metadata: {} },
+    ];
+    const query = {
+      select: () => query,
+      eq: (column: string, value: string) => {
+        filters.push(["eq", column, value]);
+        return query;
+      },
+      is: (column: string, value: null) => {
+        filters.push(["is", column, value]);
+        return query;
+      },
+      order: () => query,
+      range: () => Promise.resolve({ data: rows, error: null }),
+    };
+    const client = {
+      storage: { from: vi.fn() },
+      from: (table: string) => {
+        filters.push(["from", table]);
+        return query;
+      },
+    };
+    const found =
+      await createSupabasePlacesBackfillStore(client).findCandidates(1);
+    expect(filters).toEqual([
+      ["from", "bookmarks"],
+      ["eq", "ai_status", "done"],
+      ["is", "places_analyzed_at", null],
+    ]);
+    expect(found.map((row) => row.id)).toEqual(["a"]);
   });
 });

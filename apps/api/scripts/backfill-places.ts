@@ -47,11 +47,12 @@ const pendingPlaceSchema = z.object({
 });
 
 export interface PlacesBackfillStore {
-  // ai_status='done'이고 bookmark_places 행이 없는 북마크.
+  // ai_status='done'이고 places_analyzed_at이 null인 북마크(장소가 0개여도 분석했다면 제외).
   findCandidates(limit?: number): Promise<PlacesBackfillCandidate[]>;
   // 좌표 조회를 기다리는(pending) 국내 장소.
   findPendingPlaces(limit?: number): Promise<GeocodeRow[]>;
-  // 장소 행을 교체하고, 장소가 1개 이상일 때만 과거 자동 생성 네이버지도 키를 지운다.
+  // 장소 행을 교체하고 places_analyzed_at을 기록한다(장소 0개 포함). 장소가 1개 이상일 때만
+  // 과거 자동 생성 네이버지도 키를 지운다. 저장이 실패하면 기록하지 않아 다음 실행에서 재시도된다.
   savePlaces(
     candidate: PlacesBackfillCandidate,
     places: PlaceCandidate[],
@@ -252,6 +253,13 @@ async function readAllPages(
   }
 }
 
+function withoutLegacyNaverMapKey(
+  metadata: Record<string, string>,
+): Record<string, string> {
+  const { [LEGACY_NAVER_MAP_KEY]: _legacy, ...rest } = metadata;
+  return rest;
+}
+
 export function createSupabasePlacesBackfillStore(
   supabase: BackfillSupabaseClient,
 ): PlacesBackfillStore {
@@ -262,6 +270,12 @@ export function createSupabasePlacesBackfillStore(
           column: string,
           value: string,
         ): PagedQuery & {
+          is(
+            column: string,
+            value: null,
+          ): {
+            order(column: string, options: { ascending: boolean }): PagedQuery;
+          };
           order(column: string, options: { ascending: boolean }): PagedQuery;
         };
         order(column: string, options: { ascending: boolean }): PagedQuery;
@@ -270,31 +284,18 @@ export function createSupabasePlacesBackfillStore(
 
   return {
     async findCandidates(limit) {
-      const withPlaces = new Set<string>();
-      const placeRows = await readAllPages(() =>
-        table("bookmark_places")
-          .select("bookmark_id")
-          .order("bookmark_id", { ascending: true }),
+      const bookmarkRows = await readAllPages(
+        () =>
+          table("bookmarks")
+            .select(
+              "id,user_id,kind,url,title,description,site_name,image_original_path,metadata",
+            )
+            .eq("ai_status", "done")
+            .is("places_analyzed_at", null)
+            .order("created_at", { ascending: false }),
+        limit,
       );
-      for (const row of placeRows) {
-        const parsed = z.object({ bookmark_id: z.string() }).safeParse(row);
-        if (parsed.success) {
-          withPlaces.add(parsed.data.bookmark_id);
-        }
-      }
-
-      const bookmarkRows = await readAllPages(() =>
-        table("bookmarks")
-          .select(
-            "id,user_id,kind,url,title,description,site_name,image_original_path,metadata",
-          )
-          .eq("ai_status", "done")
-          .order("created_at", { ascending: false }),
-      );
-      const candidates = candidateSchema
-        .array()
-        .parse(bookmarkRows)
-        .filter((bookmark) => !withPlaces.has(bookmark.id));
+      const candidates = candidateSchema.array().parse(bookmarkRows);
       return limit === undefined ? candidates : candidates.slice(0, limit);
     },
     async findPendingPlaces(limit) {
@@ -317,33 +318,36 @@ export function createSupabasePlacesBackfillStore(
         places,
       );
       const legacy = candidate.metadata?.[LEGACY_NAVER_MAP_KEY];
-      if (
+      const removeLegacy =
         places.length > 0 &&
         legacy?.startsWith(LEGACY_NAVER_MAP_URL_PREFIX) &&
-        candidate.metadata
-      ) {
-        const { [LEGACY_NAVER_MAP_KEY]: _legacy, ...rest } = candidate.metadata;
-        const { error } = await (
-          supabase.from("bookmarks") as {
-            update(values: { metadata: Record<string, string> }): {
+        candidate.metadata;
+      const values: Record<string, unknown> = {
+        places_analyzed_at: new Date().toISOString(),
+        ...(removeLegacy
+          ? { metadata: withoutLegacyNaverMapKey(removeLegacy) }
+          : {}),
+      };
+      const { error } = await (
+        supabase.from("bookmarks") as {
+          update(values: Record<string, unknown>): {
+            eq(
+              column: string,
+              value: string,
+            ): {
               eq(
                 column: string,
                 value: string,
-              ): {
-                eq(
-                  column: string,
-                  value: string,
-                ): PromiseLike<{ error: { message?: string } | null }>;
-              };
+              ): PromiseLike<{ error: { message?: string } | null }>;
             };
-          }
-        )
-          .update({ metadata: rest })
-          .eq("user_id", candidate.user_id)
-          .eq("id", candidate.id);
-        if (error) {
-          throw error;
+          };
         }
+      )
+        .update(values)
+        .eq("user_id", candidate.user_id)
+        .eq("id", candidate.id);
+      if (error) {
+        throw error;
       }
     },
     geocode(rows, geocoder) {
