@@ -186,7 +186,11 @@ export function PlaceMapScreen({
         className="relative h-[45dvh] shrink-0 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 sm:order-2 sm:h-auto sm:flex-1 dark:border-zinc-800 dark:bg-zinc-900"
       >
         {createAdapter ? (
-          <div className="absolute inset-0" ref={containerRef} />
+          // 네이버 SDK가 컨테이너의 인라인 style을 position: relative로 덮어쓰므로,
+          // 부모를 채우는 일은 바깥 absolute 래퍼가 맡고 컨테이너는 크기만 채운다.
+          <div className="absolute inset-0">
+            <div className="h-full w-full" ref={containerRef} />
+          </div>
         ) : null}
         {!createAdapter || mapError ? (
           <p
@@ -203,14 +207,14 @@ export function PlaceMapScreen({
         aria-label="장소 목록"
         className="surface flex min-h-0 flex-col gap-3 rounded-t-3xl p-3 sm:order-1 sm:w-80 sm:shrink-0 sm:overflow-y-auto sm:rounded-2xl"
       >
-        <label className="relative block">
-          <span className="sr-only">지도 검색</span>
+        <label className="search-field">
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+            className="h-4 w-4 shrink-0 text-zinc-400"
           />
           <input
-            className="input w-full pl-9"
+            aria-label="지도 검색"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-400"
             onChange={(event) => setInput(event.target.value)}
             placeholder="게시글, 장소, 지역 검색"
             type="search"

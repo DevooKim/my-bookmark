@@ -310,6 +310,31 @@ describe("PlaceMapScreen", () => {
     );
   });
 
+  it("gives the SDK a container that fills an absolutely positioned wrapper", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.factory).toHaveBeenCalled());
+
+    // 네이버 SDK는 컨테이너 style을 position: relative로 덮어쓴다. 그래도 높이가
+    // 접히지 않도록 컨테이너 자신은 absolute inset-0 이 아니라 h-full w-full 이어야 한다.
+    const container = vi.mocked(map.factory).mock.calls[0]?.[0];
+    expect(container?.className).toContain("h-full");
+    expect(container?.className).toContain("w-full");
+    expect(container?.className).not.toContain("absolute");
+    expect(container?.parentElement?.className).toContain("absolute");
+    expect(container?.parentElement?.className).toContain("inset-0");
+  });
+
+  it("renders the search box with the in-flow search-field layout so the icon never overlaps the text", () => {
+    renderScreen();
+
+    const input = screen.getByRole("searchbox", { name: "지도 검색" });
+    // .input은 unlayered px-3 이라 유틸리티 pl-9 를 이긴다. 아이콘은 흐름 안에 둔다.
+    expect(input.classList.contains("input")).toBe(false);
+    const field = input.closest("label");
+    expect(field?.classList.contains("search-field")).toBe(true);
+    expect(field?.querySelector("svg")).not.toBeNull();
+  });
+
   it("destroys the map on unmount", async () => {
     const { map, unmount } = renderScreen();
     await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
