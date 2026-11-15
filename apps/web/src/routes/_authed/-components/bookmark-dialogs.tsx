@@ -62,6 +62,7 @@ export function BookmarkDialog({
       localStorage.setItem("bookmarkMode", mode);
       toast.success("북마크를 저장했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
       onClose();
     },
@@ -122,6 +123,7 @@ export function BookmarkDialog({
               }
               toast.success("이미지를 저장했어요");
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+              void queryClient.invalidateQueries({ queryKey: ["places"] });
               void queryClient.invalidateQueries({ queryKey: ["categories"] });
               onClose();
             }}
@@ -253,6 +255,7 @@ export function EditBookmarkDialog({
     onSuccess: () => {
       toast.success("수정했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
       onClose();
     },

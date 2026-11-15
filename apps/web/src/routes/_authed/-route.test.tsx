@@ -17,9 +17,14 @@ describe("DesktopMenu", () => {
     expect(trigger.getAttribute("aria-controls")).toBe("desktop-menu-popover");
     fireEvent.click(trigger);
     expect(screen.getByRole("button", { name: "라이브러리" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "지도" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "리마인더" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "설정" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "로그아웃" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "지도" }));
+    expect(onNavigate).toHaveBeenCalledWith("/map");
+    fireEvent.click(trigger);
 
     fireEvent.click(screen.getByRole("button", { name: "설정" }));
     expect(onNavigate).toHaveBeenCalledWith("/settings");

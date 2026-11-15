@@ -1,0 +1,319 @@
+// @vitest-environment jsdom
+
+import type { BookmarkPlace, PlaceGroup } from "@my-bookmark/shared";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  GROUP_COLORS,
+  type MapAdapter,
+  type MapAdapterFactory,
+  type MapAdapterHandlers,
+  type MapMarkerView,
+  type MapPoint,
+} from "../../../lib/map-adapter";
+import { PlaceMapScreen, type PlaceMapScreenProps } from "./place-map-screen";
+
+afterEach(cleanup);
+
+function place(id: string, name: string, locality: string, lat: number) {
+  return {
+    id: `00000000-0000-4000-8000-0000000002${id}`,
+    name,
+    locality,
+    countryCode: "KR",
+    lat,
+    lng: 127,
+    address: null,
+    mapProvider: "naver",
+    mapUrl: `https://map.naver.com/p/search/${name}`,
+  } satisfies BookmarkPlace;
+}
+
+function group(id: string, title: string, places: BookmarkPlace[]): PlaceGroup {
+  return {
+    bookmark: {
+      id: `00000000-0000-4000-8000-0000000001${id}`,
+      kind: "link",
+      title,
+      url: `https://example.com/${id}`,
+      thumbnailUrl: null,
+    },
+    places,
+  };
+}
+
+const cafes = group("01", "서촌 카페 6곳 추천", [
+  place("01", "대오서점", "서촌", 37.58),
+  place("02", "어니언", "안국", 37.57),
+]);
+const ramen = group("02", "대전 라멘 지도", [
+  place("03", "이키야", "대전", 36.35),
+]);
+const walk = group("03", "주말 산책 코스", [
+  place("04", "통인시장", "서촌", 37.58),
+]);
+const groups = [cafes, ramen, walk];
+
+function createFakeMap() {
+  let handlers: MapAdapterHandlers | null = null;
+  const adapter = {
+    setMarkers: vi.fn<(markers: readonly MapMarkerView[]) => void>(),
+    fitTo: vi.fn<(points: readonly MapPoint[]) => void>(),
+    panTo: vi.fn<(point: MapPoint) => void>(),
+    destroy: vi.fn(),
+  } satisfies MapAdapter;
+  const factory: MapAdapterFactory = vi.fn(async (_container, next) => {
+    handlers = next;
+    return adapter;
+  });
+  return {
+    adapter,
+    factory,
+    handlers: () => {
+      if (!handlers) {
+        throw new Error("adapter not created");
+      }
+      return handlers;
+    },
+    lastMarkers: () =>
+      adapter.setMarkers.mock.calls.at(-1)?.[0] as MapMarkerView[],
+  };
+}
+
+function renderScreen(overrides: Partial<PlaceMapScreenProps> = {}) {
+  const map = createFakeMap();
+  const props: PlaceMapScreenProps = {
+    groups,
+    isLoading: false,
+    hasError: false,
+    query: "",
+    onQueryChange: vi.fn(),
+    createAdapter: map.factory,
+    onOpenNaverMap: vi.fn(),
+    ...overrides,
+  };
+  const view = render(<PlaceMapScreen {...props} />);
+  return { ...view, map, props };
+}
+
+describe("PlaceMapScreen", () => {
+  it("colors markers per post, numbers them within the post, and fits all markers", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    expect(
+      map.lastMarkers().map((marker) => [marker.label, marker.color]),
+    ).toEqual([
+      ["1", GROUP_COLORS[0]],
+      ["2", GROUP_COLORS[0]],
+      ["1", GROUP_COLORS[1]],
+      ["1", GROUP_COLORS[2]],
+    ]);
+    expect(map.lastMarkers().every((marker) => marker.state === "normal")).toBe(
+      true,
+    );
+    expect(map.adapter.fitTo).toHaveBeenLastCalledWith([
+      { lat: 37.58, lng: 127 },
+      { lat: 37.57, lng: 127 },
+      { lat: 36.35, lng: 127 },
+      { lat: 37.58, lng: 127 },
+    ]);
+    const list = screen.getByRole("list", { name: "게시물 그룹" });
+    expect(within(list).getAllByRole("button")).toHaveLength(3);
+    expect(screen.getByText("장소 2곳")).toBeTruthy();
+  });
+
+  it("highlights only the selected post, dims the rest, and fits its markers", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.state)).toEqual([
+        "dim",
+        "dim",
+        "active",
+        "dim",
+      ]),
+    );
+    expect(map.adapter.fitTo).toHaveBeenLastCalledWith([
+      { lat: 36.35, lng: 127 },
+    ]);
+    expect(screen.getByRole("link", { name: "대전 라멘 지도" })).toBeTruthy();
+    expect(screen.getByText("이키야")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "선택 해제" }));
+    await waitFor(() =>
+      expect(
+        map.lastMarkers().every((marker) => marker.state === "normal"),
+      ).toBe(true),
+    );
+    expect(map.adapter.fitTo.mock.lastCall?.[0]).toHaveLength(4);
+  });
+
+  it("selects a post from a marker click and clears it on a background click", async () => {
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    act(() => map.handlers().onMarkerClick(cafes.places[1]?.id ?? ""));
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.state)).toEqual([
+        "active",
+        "active",
+        "dim",
+        "dim",
+      ]),
+    );
+
+    act(() => map.handlers().onBackgroundClick());
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "게시물 그룹" })).toBeTruthy(),
+    );
+  });
+
+  it("opens with the requested post selected", async () => {
+    const { map } = renderScreen({ initialBookmarkId: walk.bookmark.id });
+    await waitFor(() =>
+      expect(map.lastMarkers().map((marker) => marker.state)).toEqual([
+        "dim",
+        "dim",
+        "dim",
+        "active",
+      ]),
+    );
+    expect(screen.getByRole("link", { name: "주말 산책 코스" })).toBeTruthy();
+  });
+
+  it("pans to a place row and opens Naver Map from its button", async () => {
+    const { map, props } = renderScreen({
+      initialBookmarkId: cafes.bookmark.id,
+    });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("어니언"));
+    expect(map.adapter.panTo).toHaveBeenCalledWith({ lat: 37.57, lng: 127 });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "어니언 네이버지도에서 열기" }),
+    );
+    expect(props.onOpenNaverMap).toHaveBeenCalledWith(cafes.places[1]);
+  });
+
+  it("narrows markers and the list to the search result while keeping group colors", async () => {
+    const { map } = renderScreen({ query: "서촌 카페" });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    // "서촌 카페": 제목에 모두 일치하는 게시물 하나만 남고, 장소 전부가 유지된다.
+    expect(
+      map.lastMarkers().map((marker) => [marker.id, marker.color]),
+    ).toEqual(cafes.places.map((item) => [item.id, GROUP_COLORS[0]]));
+    expect(
+      within(screen.getByRole("list", { name: "게시물 그룹" })).getAllByRole(
+        "button",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("shows which places matched when only places match the query", async () => {
+    const { map } = renderScreen({ query: "서촌 통인" });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+
+    expect(map.lastMarkers().map((marker) => marker.color)).toEqual([
+      GROUP_COLORS[2],
+    ]);
+    expect(screen.getByText("통인시장 · 서촌")).toBeTruthy();
+  });
+
+  it("shows an empty-result message and no markers when nothing matches", async () => {
+    const { map } = renderScreen({ query: "존재하지않는검색어" });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    expect(screen.getByText("검색 결과가 없습니다")).toBeTruthy();
+    expect(map.lastMarkers()).toEqual([]);
+  });
+
+  it("clears the selection when the selected post drops out of the results", async () => {
+    const { map, rerender, props } = renderScreen({
+      initialBookmarkId: cafes.bookmark.id,
+    });
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "선택 해제" })).toBeTruthy();
+
+    rerender(<PlaceMapScreen {...props} query="이키야" />);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "선택 해제" })).toBeNull(),
+    );
+    expect(map.lastMarkers().map((marker) => marker.state)).toEqual(["normal"]);
+  });
+
+  it("debounces the search input into the URL query", async () => {
+    const { props } = renderScreen();
+    const input = screen.getByRole("searchbox", { name: "지도 검색" });
+
+    fireEvent.change(input, { target: { value: "서" } });
+    fireEvent.change(input, { target: { value: "서촌" } });
+    expect(props.onQueryChange).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(props.onQueryChange).toHaveBeenCalledTimes(1));
+    expect(props.onQueryChange).toHaveBeenCalledWith("서촌");
+  });
+
+  it("shows a notice instead of the map when the key is missing, but keeps the list working", () => {
+    renderScreen({ createAdapter: null });
+    expect(screen.getByRole("status").textContent).toContain(
+      "VITE_NAVER_MAP_CLIENT_ID",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /대전 라멘 지도/ }));
+    expect(screen.getByText("이키야")).toBeTruthy();
+  });
+
+  it("falls back to the notice when the SDK fails to load or authenticate", async () => {
+    const failing: MapAdapterFactory = vi.fn(async () => {
+      throw new Error("sdk failed");
+    });
+    renderScreen({ createAdapter: failing });
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain(
+        "지도를 불러오지 못했어요",
+      ),
+    );
+    expect(screen.getByRole("list", { name: "게시물 그룹" })).toBeTruthy();
+
+    cleanup();
+    const { map } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    act(() => map.handlers().onAuthFailure());
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain("인증에 실패"),
+    );
+  });
+
+  it("shows empty, loading, and error states", () => {
+    renderScreen({ groups: [] });
+    expect(screen.getByText("지도에 표시할 장소가 없습니다")).toBeTruthy();
+    cleanup();
+    renderScreen({ groups: [], isLoading: true });
+    expect(screen.getByText("장소를 불러오는 중…")).toBeTruthy();
+    cleanup();
+    renderScreen({ groups: [], hasError: true });
+    expect(screen.getByRole("alert").textContent).toContain(
+      "불러오지 못했어요",
+    );
+  });
+
+  it("destroys the map on unmount", async () => {
+    const { map, unmount } = renderScreen();
+    await waitFor(() => expect(map.adapter.setMarkers).toHaveBeenCalled());
+    unmount();
+    expect(map.adapter.destroy).toHaveBeenCalled();
+  });
+});

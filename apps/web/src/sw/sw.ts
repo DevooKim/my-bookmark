@@ -54,6 +54,15 @@ type ServiceWorkerScopeLike = typeof globalThis & {
 
 const swScope = globalThis as ServiceWorkerScopeLike;
 
+// 네이버 지도 SDK·타일 요청은 서비스 워커가 가로채지 않고 브라우저에 맡긴다.
+// (API가 다른 origin에 있는 배포도 있으므로 cross-origin 전체를 건너뛰지는 않는다.)
+const MAP_SDK_HOST_SUFFIXES = [".naver.com", ".naver.net", ".pstatic.net"];
+
+export function shouldHandleFetch(request: Request): boolean {
+  const { hostname } = new URL(request.url);
+  return !MAP_SDK_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+}
+
 export function classifyRequest(request: Request): CacheStrategy {
   if (request.method !== "GET") {
     return "network-only";
@@ -245,6 +254,9 @@ swScope.addEventListener?.("activate", (event) => {
 
 swScope.addEventListener?.("fetch", (event) => {
   const fetchEvent = event as FetchEventLike;
+  if (!shouldHandleFetch(fetchEvent.request)) {
+    return;
+  }
   fetchEvent.respondWith(handleFetch(fetchEvent.request));
 });
 

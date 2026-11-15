@@ -10,6 +10,7 @@ import {
   Clock,
   Library,
   LogOut,
+  Map as MapIcon,
   Menu,
   Plus,
   Settings,
@@ -123,6 +124,11 @@ function AuthedLayout() {
           to="/"
         />
         <MobileNavLink
+          icon={<MapIcon className="h-5 w-5" />}
+          label="지도"
+          to="/map"
+        />
+        <MobileNavLink
           icon={<Clock className="h-5 w-5" />}
           label="리마인더"
           to="/reminders"
@@ -148,7 +154,7 @@ function AuthedLayout() {
   );
 }
 
-type DesktopDestination = "/" | "/reminders" | "/settings";
+type DesktopDestination = "/" | "/map" | "/reminders" | "/settings";
 
 export function DesktopMenu({
   onLogout,
@@ -218,6 +224,13 @@ export function DesktopMenu({
             type="button"
           >
             <Library className="h-4 w-4" /> 라이브러리
+          </button>
+          <button
+            className="menu-item"
+            onClick={() => runAction(() => onNavigate("/map"))}
+            type="button"
+          >
+            <MapIcon className="h-4 w-4" /> 지도
           </button>
           <button
             className="menu-item"

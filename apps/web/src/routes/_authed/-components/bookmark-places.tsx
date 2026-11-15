@@ -11,10 +11,12 @@ const chipBase =
 const chip = `${chipBase} bg-blue-50 text-blue-700 hover:bg-blue-700 hover:text-white dark:bg-blue-950 dark:text-blue-200 dark:hover:bg-blue-600 dark:hover:text-white`;
 
 export function BookmarkPlaces({
+  bookmarkId,
   places,
   collapsible = false,
   interactive = false,
 }: {
+  bookmarkId: string;
   places: BookmarkPlace[];
   collapsible?: boolean;
   interactive?: boolean;
@@ -57,6 +59,16 @@ export function BookmarkPlaces({
           >
             +{hiddenCount}
           </button>
+        </li>
+      ) : null}
+      {places.some((place) => place.lat !== null && place.lng !== null) ? (
+        <li>
+          <a
+            className={`inline-flex items-center rounded-lg px-2 py-1 font-medium text-blue-700 underline-offset-2 hover:underline dark:text-blue-300${layer}`}
+            href={`/map?bookmark=${encodeURIComponent(bookmarkId)}`}
+          >
+            지도에서 보기
+          </a>
         </li>
       ) : null}
     </ul>

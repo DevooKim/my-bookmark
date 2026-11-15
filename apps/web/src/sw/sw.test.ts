@@ -6,6 +6,7 @@ import {
   handleMessage,
   handleShareTarget,
   shouldCacheResponse,
+  shouldHandleFetch,
 } from "./sw";
 
 describe("service worker cache strategy", () => {
@@ -47,6 +48,28 @@ describe("service worker cache strategy", () => {
     await handleFetch(request);
 
     expect(fetchMock).toHaveBeenCalledWith(request);
+  });
+
+  it("leaves Naver map SDK and tile requests to the browser", () => {
+    for (const url of [
+      "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=x",
+      "https://nrbe.map.naver.net/assets/tile.png",
+      "https://ssl.pstatic.net/static/maps/m.png",
+    ]) {
+      expect(shouldHandleFetch(new Request(url))).toBe(false);
+    }
+    expect(shouldHandleFetch(new Request("https://app.test/api/places"))).toBe(
+      true,
+    );
+    expect(
+      shouldHandleFetch(new Request("https://api.example.com/api/categories")),
+    ).toBe(true);
+  });
+
+  it("never caches the places API (signed thumbnails, user data)", () => {
+    expect(classifyRequest(new Request("https://app.test/api/places"))).toBe(
+      "network-only",
+    );
   });
 
   it("uses cache-first only for hashed static assets", () => {

@@ -15,6 +15,7 @@ import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedShareTargetRouteImport } from './routes/_authed/share-target'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedRemindersRouteImport } from './routes/_authed/reminders'
+import { Route as AuthedMapRouteImport } from './routes/_authed/map'
 import { Route as AuthedAiUsageRouteImport } from './routes/_authed/ai-usage'
 import { Route as AuthedImagesIdRouteImport } from './routes/_authed/images.$id'
 
@@ -47,6 +48,11 @@ const AuthedRemindersRoute = AuthedRemindersRouteImport.update({
   path: '/reminders',
   getParentRoute: () => AuthedRouteRoute,
 } as any)
+const AuthedMapRoute = AuthedMapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => AuthedRouteRoute,
+} as any)
 const AuthedAiUsageRoute = AuthedAiUsageRouteImport.update({
   id: '/ai-usage',
   path: '/ai-usage',
@@ -62,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/ai-usage': typeof AuthedAiUsageRoute
+  '/map': typeof AuthedMapRoute
   '/reminders': typeof AuthedRemindersRoute
   '/settings': typeof AuthedSettingsRoute
   '/share-target': typeof AuthedShareTargetRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/ai-usage': typeof AuthedAiUsageRoute
+  '/map': typeof AuthedMapRoute
   '/reminders': typeof AuthedRemindersRoute
   '/settings': typeof AuthedSettingsRoute
   '/share-target': typeof AuthedShareTargetRoute
@@ -81,6 +89,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/ai-usage': typeof AuthedAiUsageRoute
+  '/_authed/map': typeof AuthedMapRoute
   '/_authed/reminders': typeof AuthedRemindersRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/share-target': typeof AuthedShareTargetRoute
@@ -93,6 +102,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/ai-usage'
+    | '/map'
     | '/reminders'
     | '/settings'
     | '/share-target'
@@ -101,6 +111,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/ai-usage'
+    | '/map'
     | '/reminders'
     | '/settings'
     | '/share-target'
@@ -111,6 +122,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/login'
     | '/_authed/ai-usage'
+    | '/_authed/map'
     | '/_authed/reminders'
     | '/_authed/settings'
     | '/_authed/share-target'
@@ -167,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedRemindersRouteImport
       parentRoute: typeof AuthedRouteRoute
     }
+    '/_authed/map': {
+      id: '/_authed/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof AuthedMapRouteImport
+      parentRoute: typeof AuthedRouteRoute
+    }
     '/_authed/ai-usage': {
       id: '/_authed/ai-usage'
       path: '/ai-usage'
@@ -186,6 +205,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteRouteChildren {
   AuthedAiUsageRoute: typeof AuthedAiUsageRoute
+  AuthedMapRoute: typeof AuthedMapRoute
   AuthedRemindersRoute: typeof AuthedRemindersRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedShareTargetRoute: typeof AuthedShareTargetRoute
@@ -195,6 +215,7 @@ interface AuthedRouteRouteChildren {
 
 const AuthedRouteRouteChildren: AuthedRouteRouteChildren = {
   AuthedAiUsageRoute: AuthedAiUsageRoute,
+  AuthedMapRoute: AuthedMapRoute,
   AuthedRemindersRoute: AuthedRemindersRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedShareTargetRoute: AuthedShareTargetRoute,

@@ -161,6 +161,7 @@ export function HomePage() {
     onSuccess: () => {
       toast.success("북마크를 삭제했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
     onError: () => toast.error("삭제하지 못했어요"),
@@ -171,6 +172,7 @@ export function HomePage() {
     onSuccess: () => {
       toast.success("AI 분류를 다시 시작했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
     },
     onError: () => toast.error("AI 분류를 시작하지 못했어요"),
   });
@@ -476,6 +478,7 @@ function BookmarkCard({
             metadata={bookmark.metadata}
           />
           <BookmarkPlaces
+            bookmarkId={bookmark.id}
             collapsible
             interactive={bookmark.kind === "image"}
             places={bookmark.places}

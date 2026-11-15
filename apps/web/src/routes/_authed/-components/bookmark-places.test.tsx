@@ -5,6 +5,8 @@ import { BookmarkPlaces } from "./bookmark-places";
 
 afterEach(cleanup);
 
+const bookmarkId = "00000000-0000-4000-8000-0000000000aa";
+
 function place(index: number, overrides: Partial<BookmarkPlace> = {}) {
   return {
     id: `00000000-0000-4000-8000-00000000000${index}`,
@@ -22,13 +24,16 @@ function place(index: number, overrides: Partial<BookmarkPlace> = {}) {
 
 describe("BookmarkPlaces", () => {
   it("renders nothing without places", () => {
-    const { container } = render(<BookmarkPlaces places={[]} />);
+    const { container } = render(
+      <BookmarkPlaces bookmarkId={bookmarkId} places={[]} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 
   it("renders each place as an external map link", () => {
     render(
       <BookmarkPlaces
+        bookmarkId={bookmarkId}
         places={[
           place(1),
           place(2, {
@@ -56,6 +61,7 @@ describe("BookmarkPlaces", () => {
   it("collapses to three places with a +N button that expands the rest", () => {
     render(
       <BookmarkPlaces
+        bookmarkId={bookmarkId}
         collapsible
         places={[1, 2, 3, 4, 5].map((index) => place(index))}
       />,
@@ -70,15 +76,36 @@ describe("BookmarkPlaces", () => {
 
   it("shows every place when not collapsible", () => {
     render(
-      <BookmarkPlaces places={[1, 2, 3, 4].map((index) => place(index))} />,
+      <BookmarkPlaces
+        bookmarkId={bookmarkId}
+        places={[1, 2, 3, 4].map((index) => place(index))}
+      />,
     );
     expect(screen.getAllByRole("link")).toHaveLength(4);
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("links to the map only when a place has coordinates", () => {
+    const { rerender } = render(
+      <BookmarkPlaces bookmarkId={bookmarkId} places={[place(1)]} />,
+    );
+    expect(screen.queryByRole("link", { name: "지도에서 보기" })).toBeNull();
+
+    rerender(
+      <BookmarkPlaces
+        bookmarkId={bookmarkId}
+        places={[place(1), place(2, { lat: 37.5, lng: 127 })]}
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: "지도에서 보기" }).getAttribute("href"),
+    ).toBe(`/map?bookmark=${bookmarkId}`);
+  });
+
   it("does not collapse exactly three places", () => {
     render(
       <BookmarkPlaces
+        bookmarkId={bookmarkId}
         collapsible
         places={[1, 2, 3].map((index) => place(index))}
       />,

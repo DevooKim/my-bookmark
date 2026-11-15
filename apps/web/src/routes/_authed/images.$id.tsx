@@ -53,6 +53,7 @@ function ImageDetailPageForId({ id }: { id: string }) {
       toast.success("AI 분석을 다시 시작했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmark", id] });
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
     },
     onError: () => toast.error("AI 분석을 시작하지 못했어요"),
   });
@@ -61,6 +62,7 @@ function ImageDetailPageForId({ id }: { id: string }) {
     onSuccess: () => {
       toast.success("이미지를 삭제했어요");
       void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+      void queryClient.invalidateQueries({ queryKey: ["places"] });
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
       void navigate({ to: "/" });
     },
@@ -236,7 +238,7 @@ export function ImageDetailView({
           </p>
         ) : null}
         <BookmarkMetadata metadata={bookmark.metadata} />
-        <BookmarkPlaces places={bookmark.places} />
+        <BookmarkPlaces bookmarkId={bookmark.id} places={bookmark.places} />
         {bookmark.tags.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {bookmark.tags.map((tag) => (

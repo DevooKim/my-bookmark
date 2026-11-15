@@ -100,6 +100,7 @@ function ShareTargetPage() {
             onSelectionChange={() => setSettled(false)}
             onUploaded={() => {
               void queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+              void queryClient.invalidateQueries({ queryKey: ["places"] });
               void queryClient.invalidateQueries({ queryKey: ["categories"] });
             }}
           />

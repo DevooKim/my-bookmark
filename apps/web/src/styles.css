@@ -131,7 +131,7 @@ a[role="button"]:active {
 }
 
 .mobile-tab-bar {
-  @apply fixed inset-x-4 bottom-3 z-40 grid grid-cols-4 rounded-[1.35rem] p-1 text-[0.68rem] sm:hidden;
+  @apply fixed inset-x-4 bottom-3 z-40 grid grid-cols-5 rounded-[1.35rem] p-1 text-[0.68rem] sm:hidden;
   bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
