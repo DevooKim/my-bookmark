@@ -4,6 +4,7 @@ import type {
   MapMarkerView,
   MapPoint,
 } from "./map-adapter";
+import { MOBILE_MAP_QUERY } from "./use-media-query";
 
 // 네이버 지도 JavaScript API v3. 스크립트 URL과 인증 파라미터(ncpKeyId)는 공식 문서
 // (https://navermaps.github.io/maps.js.ncp/)의 현행 형식이다. 과거 이름은 ncpClientId.
@@ -11,6 +12,23 @@ const SDK_URL = "https://oapi.map.naver.com/openapi/v3/maps.js";
 const MARKER_SIZE = 28;
 const FIT_PADDING = 56;
 const SINGLE_POINT_ZOOM = 16;
+
+// 로고·저작권 표시 위치(약관상 항상 보여야 한다). 기본은 저작권 좌하단·로고 우하단이고,
+// 하단 시트가 아래쪽을 덮는 모바일에서는 검색 바 위 좌우 모서리로 옮긴다.
+function controlPositions(top: boolean) {
+  return {
+    logoControlOptions: {
+      position: top
+        ? naver.maps.Position.TOP_RIGHT
+        : naver.maps.Position.BOTTOM_RIGHT,
+    },
+    mapDataControlOptions: {
+      position: top
+        ? naver.maps.Position.TOP_LEFT
+        : naver.maps.Position.BOTTOM_LEFT,
+    },
+  };
+}
 
 declare global {
   interface Window {
@@ -89,6 +107,10 @@ export function createNaverMapAdapterFactory(
       // 약관상 기본값(표시)을 유지한다.
       zoomControl: false,
       scaleControl: false,
+      ...controlPositions(
+        typeof window.matchMedia === "function" &&
+          window.matchMedia(MOBILE_MAP_QUERY).matches,
+      ),
     });
     const markers = new Map<string, naver.maps.Marker>();
     const signatures = new Map<string, string>();
@@ -172,6 +194,9 @@ export function createNaverMapAdapterFactory(
             maxZoom: 17,
           },
         );
+      },
+      setControlsAtTop(top) {
+        map.setOptions(controlPositions(top));
       },
       resize() {
         map.autoResize();

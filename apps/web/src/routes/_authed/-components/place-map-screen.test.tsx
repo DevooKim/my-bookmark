@@ -76,6 +76,7 @@ function createFakeMap() {
     fitTo: vi.fn<(points: readonly MapPoint[]) => void>(),
     panTo: vi.fn<(point: MapPoint) => void>(),
     resize: vi.fn(),
+    setControlsAtTop: vi.fn<(top: boolean) => void>(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     subscribeZoom: vi.fn((listener: (state: MapZoomState) => void) => {
@@ -910,6 +911,20 @@ describe("PlaceMapScreen on a phone (bottom sheet)", () => {
     ).toContain("map-search-bar");
   });
 
+  it("moves the NAVER logo and copyright to the top on a phone and fills the screen below", async () => {
+    mockViewport(true);
+    const { map } = renderScreen();
+    await waitFor(() =>
+      expect(map.adapter.setControlsAtTop).toHaveBeenCalled(),
+    );
+    expect(map.adapter.setControlsAtTop).toHaveBeenLastCalledWith(true);
+
+    // 지도 컨테이너를 접힌 시트 높이만큼 자르지 않는다(아래까지 찬다).
+    const wrapper = vi.mocked(map.factory).mock.calls[0]?.[0]?.parentElement;
+    expect(wrapper?.className).not.toMatch(/bottom-/);
+    expect(wrapper?.className).toContain("inset-0");
+  });
+
   it("tells the SDK to resize when the map container changes size", async () => {
     mockViewport(true);
     let notify: (() => void) | null = null;
@@ -960,6 +975,17 @@ describe("PlaceMapScreen on desktop keeps its layout", () => {
         map.lastMarkers().every((marker) => marker.state === "normal"),
       ).toBe(true),
     );
+  });
+});
+
+describe("NAVER logo placement on desktop", () => {
+  it("keeps the logo and copyright at their default bottom corners", async () => {
+    mockViewport(false);
+    const { map } = renderScreen();
+    await waitFor(() =>
+      expect(map.adapter.setControlsAtTop).toHaveBeenCalled(),
+    );
+    expect(map.adapter.setControlsAtTop).toHaveBeenLastCalledWith(false);
   });
 });
 

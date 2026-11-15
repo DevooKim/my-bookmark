@@ -236,6 +236,11 @@ export function PlaceMapScreen({
 
   useEffect(() => adapter?.subscribeZoom(setZoomState), [adapter]);
 
+  // 모바일에서는 하단 시트가 아래쪽을 덮으므로 로고·저작권을 위쪽 모서리에 둔다.
+  useEffect(() => {
+    adapter?.setControlsAtTop(isMobile);
+  }, [adapter, isMobile]);
+
   // 지도 컨테이너 크기가 바뀌면(회전, 주소창 변화) SDK에 알려 타일이 비지 않게 한다.
   useEffect(() => {
     const container = containerRef.current;
@@ -332,9 +337,9 @@ export function PlaceMapScreen({
         {createAdapter ? (
           // 네이버 SDK가 컨테이너의 인라인 style을 position: relative로 덮어쓰므로,
           // 부모를 채우는 일은 바깥 absolute 래퍼가 맡고 컨테이너는 크기만 채운다.
-          // 모바일에서는 접힌 시트(손잡이 4.5rem + 약간의 간격)만큼 아래를 비워 네이버 로고·저작권이
-          // 시트에 가려지지 않게 한다. 펼친 시트는 목록을 보는 동안만 지도를 덮는다.
-          <div className="absolute inset-0 max-sm:bottom-[4.75rem]">
+          // 지도는 모바일에서도 화면 아래까지 찬다. 네이버 로고·저작권은 시트가 덮지 않도록
+          // 위쪽 모서리로 옮기므로(setControlsAtTop) 노치 아래에서 시작하게 한다.
+          <div className="absolute inset-0 max-sm:top-[env(safe-area-inset-top)]">
             <div className="h-full w-full" ref={containerRef} />
           </div>
         ) : null}

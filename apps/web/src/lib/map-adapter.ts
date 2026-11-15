@@ -36,6 +36,9 @@ export interface MapAdapter {
   setMarkers(markers: readonly MapMarkerView[]): void;
   fitTo(points: readonly MapPoint[]): void;
   panTo(point: MapPoint): void;
+  // 네이버 로고·저작권 표시를 지도 위쪽(true)이나 기본 아래쪽(false)에 둔다.
+  // 모바일에서는 아래쪽을 하단 시트가 덮으므로 위쪽으로 옮긴다.
+  setControlsAtTop(top: boolean): void;
   // 컨테이너 크기가 바뀌었음을 SDK에 알려 타일이 비지 않게 한다.
   resize(): void;
   // 현재 줌에서 ±1(애니메이션). 최소·최대 줌을 넘지 않는다.

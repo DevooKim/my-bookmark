@@ -381,9 +381,10 @@ a[role="button"]:active {
   transform: translateX(1rem);
 }
 
+/* 지도 위쪽 모서리에는 네이버 로고·저작권이 있으므로(모바일) 그 아래에 둔다. */
 .map-search-bar {
   @apply absolute inset-x-3 z-20 flex min-h-12 items-center gap-2.5 rounded-full px-4;
-  top: calc(0.75rem + env(safe-area-inset-top));
+  top: calc(2.25rem + env(safe-area-inset-top));
 }
 
 .map-search-input::-webkit-search-cancel-button {
@@ -436,7 +437,7 @@ a[role="button"]:active {
   }
 
   .map-zoom-group {
-    top: calc(4.5rem + env(safe-area-inset-top));
+    top: calc(6rem + env(safe-area-inset-top));
     bottom: auto;
   }
 
