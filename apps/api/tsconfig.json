@@ -2,8 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node", "vitest/globals"],
-    "outDir": "dist",
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tsup.config.ts"]
+  "include": ["scripts/**/*.ts"]
 }

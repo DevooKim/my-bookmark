@@ -5,7 +5,7 @@ Phase 6 Web Push 서버는 VAPID 키쌍이 필요하다. 키는 한 번 생성�
 ## 생성
 
 ```bash
-bunx --no-install web-push generate-vapid-keys
+bunx web-push generate-vapid-keys
 ```
 
 출력 예:

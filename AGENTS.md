@@ -21,16 +21,15 @@
 이 프로젝트의 문서는 구현 모델이 아키텍처 판단 없이 코딩에 집중할 수 있도록 작성되었다. 다음을 지키면 상위 모델 수준의 결과가 나온다:
 
 1. **라이브러리 API를 기억에 의존해 쓰지 말 것.** 특히 TanStack Start는 v1 이후에도 빠르게 변한다(2026-07 기준 v1.168+). 스캐폴딩은 공식 CLI/예제(`bun create @tanstack/start` 또는 공식 examples)에서 시작하고, API 시그니처가 불확실하면 `node_modules`의 타입 정의나 공식 문서를 확인한 뒤 사용한다. 추측으로 작성한 코드가 타입 에러를 내면, 억지로 우회(`any`, `@ts-ignore`)하지 말고 올바른 API를 찾는다.
-2. **경계에서 zod 검증.** 모든 HTTP 요청 본문/쿼리, AI 응답, 외부 페이지 메타데이터는 `packages/shared`의 zod 스키마로 파싱한다. 타입 단언(`as`)으로 대체하지 않는다.
+2. **경계에서 검증.** TypeScript 입력은 공용 zod 스키마로, Go API 입력은 같은 계약을 Go 경계 검증과 테스트로 적용한다.
 3. **스펙이 모호하면**: (a) `docs/`에서 관련 원칙을 찾고, (b) 없으면 가장 단순한 해석을 선택하고 `PROGRESS.md`의 결정 로그에 기록한다. 아키텍처 수준의 변경(테이블 추가, 인증 방식 변경, 의존성 교체)은 임의로 하지 말고 사용자에게 확인한다.
 4. **에러를 삼키지 않는다.** 실패한 테스트를 skip 처리하거나, 빌드 에러를 설정 완화로 덮지 않는다. 원인을 고친다.
 5. **범위를 지킨다.** 현재 Phase의 수용 기준에 없는 기능을 미리 만들지 않는다. "나중에 필요할 것 같은" 추상화를 추가하지 않는다.
 6. **알려진 함정**(상세는 각 문서):
    - `vite-plugin-pwa`는 TanStack Start 프로덕션 빌드와 호환 문제가 있다. 서비스 워커는 별도 esbuild 스텝으로 빌드한다 → `docs/06-pwa-push.md`
-   - Supabase 신규 프로젝트는 비대칭 JWT. Express에서 `jose` + JWKS로 검증한다(레거시 HS256 아님) → `docs/04-auth.md`
-   - `packages/*`는 빌드 없이 TS 소스를 직접 export한다. api의 프로덕션 빌드는 tsup이 workspace 의존성을 번들에 포함(`noExternal`)해야 한다 → `docs/01-architecture.md`
+   - Supabase 신규 프로젝트는 비대칭 JWT. Go API에서 JWKS로 검증한다(레거시 HS256 아님) → `docs/04-auth.md`
+   - `packages/*`는 빌드 없이 TS 소스를 직접 export하며 웹과 별도 관리 도구에서 사용한다.
    - iOS Web Push는 홈 화면에 설치된 PWA + 사용자 제스처 내 권한 요청만 동작한다 → `docs/06-pwa-push.md`
-   - Express 5는 async 핸들러의 rejection을 자동으로 에러 미들웨어에 전달한다. `express-async-handler` 같은 래퍼를 추가하지 않는다.
 
 ## 기술 스택 (확정 — 변경 시 사용자 확인 필요)
 
@@ -39,26 +38,26 @@
 | 패키지 매니저 | Bun workspaces (모노레포) |
 | 프론트엔드 | TanStack Start v1 (React 19, Vite), TanStack Query/Form/Virtual |
 | 스타일 | Tailwind CSS v4, shadcn/ui 스타일 컴포넌트, lucide-react, sonner |
-| 백엔드 | Express 5 (TypeScript, tsx dev / tsup build) |
+| 백엔드 | Go 1.27, libvips |
 | DB/인증 | Supabase (Postgres + Auth, 클라우드), supabase CLI 마이그레이션 |
-| AI | 자체 provider 인터페이스 — Gemini(기본)/Anthropic/OpenAI |
-| 푸시 | web-push (VAPID), node-cron 스케줄러 |
-| 품질 도구 | Biome (lint+format), Vitest, TypeScript 7.0.2 strict |
-| 배포 | web: Vercel Bun Runtime Beta, api: Docker (Node LTS) |
+| AI | OpenRouter |
+| 푸시 | Web Push (VAPID), Go 스케줄러 |
+| 품질 도구 | Go 테스트, Biome, Vitest, TypeScript strict |
+| 배포 | web: 정적 Caddy, api: Go Docker |
 | Node | 24 LTS |
 
 ## 저장소 구조
 
 ```
 apps/web        # TanStack Start 앱 (UI + PWA)
-apps/api        # Express API 서버 (REST, AI 분류, 푸시, 스케줄러)
+apps/api        # Go API 서버 (REST, AI 분류, 푸시, 스케줄러)와 별도 관리 도구
 packages/shared # zod 스키마, API 타입, 상수 (TS 소스 직접 export)
-packages/ai     # AI provider 인터페이스 + Gemini/Anthropic/OpenAI 구현
+packages/ai     # 관리 도구용 OpenRouter 구현
 supabase/       # 마이그레이션 SQL (supabase CLI)
 docs/           # 설계 명세 (이 문서들이 스펙의 원본)
 ```
 
-데이터 흐름: **웹/단축어 → Express API → Supabase**. 웹은 supabase-js를 **인증에만** 사용하고, 데이터 CRUD는 전부 Express를 거친다(단일 API 표면). Express는 secret key로 DB에 접근한다.
+데이터 흐름: **웹/단축어 → Go API → Supabase**. 웹은 supabase-js를 **인증에만** 사용하고, 데이터 CRUD는 전부 API를 거친다. API는 secret key로 DB에 접근한다.
 
 ## 명령어 (Phase 0 완료 후 유효)
 

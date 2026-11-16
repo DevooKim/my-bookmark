@@ -1,18 +1,18 @@
-# 03. API 스펙 (Express)
+# 03. API 스펙 (Go)
 
 Base URL: `{API_URL}/api`. 이미지 업로드만 `multipart/form-data`이고 나머지 요청/응답은 JSON이다. 시간은 ISO 8601(UTC).
 
 ## 인증
 
-두 방식 중 하나. 미들웨어가 `req.userId`를 채운다.
+두 방식 중 하나. 인증 미들웨어가 요청 컨텍스트에 사용자 ID를 설정한다.
 
 | 방식 | 헤더 | 대상 |
 |---|---|---|
 | Supabase 세션 | `Authorization: Bearer <access_token>` | 웹앱 |
 | API Key | `X-API-Key: bm_…` | iOS 단축어, 스크립트 |
 
-- API Key 인증은 **북마크/카테고리 엔드포인트만** 허용한다. 키 관리·푸시·리마인더 엔드포인트는 Bearer 전용 (키 유출 시 피해 최소화).
-- `GET /api/health`만 인증 불필요.
+- API Key는 북마크·카테고리·이미지·공유 API와 MCP에서 허용한다. 키 관리·푸시·리마인더·장소·AI는 Bearer 전용이다.
+- `GET /api/health`와 `GET /api/health/ready`는 인증이 필요 없다.
 
 ## 공통 에러 포맷
 

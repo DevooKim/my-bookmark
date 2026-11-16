@@ -39,13 +39,13 @@
 - `GET /api/bookmarks`, `GET /api/categories`: network-first, 성공 응답을 캐시에 복사 → 오프라인에서 마지막 목록 읽기 가능.
 - **그 외 `/api/*`는 절대 캐시하지 않는다** (mutation, 인증 관련 사고 방지). HTML 내비게이션도 network 우선.
 
-## 백엔드 (Express)
+## 백엔드 (Go)
 
-- `compression()` 미들웨어 (gzip). 응답에 `etag`는 Express 기본값 유지.
+- 이미지 처리는 libvips를 사용하며 업로드 크기와 디코딩 픽셀 수를 제한한다.
 - 목록 쿼리는 인덱스를 타는 keyset 페이지네이션 (02-database의 `bookmarks_user_created_idx`).
 - `withCounts=true` 카테고리 집계는 단일 쿼리(group by)로 — 카테고리별 N+1 금지.
 - 메타데이터 fetch/AI 분류는 요청 경로 밖(백그라운드) — 등록 응답을 절대 막지 않는다 (05-ai).
-- pino 로거는 요청당 1줄. 개발 편의용 verbose 로깅을 프로덕션 경로에 남기지 않는다.
+- 운영 알림과 오류 로그에는 인증 정보와 비밀값을 남기지 않는다.
 
 ## 웹 서버/전송
 

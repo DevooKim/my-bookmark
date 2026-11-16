@@ -27,11 +27,7 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 RUN bun run --filter @my-bookmark/web build
 
-FROM docker.io/library/node:24-alpine AS runtime
-ENV NODE_ENV=production
-WORKDIR /app
-# nitro's .output is self-contained (server bundle + client assets)
-COPY --from=build /app/apps/web/.output ./.output
+FROM docker.io/library/caddy:2-alpine AS runtime
+COPY apps/web/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/apps/web/.output/public /srv
 EXPOSE 3000
-USER node
-CMD ["node", ".output/server/index.mjs"]

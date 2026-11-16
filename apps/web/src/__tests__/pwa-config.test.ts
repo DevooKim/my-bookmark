@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -10,26 +10,6 @@ describe("PWA configuration", () => {
 
     expect(packageJson.scripts["build:sw"]).toContain("esbuild src/sw/sw.ts");
     expect(packageJson.scripts.build).toMatch(/^bun run build:sw &&/);
-  });
-
-  it("uses the Vercel Bun runtime", () => {
-    const configPath = path.resolve(__dirname, "../../vercel.json");
-
-    expect(existsSync(configPath)).toBe(true);
-    const vercelConfig = JSON.parse(readFileSync(configPath, "utf8")) as {
-      bunVersion?: string;
-    };
-
-    expect(vercelConfig.bunVersion).toBe("1.x");
-  });
-
-  it("excludes generated Vercel output from repository checks", () => {
-    const biomeConfig = readFileSync(
-      path.resolve(__dirname, "../../../../biome.json"),
-      "utf8",
-    );
-
-    expect(biomeConfig).toContain('"!**/.vercel"');
   });
 
   it("uses Bun's hoisted linker for the Nitro npm alias", () => {
@@ -59,7 +39,7 @@ describe("PWA configuration", () => {
     const rootPackageJson = JSON.parse(
       readFileSync(path.join(repositoryRoot, "package.json"), "utf8"),
     ) as { packageManager?: string };
-    const dockerfiles = ["apps/api/Dockerfile", "apps/web/Dockerfile"];
+    const dockerfiles = ["apps/web/Dockerfile"];
 
     expect(rootPackageJson.packageManager).toBe("bun@1.4.0");
     for (const dockerfile of dockerfiles) {
@@ -67,28 +47,26 @@ describe("PWA configuration", () => {
         readFileSync(path.join(repositoryRoot, dockerfile), "utf8"),
         dockerfile,
       ).toContain("FROM docker.io/oven/bun:1.4.0-alpine AS base");
-      expect(
-        readFileSync(path.join(repositoryRoot, dockerfile), "utf8"),
-        dockerfile,
-      ).toContain("FROM docker.io/library/node:24-alpine AS runtime");
     }
   });
 
-  it("builds the Docker fallback with the Node server preset", () => {
+  it("serves only built public files in the static runtime", () => {
     const dockerfile = readFileSync(
       path.resolve(__dirname, "../../Dockerfile"),
       "utf8",
     );
 
-    expect(dockerfile).toContain("ENV NITRO_PRESET=node-server");
+    expect(dockerfile).toContain(
+      "FROM docker.io/library/caddy:2-alpine AS runtime",
+    );
+    expect(dockerfile).toContain("/app/apps/web/.output/public /srv");
   });
 
-  it("pins TypeScript 7 across every workspace", () => {
+  it("pins TypeScript 7 across TypeScript workspaces", () => {
     const repositoryRoot = path.resolve(__dirname, "../../../..");
     const manifestPaths = [
       "package.json",
       "apps/web/package.json",
-      "apps/api/package.json",
       "packages/shared/package.json",
       "packages/ai/package.json",
     ];
@@ -108,15 +86,16 @@ describe("PWA configuration", () => {
     expect(webManifest.devDependencies["@types/node"]).toMatch(/^\^24\./);
   });
 
-  it("sets runtime cache headers for PWA assets", () => {
-    const viteConfig = readFileSync(
-      path.resolve(__dirname, "../../vite.config.ts"),
+  it("configures static cache headers and the API proxy", () => {
+    const caddyfile = readFileSync(
+      path.resolve(__dirname, "../../Caddyfile"),
       "utf8",
     );
 
-    expect(viteConfig).toContain('"/sw.js"');
-    expect(viteConfig).toContain('"cache-control": "no-cache"');
-    expect(viteConfig).toContain('"/icons/**"');
-    expect(viteConfig).toContain('"/manifest.webmanifest"');
+    expect(caddyfile).toContain("reverse_proxy api:3001");
+    expect(caddyfile).toContain("/assets/app-styles.css");
+    expect(caddyfile).toContain('Cache-Control "no-cache"');
+    expect(caddyfile).toContain("/icons/* /manifest.webmanifest");
+    expect(caddyfile).toContain("try_files {path} /index.html");
   });
 });

@@ -1,5 +1,5 @@
-import "../src/lib/load-env";
-import { createSupabaseAdminClient } from "../src/lib/supabase";
+import "./admin/lib/load-env";
+import { createSupabaseAdminClient } from "./admin/lib/supabase";
 
 // Seeded bookmarks use this host so --clean can remove them without touching
 // real data (bookmarks.url is unique per user, so reruns require --clean).
@@ -30,7 +30,7 @@ function parseArgs(argv: string[]): {
   clean: boolean;
 } {
   let count = 1000;
-  let email = process.env["TEST_EMAIL"];
+  let email = process.env.TEST_EMAIL;
   let clean = false;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--count") {

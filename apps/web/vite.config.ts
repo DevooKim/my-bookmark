@@ -15,9 +15,7 @@ const config = defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // styles.css must keep one stable URL: the SSR pass links its own
-        // hash, which can differ from the client pass emit (observed in the
-        // linux Docker build) and 404 → unstyled first paint (CLS).
+        // Preserve the existing stable URL and its network-first SW policy.
         assetFileNames: (assetInfo) =>
           assetInfo.names?.includes("styles.css")
             ? "assets/app-styles[extname]"
@@ -27,31 +25,11 @@ const config = defineConfig({
   },
   plugins: [
     devtools(),
-    nitro({
-      rollupConfig: { external: [/^@sentry\//] },
-      compressPublicAssets: { gzip: true, brotli: true },
-      routeRules: {
-        // 해시 없는 고정 URL이라 배포마다 내용이 바뀐다. 매번 ETag로 재검증해
-        // (변경 없으면 304) 배포 직후에도 새 CSS가 바로 적용되게 한다.
-        "/assets/app-styles.css": {
-          headers: { "cache-control": "no-cache" },
-        },
-        "/assets/**": {
-          headers: { "cache-control": "public, max-age=31536000, immutable" },
-        },
-        "/icons/**": {
-          headers: { "cache-control": "public, max-age=3600" },
-        },
-        "/manifest.webmanifest": {
-          headers: { "cache-control": "public, max-age=3600" },
-        },
-        "/sw.js": {
-          headers: { "cache-control": "no-cache" },
-        },
-      },
-    }),
+    nitro(),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({
+      spa: { enabled: true, prerender: { outputPath: "/index.html" } },
+    }),
     viteReact(),
   ],
 });

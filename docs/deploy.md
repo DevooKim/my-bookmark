@@ -1,6 +1,6 @@
 # 배포 가이드
 
-기본 배포 구성은 `web`(TanStack Start SSR)은 Vercel Bun Runtime Beta, `api`(Express)는 Node.js 24 Docker다. Docker Compose는 로컬 프로덕션 검증과 두 서비스를 함께 자체 호스팅하는 대안으로 유지한다. Supabase는 클라우드를 사용한다.
+web은 TanStack Start의 정적 SPA를 빌드해 Compose의 정적 Caddy에서 제공한다. 기존 운영 Caddy는 HTTPS와 기존 도메인별 web/API 프록시를 유지한다. Supabase는 클라우드를 사용한다.
 
 ## 0. 사전 준비 체크리스트
 
@@ -9,7 +9,6 @@
 - [ ] `.env` 작성 (아래 표)
 - [ ] VAPID 키 생성 (아래)
 - [ ] API를 실행할 Docker 호스트
-- [ ] 저장소와 연결된 Vercel 프로젝트 (`apps/web`을 Root Directory로 설정)
 
 ## 1. 환경변수 (.env)
 
@@ -31,7 +30,7 @@
 | `ALERT_ENV` | Discord 메시지 환경명 | 기본 `home-production` |
 | `VITE_SUPABASE_URL` | 웹 클라이언트용 | 빌드 시점에 번들에 포함 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key (`sb_publishable_…`) | 공개 가능 |
-| `VITE_API_URL` | 브라우저가 접근하는 api 주소 | 배포 시 `https://bm.example.com/api`가 아니라 **api 서버의 공개 주소** (예: `https://api.bm.example.com` 또는 리버스 프록시 경유 동일 도메인) |
+| `VITE_API_URL` | 선택적 API origin (`/api` 제외) | 비우면 production은 동일 origin의 `/api/*`, dev는 `http://localhost:3001`. 기존 별도 API 도메인을 쓰는 경우 해당 HTTPS origin 지정 |
 | `VITE_VAPID_PUBLIC_KEY` | 푸시 구독용 공개키 | `VAPID_PUBLIC_KEY`와 동일 값 |
 | `VITE_NAVER_MAP_CLIENT_ID` | 네이버 클라우드 플랫폼 Maps 인증 키 ID (`/map` 지도용) | 빌드 시점에 번들에 포함. 공개 가능. 비어 있으면 `/map`은 지도 대신 안내 문구만 표시. 콘솔의 Web 서비스 URL에 배포 도메인을 등록해야 한다 |
 
@@ -42,7 +41,7 @@ AI 분류는 OpenRouter 요청의 `models` 배열로 폴백한다 — 서버 env
 ## 2. VAPID 키 생성
 
 ```bash
-bunx --no-install web-push generate-vapid-keys
+bunx web-push generate-vapid-keys
 ```
 
 출력된 Public/Private key를 `.env`의 `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VITE_VAPID_PUBLIC_KEY`에 넣는다. 상세는 `docs/vapid-guide.md`.
@@ -51,9 +50,9 @@ bunx --no-install web-push generate-vapid-keys
 
 ## 3. 배포
 
-### 3.1 API — Node.js 24 Docker
+### 3.1 API — Go Docker
 
-API 이미지는 Bun으로 의존성을 설치하고 빌드하지만, 최종 컨테이너는 Node.js 24 LTS에서 실행된다.
+API 이미지는 Go 서버를 빌드해 실행한다. 서버 전용 설정은 API 컨테이너에만 둔다.
 
 ```bash
 docker compose build api
@@ -61,21 +60,11 @@ docker compose up -d api
 curl http://localhost:3001/api/health   # {"ok":true}
 ```
 
-API 호스트에는 서버 전용 환경변수(`SUPABASE_SECRET_KEY`, `OPEN_ROUTER_API_KEY`, VAPID private key 포함)를 설정한다. web의 Vercel 프로젝트에는 이 값을 넣지 않는다.
+API 호스트에는 서버 전용 환경변수(`SUPABASE_SECRET_KEY`, `OPEN_ROUTER_API_KEY`, VAPID private key 포함)를 설정한다. web 빌드에는 넣지 않는다.
 
-### 3.2 web — Vercel Bun Runtime Beta
+### 3.2 정적 web + Compose
 
-Vercel 프로젝트 설정:
-
-1. 저장소를 연결하고 **Root Directory**를 `apps/web`으로 지정한다.
-2. 저장소 루트의 `bun.lock`으로 Bun 설치가 자동 감지되는지 배포 로그에서 확인한다.
-3. Build Command는 package script인 `bun run build`를 사용한다. `VERCEL=1` 환경에서 Nitro가 Vercel preset을 자동 선택한다.
-4. `apps/web/vercel.json`의 `bunVersion: "1.x"`가 Vercel Functions를 Bun Runtime Beta로 실행한다.
-5. `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`, `VITE_VAPID_PUBLIC_KEY`, `VITE_NAVER_MAP_CLIENT_ID`를 Preview와 Production 환경에 설정한다.
-
-`VITE_API_URL`은 브라우저에서 접근 가능한 HTTPS API origin이어야 한다. 배포 로그에는 `[nitro:vercel] Using bun1.x runtime`과 `.vercel/output/functions` 생성이 나타나야 한다.
-
-### 3.3 Docker Compose 대안
+web 이미지는 빌드 시 SPA shell과 에셋을 생성하고 `.output/public`만 정적 Caddy 이미지에 복사한다. 런타임에 Node/Nitro 서버는 실행하지 않는다.
 
 저장소의 모든 외부 이미지는 Podman의 short-name alias 설정 없이도 동작하도록 `docker.io/...` 완전 이름을 사용한다. 아래 명령은 Docker Compose와 Podman Compose 모두에서 사용할 수 있다.
 
@@ -93,41 +82,15 @@ curl -I http://localhost:3000/login     # 200
   `docker compose logs api | grep -i cron`
 - Uptime Kuma는 `127.0.0.1:3002`에만 공개되며 데이터는 로컬 `uptime-kuma-data` volume에 저장된다. Docker socket은 마운트하지 않는다.
 
-## 4. 자체 호스팅 HTTPS / 리버스 프록시 (Caddy)
+## 4. 기존 운영 Caddy와 HTTPS
 
-**PWA 설치와 Web Push는 HTTPS가 필수**다(localhost 제외). Vercel은 web HTTPS를 제공한다. Docker Compose로 두 서비스를 자체 호스팅할 때는 Caddy를 앞단에 둔다.
+**PWA 설치와 Web Push는 HTTPS가 필수**다(localhost 제외). 집 서버의 실제 `~/containers/my-bookmark/compose.yaml`은 저장소 밖에서 관리하며 빌드 컨텍스트는 `../../apps/my-bookmark`다. 기존 외부 Caddy(`~/containers/my-bookmark/Caddyfile`)는 `:8080`에서 민감 경로를 404 처리하고 `/api/*`를 `api:3001`, 나머지를 `web:3000`으로 프록시한다. Tailscale 경로, 접근 제한, Caddy 설정과 서비스 간 네트워크를 그대로 유지한다. 이 운영 Compose에서는 포트를 호스트 loopback에 게시하지 않으므로 위 로컬 Compose의 `localhost:3000/3001` 점검 명령을 그대로 적용하지 않는다.
 
-`Caddyfile` 예시 (web과 api를 한 도메인에서 서빙 — CORS 불필요):
+기존 운영 Caddy가 API로 직접 프록시하므로 정적 web 컨테이너가 추가돼도 API 경로의 프록시 hop 수는 늘지 않는다. 기존 `TRUST_PROXY` 설정을 유지하고 실제 경로에서 클라이언트 IP를 검증한다. web의 정적 Caddy도 로컬 Compose에서 `/api/*`를 API 컨테이너로 프록시하므로 다른 경로에서 web을 통해 API로 전달한다면 hop이 하나 늘어난다.
 
-```caddy
-bm.example.com {
-    handle /api/* {
-        reverse_proxy api:3001
-    }
-    handle {
-        reverse_proxy web:3000
-    }
-}
-```
+정적 Caddy 컨테이너는 운영 Caddy 외에 서버 프로세스 하나가 더 필요하지만, 저장소 밖 Caddy 설정이나 정적 파일 마운트를 변경하지 않고 기존 포트·TLS 경계를 유지한다. `apps/web/Caddyfile`은 SPA 경로를 `index.html`로 폴백하되 누락된 정적 파일은 404로 반환하고, 기존 SW/자산 캐시 정책을 적용한다. 운영 Caddy에 캐시 헤더를 덮어쓰는 규칙이 없는지도 확인한다.
 
-compose 오버라이드 예시 (`docker-compose.override.yml`):
-
-```yaml
-services:
-  caddy:
-    image: docker.io/library/caddy:2-alpine
-    ports: ["80:80", "443:443"]
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    depends_on: [web, api]
-volumes:
-  caddy_data:
-```
-
-단일 도메인 구성 시 `.env`는 `WEB_ORIGIN=https://bm.example.com`, `VITE_API_URL=https://bm.example.com`으로 설정하고 web 이미지를 다시 빌드한다. 프록시 뒤에서는 `TRUST_PROXY=1`도 설정해 api가 `X-Forwarded-For`의 실제 클라이언트 IP를 보게 한다(API Key rate limit 정확도).
-
-집 서버의 실제 Caddy 설정은 저장소 밖에서 관리한다. Tailscale 내부 전용 Kuma hostname을 `127.0.0.1:3002`로 reverse proxy하고 Tailnet 밖에서 열리지 않는지 확인한다. Caddy가 별도 컨테이너라면 api/web/Kuma와 같은 Docker network에 연결하고 host port를 외부 인터페이스로 넓히지 않는다.
+운영 적용 시 저장소 밖 Compose·Caddy 설정을 보존하고 해당 운영 Compose 디렉터리에서 web 이미지를 재빌드·교체한다. 이 Compose는 다섯 `VITE_*` 빌드 인자를 `~/containers/my-bookmark/.env`에서 읽는다. 값은 빌드 시 고정되며 변경 시 재빌드가 필요하다. `VITE_API_URL`을 비우면 운영 Caddy와 같은 origin의 `/api/*`를 사용하며, 별도 origin을 사용하는 현재 값이 있으면 의도 확인 없이 덮어쓰지 않는다. 배포 후 실제 도메인에서 `/login`, `/map` 직접 진입, `/api/health`, 없는 `/assets/…`의 404, `/sw.js`와 CSS 캐시 헤더를 확인한다. Kuma가 별도로 운영 중이면 기존 접근 제한도 유지한다.
 
 ## 5. Supabase 설정 요약
 
@@ -166,7 +129,7 @@ API는 동일 IP의 인증 실패 1분 5회, 민감 API 경로 1회, route miss 
 
 배포 후 web/API 컨테이너 중지·복구, readiness 실패·복구, 한 IP의 인증 실패 5회, `/api/.env` 요청을 차례로 시험한다. Discord Webhook을 일시적으로 잘못 설정해도 앱 요청과 cron이 계속 동작하는지 확인한다.
 
-- 로그: `docker compose logs -f api` (pino JSON). `Authorization`/`X-API-Key` 헤더는 redact됨.
+- 로그: `docker compose logs -f api` (Go 표준 `log` 텍스트 출력, pino JSON 아님). `Authorization`/`X-API-Key` 요청 헤더는 로깅하지 않는다.
 - 종료: `docker compose down` — api는 SIGTERM에서 cron 중지 후 서버를 닫는다(graceful).
 - 이미지 갱신 배포: `git pull && docker compose build && docker compose up -d`.
 - 시드/정리(개발용): `bun run --filter @my-bookmark/api seed:bookmarks -- [--count N] [--clean]` — `https://seed.my-bookmark.test/…` URL만 건드린다.

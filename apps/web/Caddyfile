@@ -1,0 +1,39 @@
+:3000 {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy api:3001
+    }
+
+    handle {
+        root * /srv
+
+        @assets {
+            path /assets/*
+            not path /assets/app-styles.css
+        }
+        header @assets Cache-Control "public, max-age=31536000, immutable" {
+            match status 2xx 304
+        }
+        @styles path /assets/app-styles.css
+        header @styles Cache-Control "no-cache"
+        @icons path /icons/* /manifest.webmanifest
+        header @icons Cache-Control "public, max-age=3600"
+        @revalidate path /sw.js /index.html
+        header @revalidate Cache-Control "no-cache"
+
+        @assetPaths path /assets/* /icons/*
+        handle @assetPaths {
+            file_server
+        }
+        @static path_regexp staticFile \.[^/]+$
+        handle @static {
+            file_server
+        }
+        handle {
+            try_files {path} /index.html
+            header Cache-Control "no-cache"
+            file_server
+        }
+    }
+}

@@ -29,29 +29,12 @@ bun run test
 
 This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
 
-### Removing Tailwind CSS
+## Static SPA deployment
 
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `bun remove @tailwindcss/vite tailwindcss`
-
-
-## Deploy to Vercel with Nitro
-
-Create a Vercel project with `apps/web` as its Root Directory. Vercel detects the repository-level `bun.lock`, and `vercel.json` opts the emitted functions into the Bun 1.x Beta runtime.
-
-```bash
-VERCEL=1 bun run build
-```
-
-The deployment output is written to `.vercel/output`. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`, and `VITE_VAPID_PUBLIC_KEY` in the Vercel project.
-
-The regular `bun run build` command keeps the Node server output under `.output` for Docker or local production checks.
-
-
+`bun run build` produces the SPA shell and assets in `.output/public`.
+The Docker runtime serves only those files with Caddy and proxies `/api/*`
+to the API. See [the deployment guide](../../docs/deploy.md) for environment
+variables, the existing outer Caddy, and cache policy.
 
 ## Routing
 
@@ -122,47 +105,6 @@ export const Route = createRootRoute({
 
 More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
 
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
 
 ## Data Fetching
 

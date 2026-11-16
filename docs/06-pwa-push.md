@@ -18,7 +18,7 @@
 ```
 [등록]  웹앱: 권한 요청 → pushManager.subscribe(VAPID 공개키)
         → 구독 객체(endpoint+키)를 서버에 저장
-[발송]  node-cron이 도래한 리마인더 발견
+[발송]  Go 스케줄러가 도래한 리마인더 발견
         → 단발은 sent 전이, 반복은 다음 실행 시각으로 조건부 갱신
         → web-push.sendNotification(구독, payload)   ← 서버는 푸시 서비스로 보낼 뿐
         → 푸시 서비스(APNs/FCM/Mozilla)가 기기로 전달
@@ -115,7 +115,7 @@ self.addEventListener('notificationclick', (event) => {
 ## 리마인더 스케줄러 (services/reminder-cron.ts)
 
 ```
-node-cron '* * * * *' (매분):
+Go 스케줄러(매분):
 1. select * from reminders where status='pending' and is_enabled=true and remind_at <= now() limit 20
 2. 단발: status='sent', sent_at=now()
    반복: remind_at=다음 미래 회차, sent_at=now(), status='pending' 유지

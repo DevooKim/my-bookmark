@@ -26,27 +26,11 @@ Supabase 대시보드에서:
 
 **SSR 주의**: 세션이 localStorage에 있으므로 서버 렌더 시점엔 인증 상태를 모른다. 이 앱은 데이터가 전부 클라이언트 fetch(TanStack Query)이므로 문제없다 — 라우트 가드는 클라이언트에서 동작하면 충분하고, SSR로 데이터를 미리 채우려는 시도를 하지 말 것 (복잡도만 늘어난다).
 
-## Express에서 Supabase JWT 검증
+## Go API의 Supabase JWT 검증
 
-Supabase는 2025-10 이후 신규 프로젝트에 **비대칭 JWT 서명 키**를 기본 적용한다. 검증은 JWKS 공개키로 로컬에서 수행한다 — 요청마다 Supabase API를 호출하지 않는다(`auth.getUser()` 방식 금지, 느리고 불필요).
+Supabase의 비대칭 JWT는 `SUPABASE_URL/auth/v1/.well-known/jwks.json` 공개키로 검증한다. 서버는 서명, issuer, `authenticated` audience, 유효 시간과 subject를 검사한다. 유효한 캐시 키는 로컬 검증하며, JWKS 갱신은 단일 요청으로 합치고 미등록 키의 반복 갱신에 30초 cooldown을 적용한다. 키 집합을 가져오지 못하면 401이 아니라 502를 반환한다.
 
-```ts
-// middleware/auth.ts 개요 — jose 사용
-import { createRemoteJWKSet, jwtVerify } from 'jose';
-
-const jwks = createRemoteJWKSet(new URL(`${env.SUPABASE_URL}/auth/v1/jwks`)); // 모듈 레벨 1회, jose가 캐싱
-
-export async function bearerAuth(token: string): Promise<string /* userId */> {
-  const { payload } = await jwtVerify(token, jwks, {
-    issuer: `${env.SUPABASE_URL}/auth/v1`,
-    audience: 'authenticated',
-  });
-  return payload.sub!;
-}
-```
-
-- `createRemoteJWKSet`은 키를 캐싱하고 미지의 `kid`가 오면 자동 refetch한다. JWKS 엔드포인트는 Supabase 엣지에서 10분 캐시되므로 키 로테이션 직후 잠깐의 지연이 있을 수 있다(1인 서비스에선 무시 가능).
-- **레거시 프로젝트 폴백**: 프로젝트가 구형 HS256(shared secret)이면 JWKS에 키가 없다. 그 경우 `SUPABASE_JWT_SECRET` env를 추가하고 `jwtVerify(token, secret)`로 검증하는 분기를 둔다. 어느 쪽인지는 대시보드 Settings → JWT Keys에서 확인(구현 시점에 확인해서 한쪽만 구현해도 됨 — 결정을 PROGRESS.md에 기록).
+구형 HS256 공유 비밀 기반 토큰은 지원하지 않는다.
 
 ## API Key 설계
 

@@ -1,10 +1,10 @@
-import "../src/lib/load-env";
+import "./admin/lib/load-env";
 import { fileURLToPath } from "node:url";
 import type { EmbeddingProvider } from "@my-bookmark/ai";
 import { z } from "zod";
-import { createSupabaseAdminClient } from "../src/lib/supabase";
-import { buildEmbeddingText } from "../src/services/embedding";
-import { getEmbeddingProvider } from "../src/services/embedding-provider";
+import { createSupabaseAdminClient } from "./admin/lib/supabase";
+import { buildEmbeddingText } from "./admin/services/embedding";
+import { getEmbeddingProvider } from "./admin/services/embedding-provider";
 
 export const EMBEDDING_BATCH_SIZE = 100;
 const QUERY_PAGE_SIZE = 500;

@@ -14,7 +14,7 @@
 
 ### 리마인더 — 다시 볼 링크를 정해둔 시간에 푸시
 
-Web Push(VAPID) + node-cron 스케줄러로 지정한 시각에 알림을 보낸다. 반복(매일) 설정도 지원한다.
+Web Push(VAPID)와 Go 스케줄러로 지정한 시각에 알림을 보낸다. 단발·매일·매주·매월 반복을 지원한다.
 
 ![리마인더 화면](./docs/screenshots/reminders.jpeg)
 
@@ -29,9 +29,9 @@ OpenRouter 계정 사용액, 모델별 토큰·호출 수, 일별 추이와 최�
 ## 주요 기능
 
 - **AI 자동 분류** — 등록 즉시 응답(201) 후 백그라운드에서 카테고리·태그·메타데이터를 생성
-- **OpenRouter 기반 AI** — OpenRouter를 통해 여러 모델로 분류, 설정 화면에서 모델·암호화 API 키 전환
+- **OpenRouter 기반 AI** — 서버 환경변수의 키와 모델 폴백 순서로 분류
 - **PWA** — Web App Manifest + Service Worker로 홈 화면 설치, 모바일 퍼스트 UI
-- **Web Push 리마인더** — VAPID 기반 푸시 + node-cron 스케줄러
+- **Web Push 리마인더** — VAPID 기반 푸시와 Go 스케줄러
 - **API Key 발급** — 설정 화면에서 API Key를 발급·관리하고, `X-API-Key` 인증으로 외부에서 REST API를 호출
 - **AI 사용량 대시보드** — 모델별 비용·토큰·호출 추이 시각화
 
@@ -42,16 +42,18 @@ OpenRouter 계정 사용액, 모델별 토큰·호출 수, 일별 추이와 최�
 | 패키지 매니저 | Bun workspaces (모노레포) |
 | 프론트엔드 | TanStack Start v1 (React 19, Vite), TanStack Query/Form/Virtual |
 | 스타일 | Tailwind CSS v4, shadcn/ui 스타일 컴포넌트, lucide-react, sonner |
-| 백엔드 | Express 5 (TypeScript, tsx dev / tsup build) |
+| 백엔드 | Go 1.27, libvips |
 | DB/인증 | Supabase (Postgres + Auth) |
 | AI | OpenRouter |
-| 푸시 | web-push (VAPID), node-cron 스케줄러 |
-| 품질 도구 | Biome (lint+format), Vitest, TypeScript strict |
+| 푸시 | Web Push (VAPID), Go 리마인더 스케줄러 |
+| 품질 도구 | Go 테스트, Biome, Vitest, TypeScript strict |
 
 ## 시작하기
 
+로컬에서 API와 루트 검증 명령을 실행하려면 **Go 1.27 이상, C 컴파일러, pkg-config, libvips 개발 패키지**가 필요하다. Go 실행 파일이 `PATH`에 있어야 하며, 예를 들어 Alpine에서는 `apk add build-base pkgconf vips-dev`로 native 의존성을 설치한다. 프로덕션 API 이미지는 Dockerfile에서 이 의존성을 직접 설치한다.
+
 ```bash
-bun install
+bun install              # Go 1.27과 libvips 개발 패키지도 필요
 bun run dev              # web(:3000) + api(:3001) 동시 실행
 ```
 
@@ -61,8 +63,8 @@ bun run dev              # web(:3000) + api(:3001) 동시 실행
 ### 명령어
 
 ```bash
-bun run typecheck        # 전 워크스페이스 타입체크
-bun run lint             # Biome 검사 (--write로 자동수정)
-bun run test             # Vitest
+bun run typecheck        # Go vet + 전 워크스페이스 타입체크
+bun run lint             # Go vet + Biome 검사
+bun run test             # Go test + Vitest
 bun run build            # 전 워크스페이스 빌드
 ```

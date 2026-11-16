@@ -11,19 +11,19 @@
        │ (Supabase 세션)     │
        ▼                    ▼
 ┌──────────────────────────────────┐        ┌─────────────────┐
-│  Express API (apps/api)          │───────▶│ Supabase        │
+│  Go API (apps/api)               │───────▶│ Supabase        │
 │  - REST /api/*                   │ secret │  - Postgres+RLS │
 │  - JWT 검증(JWKS) / API Key 검증  │  key   │  - Auth (JWKS)  │
 │  - 메타데이터 fetch + AI 분류      │        └─────────────────┘
-│  - node-cron 리마인더 스케줄러     │
-│  - web-push 발송                  │───▶ 푸시 서비스(APNs/FCM/Mozilla)
+│  - 리마인더 스케줄러              │
+│  - Web Push 발송                 │───▶ 푸시 서비스(APNs/FCM/Mozilla)
 └──────────────────────────────────┘              │
                                                   ▼
                                         Service Worker → OS 알림
 ```
 
-- **웹앱은 supabase-js를 인증(로그인/세션/토큰 갱신)에만 사용**한다. 데이터 CRUD는 전부 Express API를 호출한다.
-- Express는 Supabase **secret key**(구 service_role)로 DB에 접근한다. RLS는 심층 방어로 활성화해두지만 Express 경로에서는 bypass된다.
+- **웹앱은 supabase-js를 인증(로그인/세션/토큰 갱신)에만 사용**한다. 데이터 CRUD는 전부 Go API를 호출한다.
+- Go API는 Supabase **secret key**로 DB에 접근한다. RLS는 심층 방어로 활성화해두지만 API 경로에서는 bypass된다.
 - 인증 없는 DB 직접 접근 경로는 존재하지 않는다 (publishable key로는 RLS 때문에 아무것도 못 읽음).
 
 ## 모노레포 구조
@@ -46,34 +46,29 @@ my-bookmark/
 │   │   │   └── sw/sw.ts      # 서비스 워커 소스 (별도 esbuild로 번들 → public/sw.js)
 │   │   ├── public/           # manifest.webmanifest, 아이콘
 │   │   └── vite.config.ts
-│   └── api/                  # Express 5
-│       └── src/
-│           ├── index.ts      # 부트스트랩 (helmet, cors, 라우터, 에러 미들웨어, cron 시작)
-│           ├── middleware/    # auth.ts (JWT/API Key), error.ts, rate-limit.ts
-│           ├── routes/       # bookmarks.ts, categories.ts, reminders.ts, push.ts, keys.ts, health.ts
-│           ├── services/     # metadata.ts, categorize.ts, push-sender.ts, reminder-cron.ts
-│           └── lib/          # supabase.ts (admin client), env.ts (zod로 env 검증)
+│   └── api/                  # Go API 서버
+│       ├── cmd/server/       # 서버 부트스트랩, 환경 설정, 라우팅
+│       ├── internal/         # 인증·MCP·북마크·AI·이미지·푸시·리마인더
+│       ├── scripts/          # 별도 실행하는 TypeScript 운영 도구
+│       ├── go.mod, go.sum
+│       └── Dockerfile        # Go 빌드 및 libvips 실행 이미지
 ├── packages/
 │   ├── shared/               # zod 스키마 + API 타입 + 상수. 빌드 없이 TS 소스 export
-│   └── ai/                   # AiProvider 인터페이스 + gemini/anthropic/openai 구현
+│   └── ai/                   # TypeScript 관리 도구용 OpenRouter 구현
 ├── supabase/
 │   └── migrations/           # 0001_initial.sql …  (supabase CLI)
 └── docs/
 ```
 
-### 워크스페이스 패키지 규칙 (함정 주의)
+### 워크스페이스 패키지 규칙
 
-`packages/shared`, `packages/ai`는 **빌드 스텝 없이** `"exports": { ".": "./src/index.ts" }`로 TS 소스를 직접 내보낸다.
-
-- apps/web: Vite가 TS를 그대로 처리 → 문제 없음.
-- apps/api dev: `tsx watch`가 workspace TS를 그대로 처리 → 문제 없음.
-- apps/api **프로덕션 빌드**: tsup 설정에서 `noExternal: [/^@my-bookmark\//]`로 workspace 패키지를 번들에 포함해야 한다. 빠뜨리면 런타임에서 TS 파일을 require하다 죽는다.
+`packages/shared`, `packages/ai`는 **빌드 스텝 없이** TypeScript 소스를 직접 내보낸다. 웹과 별도 실행하는 TypeScript 관리 도구가 사용하며, Go API 실행 파일에는 포함되지 않는다.
 
 패키지 네이밍: `@my-bookmark/shared`, `@my-bookmark/ai`, `@my-bookmark/web`, `@my-bookmark/api`.
 
 ## 버전 정책
 
-2026-07 기준: TanStack Start v1(1.168+), React 19, Vite(Start에 포함된 버전 사용), Express 5, Tailwind v4, TypeScript 7.0.2, Node 24 LTS, Bun 1.3+.
+서버: Go 1.27 및 libvips. 웹: TanStack Start v1, React 19, Tailwind v4, TypeScript 7.0.2, Node 24 LTS, Bun 1.4.
 
 **정확한 버전과 API는 스캐폴딩 시점의 공식 도구가 결정한다.** TanStack Start는 공식 CLI(`bun create @tanstack/start`) 또는 공식 examples에서 시작하고, 이 문서와 스캐폴드가 충돌하면 스캐폴드(현행 API)를 따르되 구조(라우트 경로, 디렉토리 역할)는 이 문서를 따른다.
 
@@ -93,7 +88,7 @@ my-bookmark/
 | `NAVER_SEARCH_CLIENT_ID` / `NAVER_SEARCH_CLIENT_SECRET` | 선택. NAVER API HUB 지역 검색 Client ID/Secret(서버 전용). 국내 장소 좌표 조회에 사용하며 미설정 시 조회를 건너뛰고 기동 시 경고 1회 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys`로 생성 |
 | `VAPID_SUBJECT` | `mailto:{email}` 형식 |
-| `TRUST_PROXY` | 선택. 리버스 프록시 뒤에서 hop 수(예: `1`) — express `trust proxy` 설정. 미설정 시 미적용 |
+| `TRUST_PROXY` | 선택. 리버스 프록시 뒤에서 신뢰할 hop 수(예: `1`); 미설정 시 전달 헤더를 신뢰하지 않음 |
 
 ### apps/web (클라이언트 노출 — 비밀값 금지)
 
@@ -101,27 +96,26 @@ my-bookmark/
 |---|---|
 | `VITE_SUPABASE_URL` | 위와 동일 |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key (`sb_publishable_…`, 구 anon) |
-| `VITE_API_URL` | Express 주소 (dev: `http://localhost:3001`) |
+| `VITE_API_URL` | 선택적 API origin (경로 `/api` 제외). 비우면 dev는 `http://localhost:3001`, production은 같은 origin |
 | `VITE_VAPID_PUBLIC_KEY` | 푸시 구독용 공개키 (공개돼도 안전) |
 | `VITE_NAVER_MAP_CLIENT_ID` | 네이버 클라우드 플랫폼 Maps 인증 키 ID (`/map` 지도 SDK용, 브라우저 노출 가능). 미설정이면 지도 대신 안내 문구 |
 
-api 부팅 시 `lib/env.ts`에서 zod로 전체 env를 검증하고, 누락 시 명확한 메시지로 즉시 종료한다.
+API는 기동 시 서버 환경을 검증하고 필수 설정 오류를 명확히 보고한 뒤 종료한다.
 
 ## Docker 구성 (Phase 7)
 
-- 빌드 단계: Bun 1.4.0으로 `bun.lock` 기반 의존성 설치와 workspace build 수행.
-- `apps/api`: `docker.io/library/node:24-alpine` 실행 스테이지에서 프로덕션 의존성과 dist 번들 실행.
-- `apps/web`: `docker.io/library/node:24-alpine`에서 TanStack Start Node 서버 산출물 실행 (Compose/자체 호스팅 대안).
+- `apps/api`: Go 1.27 Alpine 빌드 스테이지에서 Go 실행 파일을 생성하고, Alpine 실행 이미지에 libvips와 CA 인증서를 포함한다.
+- `apps/web`: 빌드한 정적 SPA만 `docker.io/library/caddy:2-alpine`에서 제공한다. 기존 운영 Caddy 뒤의 별도 정적 서버 프로세스다.
 - Supabase는 클라우드 사용 — 로컬 컨테이너 불필요. (로컬 개발 시 `supabase start`는 선택사항)
-- 기본 web 배포는 Vercel이며 `apps/web/vercel.json`에서 Bun 1.x Runtime Beta를 사용한다. API는 Node 24 Docker로 별도 배포한다.
+- web은 기존 운영 Caddy가 Compose web을 프록시하는 방식으로 제공한다. `/api/*`는 기존 도메인별 API 라우팅을 유지한다.
 - 자체 호스팅 시 리버스 프록시/HTTPS(Caddy)를 docker-compose 앞에 둔다. **푸시와 PWA 설치는 HTTPS 필수**다.
 
 ## 횡단 관심사
 
 - **CORS**: api는 `WEB_ORIGIN`만 허용. 단축어(API Key)는 CORS 무관(브라우저 아님).
-- **보안 헤더**: helmet 기본 적용.
-- **레이트 리밋**: `express-rate-limit` — API Key 인증 엔드포인트에 분당 60회 (무차별 대입 완화).
-- **로깅**: pino(JSON). 요청 로그 + 에러 스택. AI 응답 원문은 debug 레벨.
+- **보안 헤더**: API가 보안 응답 헤더를 설정한다.
+- **레이트 리밋**: API Key 인증 대상 경로에 분당 60회/IP 제한을 적용한다.
+- **로깅**: 서버 오류와 외부 연동 오류를 기록하며 인증 정보는 출력하지 않는다.
 - **운영 알림**: 같은 Compose의 Uptime Kuma가 Caddy 경유 가용성을 확인하고, API는 Discord Webhook으로 cron·Push·AI·서버 오류와 IP별 비정상 접근 임계치를 알린다. 알림 실패는 원래 작업을 실패시키지 않는다.
 - **접근 감지**: Caddy 뒤 `TRUST_PROXY=1`의 실제 IP를 기준으로 인증 실패(1분 5회), API 경로 탐색, parser/413, 429를 메모리에서 집계한다. 자동 차단은 하지 않는다.
 - **graceful shutdown**: SIGTERM 시 cron 중지 → 서버 close.

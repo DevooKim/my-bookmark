@@ -1,24 +1,24 @@
-import "../src/lib/load-env";
+import "./admin/lib/load-env";
 import { fileURLToPath } from "node:url";
 import type { AiProvider, PlaceCandidate } from "@my-bookmark/ai";
 import { z } from "zod";
-import { createSupabaseAdminClient } from "../src/lib/supabase";
-import { domainFromUrl } from "../src/lib/url";
-import { getAiProvider } from "../src/services/ai-provider";
+import { createSupabaseAdminClient } from "./admin/lib/supabase";
+import { domainFromUrl } from "./admin/lib/url";
+import { getAiProvider } from "./admin/services/ai-provider";
 import {
   type GeocodeRow,
   geocodePlaceRows,
   replaceBookmarkPlaces,
   selectPlaceCandidates,
-} from "../src/services/bookmark-places";
-import { processImage } from "../src/services/image-processing";
+} from "./admin/services/bookmark-places";
+import { processImage } from "./admin/services/image-processing";
 import {
   type ImageStorageBucket,
   loadImageForAnalysis,
-} from "../src/services/image-storage";
-import { fetchMetadata } from "../src/services/metadata";
-import type { PlaceGeocoder } from "../src/services/place-geocoder";
-import { getPlaceGeocoder } from "../src/services/place-geocoder-provider";
+} from "./admin/services/image-storage";
+import { fetchMetadata } from "./admin/services/metadata";
+import type { PlaceGeocoder } from "./admin/services/place-geocoder";
+import { getPlaceGeocoder } from "./admin/services/place-geocoder-provider";
 
 const QUERY_PAGE_SIZE = 500;
 const IMAGE_BUCKET = "bookmark-images";
